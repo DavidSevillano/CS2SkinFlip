@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  steamId      String    @unique
+  username     String
+  avatarUrl    String?
+  isPremium    Boolean   @default(false)
+  premiumUntil DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  watchlist WatchlistItem[]
+  alerts    Alert[]
+  portfolio PortfolioItem[]
+
+  @@index([steamId])
+}
+
+model Skin {
+  id             String   @id
+  name           String
+  marketHashName String   @unique
+  weapon         String
+  rarity         String
+  iconUrl        String
+  createdAt      DateTime @default(now())
+
+  price        SkinPrice?
+  priceHistory PriceHistory[]
+
+  @@index([weapon])
+  @@index([rarity])
+}
+
+model SkinPrice {
+  id            String   @id @default(cuid())
+  skinId        String   @unique
+  steamPrice    Float?
+  csFloatPrice  Float?
+  skinportPrice Float?
+  dmarketPrice  Float?
+  lowestPrice   Float?
+  volume24h     Int?
+  updatedAt     DateTime @updatedAt
+
+  skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)
+}
+
+model PriceHistory {
+  id        String   @id @default(cuid())
+  skinId    String
+  price     Float
+  source    String   @default("steam")
+  timestamp DateTime @default(now())
+
+  skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)
+
+  @@index([skinId, timestamp])
+}
+
+model WatchlistItem {
+  id              String   @id @default(cuid())
+  userId          String
+  skinId          String
+  targetBuyPrice  Float?
+  targetSellPrice Float?
+  alertEnabled    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skinId])
+  @@index([userId])
+}
+
+model Alert {
+  id          String    @id @default(cuid())
+  userId      String
+  skinId      String
+  type        AlertType
+  targetPrice Float
+  isActive    Boolean   @default(true)
+  isTriggered Boolean   @default(false)
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+enum AlertType {
+  BUY_BELOW
+  SELL_ABOVE
+}
+
+model PortfolioItem {
+  id           String   @id @default(cuid())
+  userId       String
+  skinId       String
+  assetId      String
+  float        Float?
+  acquirePrice Float
+  acquiredAt   DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, assetId])
+  @@index([userId])
+}
