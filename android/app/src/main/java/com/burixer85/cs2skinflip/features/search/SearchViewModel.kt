@@ -46,9 +46,13 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
     val uiState: StateFlow<SearchUiState> = _uiState
 
-    val availableWeapons = skinRepository.getAllWeapons()
+    private val _availableWeapons = MutableStateFlow<List<String>>(emptyList())
+    val availableWeapons: StateFlow<List<String>> = _availableWeapons
 
     init {
+        viewModelScope.launch {
+            _availableWeapons.value = skinRepository.getAllWeapons()
+        }
         viewModelScope.launch {
             _query
                 .debounce(300)

@@ -29,11 +29,13 @@ class SkinRepository @Inject constructor(
         wear: SkinWear? = null,
         statTrakOnly: Boolean = false
     ): Flow<List<Skin>> = flow {
+        val hasFilters = query.isNotBlank() || weapon != null || rarity != null || wear != null || statTrakOnly
         val remote = runCatching {
             backendApi.searchSkins(
                 query = query.ifBlank { null },
                 weapon = weapon,
-                rarity = rarity?.displayName
+                rarity = rarity?.displayName,
+                sort = if (hasFilters) "name" else "random"
             ).data.map { it.toDomain() }
         }.getOrElse {
             var results = MockData.searchSkins(query)
@@ -61,5 +63,9 @@ class SkinRepository @Inject constructor(
         }
     }
 
-    fun getAllWeapons(): List<String> = MockData.skins.map { it.weapon }.distinct().sorted()
+    suspend fun getAllWeapons(): List<String> = runCatching {
+        backendApi.getWeapons()
+    }.getOrElse {
+        MockData.skins.map { it.weapon }.distinct().sorted()
+    }
 }
