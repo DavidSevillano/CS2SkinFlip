@@ -18,6 +18,9 @@ interface CS2BackendApiService {
     @GET("skins/top-movers")
     suspend fun getTopMovers(): List<TopMoverDto>
 
+    @GET("skins/weapons")
+    suspend fun getWeapons(): List<String>
+
     @GET("skins")
     suspend fun searchSkins(
         @Query("q") query: String? = null,
@@ -26,7 +29,8 @@ interface CS2BackendApiService {
         @Query("minPrice") minPrice: Double? = null,
         @Query("maxPrice") maxPrice: Double? = null,
         @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 100,
+        @Query("sort") sort: String = "random"
     ): SkinsPageDto
 
     @GET("skins/{id}")
@@ -134,17 +138,21 @@ private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.
 
 fun TopMoverDto.toDomain(): Skin {
     val wear = parseWearFromName(marketHashName)
+    // "AK-47 | Redline (Field-Tested)" → name="AK-47 | Redline", weapon="AK-47", skinName="Redline"
+    val cleanName = marketHashName.substringBefore("(").trim()
+    val weaponName = cleanName.substringBefore("|").trim()
+    val patternName = cleanName.substringAfter("|", cleanName).trim()
     return Skin(
         id = skinId,
-        name = marketHashName.substringBefore("|").trim(),
-        weapon = marketHashName.substringBefore("|").trim(),
-        skinName = marketHashName.substringAfter("|", "").substringBefore("(").trim(),
+        name = cleanName,
+        weapon = weaponName,
+        skinName = patternName,
         rarity = parseRarityFromName(marketHashName),
         wear = wear,
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        steamPrice = steamPrice ?: 0.0,
+        steamPrice = lowestPrice ?: steamPrice ?: 0.0,
         csFloatPrice = csFloatPrice,
         skinportPrice = skinportPrice,
         dmarketPrice = dmarketPrice,
@@ -161,17 +169,20 @@ fun BackendSkinDto.toDomain(
     priceHistory: List<PricePoint> = emptyList()
 ): Skin {
     val wear = parseWearFromName(marketHashName)
+    val cleanName = marketHashName.substringBefore("(").trim()
+    val weaponName = cleanName.substringBefore("|").trim()
+    val patternName = cleanName.substringAfter("|", cleanName).trim()
     return Skin(
         id = id,
-        name = weapon,
-        weapon = weapon,
-        skinName = marketHashName.substringAfter("|", "").substringBefore("(").trim(),
+        name = cleanName,
+        weapon = weaponName,
+        skinName = patternName,
         rarity = parseRarity(rarity),
         wear = wear,
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        steamPrice = price?.steamPrice ?: 0.0,
+        steamPrice = price?.lowestPrice ?: price?.steamPrice ?: 0.0,
         csFloatPrice = price?.csFloatPrice,
         skinportPrice = price?.skinportPrice,
         dmarketPrice = price?.dmarketPrice,

@@ -102,7 +102,7 @@ fun SkinCard(
                     }
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "${"$%.2f".format(skin.steamPrice)}",
+                        text = if (skin.steamPrice > 0.0) "${"$%.2f".format(skin.steamPrice)}" else "—",
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurface
@@ -176,7 +176,7 @@ fun SkinCardCompact(
 
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = "${"$%.2f".format(skin.steamPrice)}",
+                text = if (skin.steamPrice > 0.0) "${"$%.2f".format(skin.steamPrice)}" else "—",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )
