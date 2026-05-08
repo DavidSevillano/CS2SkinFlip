@@ -12,7 +12,19 @@ function sleep(ms: number) {
 }
 
 export async function refreshAllPrices(log: FastifyBaseLogger) {
-  const skins = await prisma.skin.findMany({ select: { id: true, marketHashName: true } })
+  // Refresh top 100 skins — prioritise those with existing prices, then fill from catalog
+  const withPrice = await prisma.skin.findMany({
+    select: { id: true, marketHashName: true },
+    where: { price: { isNot: null } },
+    orderBy: { price: { volume24h: 'desc' } },
+    take: 60,
+  })
+  const withoutPrice = await prisma.skin.findMany({
+    select: { id: true, marketHashName: true },
+    where: { price: null },
+    take: 40,
+  })
+  const skins = [...withPrice, ...withoutPrice]
 
   log.info(`[PriceRefresh] Refreshing prices for ${skins.length} skins...`)
 
@@ -60,10 +72,7 @@ export async function refreshAllPrices(log: FastifyBaseLogger) {
 }
 
 export function startPriceRefreshJob(log: FastifyBaseLogger) {
-  // Run immediately on startup
-  refreshAllPrices(log).catch((err) => log.error('[PriceRefresh] Startup run failed:', err))
-
-  // Then repeat every 5 minutes
+  // First run after 5 minutes (populate job already has fresh prices)
   const interval = setInterval(() => {
     refreshAllPrices(log).catch((err) => log.error('[PriceRefresh] Scheduled run failed:', err))
   }, REFRESH_INTERVAL_MS)

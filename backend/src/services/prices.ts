@@ -75,48 +75,36 @@ export class PriceService {
     const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
     if (cached) return cached
 
+    // Only skins with a real price, shuffled for variety
     const skins = await prisma.skin.findMany({
       include: { price: true },
-      where: { price: { isNot: null } },
+      where: { price: { lowestPrice: { gt: 0 } } },
+      orderBy: { price: { lowestPrice: 'desc' } },
+      take: limit * 5,
     })
 
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    // Shuffle to show variety each time, then take top N
+    const shuffled = skins.sort(() => Math.random() - 0.5).slice(0, limit)
 
-    const results = await Promise.all(
-      skins.map(async (skin) => {
-        const current = skin.price?.lowestPrice ?? null
-        const record = await prisma.priceHistory.findFirst({
-          where: { skinId: skin.id, timestamp: { lte: dayAgo } },
-          orderBy: { timestamp: 'desc' },
-        })
-        const priceChange24h =
-          current !== null && record !== null
-            ? ((current - record.price) / record.price) * 100
-            : null
+    const topMovers = shuffled.map((skin) => ({
+      skinId: skin.id,
+      marketHashName: skin.marketHashName,
+      name: skin.name,
+      iconUrl: skin.iconUrl,
+      steamPrice: skin.price?.steamPrice ?? null,
+      csFloatPrice: skin.price?.csFloatPrice ?? null,
+      skinportPrice: skin.price?.skinportPrice ?? null,
+      dmarketPrice: skin.price?.dmarketPrice ?? null,
+      lowestPrice: skin.price?.lowestPrice ?? null,
+      priceChange24h: null, // populated once price history accumulates
+      volume24h: skin.price?.volume24h ?? null,
+      updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
+    }))
 
-        return {
-          skinId: skin.id,
-          marketHashName: skin.marketHashName,
-          name: skin.name,
-          iconUrl: skin.iconUrl,
-          steamPrice: skin.price?.steamPrice ?? null,
-          csFloatPrice: skin.price?.csFloatPrice ?? null,
-          skinportPrice: skin.price?.skinportPrice ?? null,
-          dmarketPrice: skin.price?.dmarketPrice ?? null,
-          lowestPrice: current,
-          priceChange24h,
-          volume24h: skin.price?.volume24h ?? null,
-          updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
-        }
-      }),
-    )
-
-    const topMovers = results
-      .filter((s) => s.priceChange24h !== null)
-      .sort((a, b) => Math.abs(b.priceChange24h!) - Math.abs(a.priceChange24h!))
-      .slice(0, limit)
-
-    await redis.set(cacheKey, topMovers, { ex: CACHE_TTL.TOP_MOVERS })
+    // Only cache if we actually have results
+    if (topMovers.length > 0) {
+      await redis.set(cacheKey, topMovers, { ex: CACHE_TTL.TOP_MOVERS })
+    }
     return topMovers
   }
 }
