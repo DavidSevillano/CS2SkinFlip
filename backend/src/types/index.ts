@@ -50,10 +50,9 @@ export interface InventoryItem {
 export interface AggregatedPrices {
   skinId: string
   marketHashName: string
-  steamPrice: number | null
-  csFloatPrice: number | null
   skinportPrice: number | null
   dmarketPrice: number | null
+  csgoMarketPrice: number | null
   lowestPrice: number | null
   priceChange24h: number | null
   volume24h: number | null

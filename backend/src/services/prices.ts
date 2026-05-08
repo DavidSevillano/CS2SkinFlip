@@ -1,56 +1,28 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
-import { SteamService } from './steam'
 import type { AggregatedPrices } from '../types'
 
 export class PriceService {
-  private steam = new SteamService()
 
+  /** Read stored prices from DB (populated by bulk job every 2h). Cached 5 min. */
   async getPricesForSkin(skinId: string, marketHashName: string): Promise<AggregatedPrices> {
     const cacheKey = `prices:${skinId}`
     const cached = await redis.get<AggregatedPrices>(cacheKey)
     if (cached) return cached
 
-    const steamData = await this.steam.getMarketPrice(marketHashName)
-
-    // Lowest available price across all markets (only Steam implemented for now)
-    const candidates = [steamData.lowestPrice].filter((p): p is number => p !== null)
-    const lowestPrice = candidates.length > 0 ? Math.min(...candidates) : null
-
-    const priceChange24h = await this.calculate24hChange(skinId, steamData.lowestPrice)
+    const row = await prisma.skinPrice.findUnique({ where: { skinId } })
+    const priceChange24h = await this.calculate24hChange(skinId, row?.lowestPrice ?? null)
 
     const prices: AggregatedPrices = {
       skinId,
       marketHashName,
-      steamPrice: steamData.lowestPrice,
-      csFloatPrice: null,   // TODO: integrate CSFloat API
-      skinportPrice: null,  // TODO: integrate Skinport API
-      dmarketPrice: null,   // TODO: integrate DMarket API
-      lowestPrice,
+      skinportPrice: row?.skinportPrice ?? null,
+      dmarketPrice: row?.dmarketPrice ?? null,
+      csgoMarketPrice: row?.csgoMarketPrice ?? null,
+      lowestPrice: row?.lowestPrice ?? null,
       priceChange24h,
-      volume24h: steamData.volume,
-      updatedAt: new Date().toISOString(),
-    }
-
-    await prisma.skinPrice.upsert({
-      where: { skinId },
-      update: {
-        steamPrice: prices.steamPrice,
-        lowestPrice: prices.lowestPrice,
-        volume24h: prices.volume24h,
-      },
-      create: {
-        skinId,
-        steamPrice: prices.steamPrice,
-        lowestPrice: prices.lowestPrice,
-        volume24h: prices.volume24h,
-      },
-    })
-
-    if (steamData.lowestPrice !== null) {
-      await prisma.priceHistory.create({
-        data: { skinId, price: steamData.lowestPrice, source: 'steam' },
-      })
+      volume24h: row?.volume24h ?? null,
+      updatedAt: row?.updatedAt.toISOString() ?? new Date().toISOString(),
     }
 
     await redis.set(cacheKey, prices, { ex: CACHE_TTL.SKIN_PRICES })
@@ -86,20 +58,36 @@ export class PriceService {
     // Shuffle to show variety each time, then take top N
     const shuffled = skins.sort(() => Math.random() - 0.5).slice(0, limit)
 
-    const topMovers = shuffled.map((skin) => ({
-      skinId: skin.id,
-      marketHashName: skin.marketHashName,
-      name: skin.name,
-      iconUrl: skin.iconUrl,
-      steamPrice: skin.price?.steamPrice ?? null,
-      csFloatPrice: skin.price?.csFloatPrice ?? null,
-      skinportPrice: skin.price?.skinportPrice ?? null,
-      dmarketPrice: skin.price?.dmarketPrice ?? null,
-      lowestPrice: skin.price?.lowestPrice ?? null,
-      priceChange24h: null, // populated once price history accumulates
-      volume24h: skin.price?.volume24h ?? null,
-      updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
-    }))
+    // Batch fetch price history for all selected skins (avoid N+1)
+    const skinIds = shuffled.map((s) => s.id)
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const histories = await prisma.priceHistory.findMany({
+      where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
+      orderBy: { timestamp: 'desc' },
+      distinct: ['skinId'],
+    })
+    const historyMap = new Map(histories.map((h) => [h.skinId, h.price]))
+
+    const topMovers = shuffled.map((skin) => {
+      const current = skin.price?.lowestPrice ?? null
+      const prev = historyMap.get(skin.id) ?? null
+      const priceChange24h = current !== null && prev !== null
+        ? ((current - prev) / prev) * 100
+        : null
+      return {
+        skinId: skin.id,
+        marketHashName: skin.marketHashName,
+        name: skin.name,
+        iconUrl: skin.iconUrl,
+        skinportPrice: skin.price?.skinportPrice ?? null,
+        dmarketPrice: skin.price?.dmarketPrice ?? null,
+        csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
+        lowestPrice: current,
+        priceChange24h,
+        volume24h: skin.price?.volume24h ?? null,
+        updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
+      }
+    })
 
     // Only cache if we actually have results
     if (topMovers.length > 0) {
