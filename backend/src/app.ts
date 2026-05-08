@@ -3,6 +3,7 @@ import { buildServer } from './server'
 import { env } from './config/env'
 import { prisma } from './db/prisma'
 import { startPriceRefreshJob } from './jobs/priceRefresh'
+import { populateSkins } from './jobs/populateSkins'
 
 async function main() {
   const app = await buildServer()
@@ -19,7 +20,8 @@ async function main() {
 
   try {
     await app.listen({ port: env.PORT, host: env.HOST })
-    startPriceRefreshJob(app.log)
+    // First populate DB with real skins (only runs if DB has < 50 skins)
+    populateSkins(app.log).then(() => startPriceRefreshJob(app.log))
   } catch (err) {
     app.log.error(err)
     process.exit(1)
