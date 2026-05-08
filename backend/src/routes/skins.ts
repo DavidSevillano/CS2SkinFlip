@@ -2,15 +2,15 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
-import { SteamService } from '../services/steam'
 
 const priceService = new PriceService()
-const steamService = new SteamService()
 
 const searchQuerySchema = z.object({
   q: z.string().optional(),
   weapon: z.string().optional(),
   rarity: z.string().optional(),
+  wear: z.string().optional(),
+  statTrak: z.coerce.boolean().optional(),
   minPrice: z.coerce.number().optional(),
   maxPrice: z.coerce.number().optional(),
   page: z.coerce.number().int().positive().default(1),
@@ -18,22 +18,6 @@ const searchQuerySchema = z.object({
   sort: z.enum(['name', 'price_asc', 'price_desc', 'random']).default('random'),
 })
 
-async function fetchAndStorePrices(skins: Array<{ id: string; marketHashName: string }>) {
-  await Promise.all(
-    skins.map(async (skin) => {
-      try {
-        const { lowestPrice, volume } = await steamService.getMarketPrice(skin.marketHashName)
-        if (lowestPrice && lowestPrice > 0) {
-          await prisma.skinPrice.upsert({
-            where: { skinId: skin.id },
-            update: { steamPrice: lowestPrice, lowestPrice, volume24h: volume, updatedAt: new Date() },
-            create: { skinId: skin.id, steamPrice: lowestPrice, lowestPrice, volume24h: volume },
-          })
-        }
-      } catch { /* ignore individual failures */ }
-    })
-  )
-}
 
 export const skinRoutes: FastifyPluginAsync = async (app) => {
   app.get('/skins', async (request, reply) => {
@@ -42,57 +26,61 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'Invalid query parameters', details: params.error.flatten() })
     }
 
-    const { q, weapon, rarity, minPrice, maxPrice, page, limit, sort } = params.data
+    const { q, weapon, rarity, wear, statTrak, minPrice, maxPrice, page, limit, sort } = params.data
     const skip = (page - 1) * limit
-    const hasQuery = !!(q || weapon || rarity)
+    const hasQuery = !!(q || weapon || rarity || wear || statTrak)
 
-    const where: Parameters<typeof prisma.skin.findMany>[0]['where'] = {}
+    // Build all filters as AND conditions to avoid field-merging conflicts
+    const conditions: any[] = []
 
     if (q) {
-      where.OR = [
+      conditions.push({ OR: [
         { name: { contains: q, mode: 'insensitive' } },
         { marketHashName: { contains: q, mode: 'insensitive' } },
-      ]
+      ]})
     }
-    if (weapon) where.weapon = { equals: weapon, mode: 'insensitive' }
-    if (rarity) where.rarity = { equals: rarity, mode: 'insensitive' }
+    if (weapon) conditions.push({ weapon: { equals: weapon, mode: 'insensitive' } })
+    if (rarity) conditions.push({ rarity: { equals: rarity, mode: 'insensitive' } })
+    // wear is stored as "(Field-Tested)" suffix in marketHashName
+    if (wear) conditions.push({ marketHashName: { contains: `(${wear})`, mode: 'insensitive' } })
+    // use 'StatTrak' without ™ to avoid unicode matching issues
+    if (statTrak) conditions.push({ marketHashName: { contains: 'StatTrak', mode: 'insensitive' } })
     if (minPrice !== undefined || maxPrice !== undefined) {
-      where.price = { lowestPrice: {} }
-      if (minPrice !== undefined) (where.price as any).lowestPrice.gte = minPrice
-      if (maxPrice !== undefined) (where.price as any).lowestPrice.lte = maxPrice
+      const priceFilter: any = {}
+      if (minPrice !== undefined) priceFilter.gte = minPrice
+      if (maxPrice !== undefined) priceFilter.lte = maxPrice
+      conditions.push({ price: { lowestPrice: priceFilter } })
     }
-
     // Without a search query: only show skins that already have a price
-    if (!hasQuery) {
-      where.price = { ...((where.price as any) ?? {}), isNot: null }
-    }
+    if (!hasQuery) conditions.push({ price: { isNot: null } })
+
+    const where: NonNullable<Parameters<typeof prisma.skin.findMany>[0]>['where'] =
+      conditions.length > 0 ? { AND: conditions } : {}
 
     const total = await prisma.skin.count({ where })
 
     let skins: any[]
 
-    if (sort === 'random') {
+    if (sort === 'random' && !hasQuery) {
+      // Browse: most valuable skins first, paginated
+      skins = await prisma.skin.findMany({
+        where,
+        include: { price: true },
+        orderBy: { price: { lowestPrice: 'desc' } },
+        skip,
+        take: limit,
+      })
+    } else if (sort === 'random') {
       const allIds = await prisma.skin.findMany({ where, select: { id: true } })
       const shuffled = allIds.sort(() => Math.random() - 0.5).slice(skip, skip + limit)
       const ids = shuffled.map((s) => s.id)
       skins = await prisma.skin.findMany({ where: { id: { in: ids } }, include: { price: true } })
     } else {
-      const orderBy: Parameters<typeof prisma.skin.findMany>[0]['orderBy'] =
+      const orderBy: NonNullable<Parameters<typeof prisma.skin.findMany>[0]>['orderBy'] =
         sort === 'price_asc'  ? { price: { lowestPrice: 'asc' } }  :
         sort === 'price_desc' ? { price: { lowestPrice: 'desc' } } :
         { name: 'asc' }
       skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy })
-    }
-
-    // When searching: fetch prices on-demand for results that have none
-    if (hasQuery) {
-      const unpriced = skins.filter((s) => !s.price).slice(0, 20) // max 20 on-demand fetches
-      if (unpriced.length > 0) {
-        await fetchAndStorePrices(unpriced)
-        // Reload with fresh prices
-        const ids = skins.map((s) => s.id)
-        skins = await prisma.skin.findMany({ where: { id: { in: ids } }, include: { price: true } })
-      }
     }
 
     return { data: skins, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
@@ -116,12 +104,6 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
 
     let skin = await prisma.skin.findUnique({ where: { id: skinId }, include: { price: true } })
     if (!skin) return reply.status(404).send({ error: 'Skin not found' })
-
-    // Fetch price on-demand if missing
-    if (!skin.price) {
-      await fetchAndStorePrices([{ id: skin.id, marketHashName: skin.marketHashName }])
-      skin = await prisma.skin.findUnique({ where: { id: skinId }, include: { price: true } }) ?? skin
-    }
 
     return skin
   })
