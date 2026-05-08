@@ -36,7 +36,8 @@ function slugify(str: string): string {
 
 export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
   const existing = await prisma.skin.count()
-  if (existing >= 500) {
+  // Threshold accounts for base skins (~9114) + StatTrak variants (~4500)
+  if (existing >= 12000) {
     log.info(`[PopulateSkins] DB already has ${existing} skins, skipping`)
     return
   }
@@ -67,8 +68,10 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
     if (!skin.wears || skin.wears.length === 0) continue
 
     for (const wear of skin.wears) {
-      // Market hash name is exactly: "{skin.name} ({wear.name})"
-      const marketHashName = `${skin.name} (${wear.name})`
+      // Market hash name: "{skin.name} ({wear.name})"
+      // Knife names start with "★ ", StatTrak knife format: "★ StatTrak™ Karambit | ..."
+      const baseName = skin.name  // e.g. "AK-47 | Redline" or "★ Karambit | Fade"
+      const marketHashName = `${baseName} (${wear.name})`
       const id = slugify(marketHashName)
 
       const priceData = prices[marketHashName]
@@ -78,14 +81,25 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
         priceData?.steam?.last_30d ??
         null
 
-      records.push({
-        id,
-        marketHashName,
-        weapon: skin.weapon.name,
-        rarity: skin.rarity.name,
-        iconUrl: skin.image,
-        price,
-      })
+      records.push({ id, marketHashName, weapon: skin.weapon.name, rarity: skin.rarity.name, iconUrl: skin.image, price })
+
+      // Also create StatTrak variant if available
+      if (skin.stattrak) {
+        const stattrakBase = baseName.startsWith('★ ')
+          ? `★ StatTrak™ ${baseName.slice(2)}`   // "★ StatTrak™ Karambit | Fade"
+          : `StatTrak™ ${baseName}`               // "StatTrak™ AK-47 | Redline"
+        const stattrakHashName = `${stattrakBase} (${wear.name})`
+        const stattrakId = slugify(stattrakHashName)
+        const stattrakPrice = prices[stattrakHashName]
+        records.push({
+          id: stattrakId,
+          marketHashName: stattrakHashName,
+          weapon: skin.weapon.name,
+          rarity: skin.rarity.name,
+          iconUrl: skin.image,
+          price: stattrakPrice?.steam?.last_24h ?? stattrakPrice?.steam?.last_7d ?? stattrakPrice?.steam?.last_30d ?? null,
+        })
+      }
     }
   }
 
@@ -117,8 +131,8 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
           if (r.price !== null) {
             await prisma.skinPrice.upsert({
               where: { skinId: r.id },
-              update: { steamPrice: r.price, lowestPrice: r.price, updatedAt: new Date() },
-              create: { skinId: r.id, steamPrice: r.price, lowestPrice: r.price },
+              update: { lowestPrice: r.price, updatedAt: new Date() },
+              create: { skinId: r.id, lowestPrice: r.price },
             })
           }
 

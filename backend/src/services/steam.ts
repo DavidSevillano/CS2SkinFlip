@@ -79,18 +79,55 @@ export class SteamService {
   async getMarketPrice(
     marketHashName: string,
   ): Promise<{ lowestPrice: number | null; medianPrice: number | null; volume: number | null }> {
+    const empty = { lowestPrice: null, medianPrice: null, volume: null }
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://steamcommunity.com/market/',
+    }
+
+    // 1) Try priceoverview — exact price for this item
     try {
       const { data } = await axios.get(`${STEAM_MARKET}/priceoverview/`, {
         params: { currency: 1, appid: 730, market_hash_name: marketHashName },
-        timeout: 5000,
+        timeout: 8000,
+        headers,
       })
-      return {
-        lowestPrice: parsePriceString(data.lowest_price),
-        medianPrice: parsePriceString(data.median_price),
-        volume: data.volume ? parseInt(String(data.volume).replace(/,/g, ''), 10) : null,
+      if (data.success && data.lowest_price) {
+        const price = parsePriceString(data.lowest_price)
+        if (price && price > 0) {
+          console.log(`[Steam] priceoverview $${price.toFixed(2)} for "${marketHashName}"`)
+          return {
+            lowestPrice: price,
+            medianPrice: parsePriceString(data.median_price),
+            volume: data.volume ? parseInt(String(data.volume).replace(/,/g, ''), 10) : null,
+          }
+        }
       }
-    } catch {
-      return { lowestPrice: null, medianPrice: null, volume: null }
+    } catch (err: any) {
+      console.warn(`[Steam] priceoverview failed (${err?.response?.status ?? err?.message}), trying search...`)
     }
+
+    // 2) Fallback: search and match by exact hash_name
+    try {
+      const { data } = await axios.get(`${STEAM_MARKET}/search/render/`, {
+        params: { appid: 730, q: marketHashName, count: 10, norender: 1 },
+        timeout: 10000,
+        headers,
+      })
+      const results: any[] = data.results ?? []
+      const match = results.find((r) => r.hash_name === marketHashName)
+      if (match && match.sell_price > 0) {
+        const price = match.sell_price / 100
+        console.log(`[Steam] search $${price.toFixed(2)} for "${marketHashName}"`)
+        return { lowestPrice: price, medianPrice: null, volume: match.sell_listings ?? null }
+      }
+      console.warn(`[Steam] no exact match in search for "${marketHashName}"`)
+    } catch (err: any) {
+      console.error(`[Steam] search also failed for "${marketHashName}": ${err?.response?.status ?? err?.message}`)
+    }
+
+    return empty
   }
 }

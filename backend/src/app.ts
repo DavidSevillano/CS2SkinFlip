@@ -4,7 +4,7 @@ import { env } from './config/env'
 import { prisma } from './db/prisma'
 import { startPriceRefreshJob } from './jobs/priceRefresh'
 import { populateSkins } from './jobs/populateSkins'
-import { populatePricesFromSteam } from './jobs/populatePrices'
+import { populatePricesFromSkinport } from './jobs/populatePrices'
 import { redis } from './redis/client'
 
 async function main() {
@@ -26,7 +26,7 @@ async function main() {
     await redis.del('top-movers:20')
     // Chain: populate skins → populate prices → start refresh job
     populateSkins(app.log)
-      .then(() => populatePricesFromSteam(app.log, 5))
+      .then(() => populatePricesFromSkinport(app.log))
       .then(() => startPriceRefreshJob(app.log))
   } catch (err) {
     app.log.error(err)
