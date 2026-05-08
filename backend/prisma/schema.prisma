@@ -41,15 +41,14 @@ model Skin {
 }
 
 model SkinPrice {
-  id            String   @id @default(cuid())
-  skinId        String   @unique
-  steamPrice    Float?
-  csFloatPrice  Float?
-  skinportPrice Float?
-  dmarketPrice  Float?
-  lowestPrice   Float?
-  volume24h     Int?
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  skinId          String   @unique
+  skinportPrice   Float?
+  dmarketPrice    Float?
+  csgoMarketPrice Float?
+  lowestPrice     Float?
+  volume24h       Int?
+  updatedAt       DateTime @updatedAt
 
   skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)
 }
