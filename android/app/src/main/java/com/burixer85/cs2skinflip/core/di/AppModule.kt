@@ -9,6 +9,7 @@ import com.burixer85.cs2skinflip.BuildConfig
 import com.burixer85.cs2skinflip.core.data.local.AlertDao
 import com.burixer85.cs2skinflip.core.data.local.AppDatabase
 import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
+import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.google.gson.GsonBuilder
 import dagger.Module
@@ -56,8 +57,11 @@ object AppModule {
             })
             .build()
 
+    // ─── Steam Web API ────────────────────────────────────────────────────────
+
     @Provides
     @Singleton
+    @Named("steam")
     fun provideSteamRetrofit(client: OkHttpClient): Retrofit =
         Retrofit.Builder()
             .baseUrl("https://api.steampowered.com/")
@@ -67,10 +71,27 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideSteamApiService(retrofit: Retrofit): SteamApiService =
+    fun provideSteamApiService(@Named("steam") retrofit: Retrofit): SteamApiService =
         retrofit.create(SteamApiService::class.java)
 
     @Provides
     @Named("steam_api_key")
     fun provideSteamApiKey(): String = BuildConfig.STEAM_API_KEY
+
+    // ─── CS2SkinFlip Backend ──────────────────────────────────────────────────
+
+    @Provides
+    @Singleton
+    @Named("backend")
+    fun provideBackendRetrofit(client: OkHttpClient): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.BACKEND_URL + "/")
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create(GsonBuilder().create()))
+            .build()
+
+    @Provides
+    @Singleton
+    fun provideCS2BackendApiService(@Named("backend") retrofit: Retrofit): CS2BackendApiService =
+        retrofit.create(CS2BackendApiService::class.java)
 }
