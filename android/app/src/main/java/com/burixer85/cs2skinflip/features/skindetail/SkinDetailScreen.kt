@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -211,10 +212,9 @@ private fun SkinDetailContent(
             Spacer(Modifier.height(12.dp))
 
             val prices = listOf(
-                Triple(Marketplace.STEAM, skin.steamPrice, AccentBlue),
-                Triple(Marketplace.CSFLOAT, skin.csFloatPrice, AccentGreen),
                 Triple(Marketplace.SKINPORT, skin.skinportPrice, AccentOrange),
-                Triple(Marketplace.DMARKET, skin.dmarketPrice, Color(0xFF9C59FF))
+                Triple(Marketplace.DMARKET, skin.dmarketPrice, Color(0xFF9C59FF)),
+                Triple(Marketplace.CSGO_MARKET, skin.csgoMarketPrice, AccentGreen)
             )
 
             prices.forEach { (marketplace, price, color) ->
@@ -303,10 +303,15 @@ private fun MarketplacePriceRow(
     color: Color,
     isLowest: Boolean
 ) {
+    val isListed = price != null
     Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isLowest) color.copy(alpha = 0.08f) else SurfaceVariant
+            containerColor = when {
+                isLowest  -> color.copy(alpha = 0.08f)
+                !isListed -> SurfaceVariant.copy(alpha = 0.5f)
+                else      -> SurfaceVariant
+            }
         )
     ) {
         Row(
@@ -317,14 +322,19 @@ private fun MarketplacePriceRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Color dot — greyed out when not listed
                 Box(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(color)
+                        .background(if (isListed) color else TextSecondary.copy(alpha = 0.4f))
                 )
                 Spacer(Modifier.width(10.dp))
-                Text(text = name, fontSize = 14.sp, color = TextPrimary)
+                Text(
+                    text = name,
+                    fontSize = 14.sp,
+                    color = if (isListed) TextPrimary else TextSecondary
+                )
                 if (isLowest) {
                     Spacer(Modifier.width(6.dp))
                     Text(
@@ -335,7 +345,7 @@ private fun MarketplacePriceRow(
                     )
                 }
             }
-            if (price != null) {
+            if (isListed) {
                 Text(
                     text = "${"$%.2f".format(price)}",
                     fontWeight = FontWeight.Bold,
@@ -343,7 +353,12 @@ private fun MarketplacePriceRow(
                     color = if (isLowest) color else TextPrimary
                 )
             } else {
-                Text("N/A", fontSize = 14.sp, color = TextSecondary)
+                Text(
+                    text = "Not listed",
+                    fontSize = 12.sp,
+                    color = TextSecondary.copy(alpha = 0.6f),
+                    fontStyle = FontStyle.Italic
+                )
             }
         }
     }
