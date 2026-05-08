@@ -22,6 +22,9 @@ android {
 
         val steamApiKey = project.findProperty("STEAM_API_KEY")?.toString() ?: ""
         buildConfigField("String", "STEAM_API_KEY", "\"$steamApiKey\"")
+
+        val backendUrl = project.findProperty("BACKEND_URL")?.toString() ?: "http://10.0.2.2:3000"
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
     }
 
     buildTypes {
