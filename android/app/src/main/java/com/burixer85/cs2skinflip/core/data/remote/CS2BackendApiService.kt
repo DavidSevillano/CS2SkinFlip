@@ -26,6 +26,8 @@ interface CS2BackendApiService {
         @Query("q") query: String? = null,
         @Query("weapon") weapon: String? = null,
         @Query("rarity") rarity: String? = null,
+        @Query("wear") wear: String? = null,
+        @Query("statTrak") statTrak: Boolean? = null,
         @Query("minPrice") minPrice: Double? = null,
         @Query("maxPrice") maxPrice: Double? = null,
         @Query("page") page: Int = 1,
@@ -56,10 +58,9 @@ data class TopMoverDto(
     val marketHashName: String,
     val name: String,
     val iconUrl: String,
-    val steamPrice: Double?,
-    val csFloatPrice: Double?,
     val skinportPrice: Double?,
     val dmarketPrice: Double?,
+    val csgoMarketPrice: Double?,
     val lowestPrice: Double?,
     val priceChange24h: Double?,
     val volume24h: Int?,
@@ -89,10 +90,9 @@ data class BackendSkinDto(
 )
 
 data class BackendSkinPriceDto(
-    val steamPrice: Double?,
-    val csFloatPrice: Double?,
     val skinportPrice: Double?,
     val dmarketPrice: Double?,
+    val csgoMarketPrice: Double?,
     val lowestPrice: Double?,
     val volume24h: Int?
 )
@@ -138,7 +138,6 @@ private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.
 
 fun TopMoverDto.toDomain(): Skin {
     val wear = parseWearFromName(marketHashName)
-    // "AK-47 | Redline (Field-Tested)" → name="AK-47 | Redline", weapon="AK-47", skinName="Redline"
     val cleanName = marketHashName.substringBefore("(").trim()
     val weaponName = cleanName.substringBefore("|").trim()
     val patternName = cleanName.substringAfter("|", cleanName).trim()
@@ -152,11 +151,10 @@ fun TopMoverDto.toDomain(): Skin {
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        steamPrice = lowestPrice ?: steamPrice ?: 0.0,
-        csFloatPrice = csFloatPrice,
         skinportPrice = skinportPrice,
         dmarketPrice = dmarketPrice,
-        priceChange24h = priceChange24h ?: 0.0,
+        csgoMarketPrice = csgoMarketPrice,
+        priceChange24h = priceChange24h,
         volume24h = volume24h ?: 0,
         floatMin = wear.floatRange.start,
         floatMax = wear.floatRange.endInclusive,
@@ -165,7 +163,7 @@ fun TopMoverDto.toDomain(): Skin {
 }
 
 fun BackendSkinDto.toDomain(
-    priceChange24h: Double = 0.0,
+    priceChange24h: Double? = null,
     priceHistory: List<PricePoint> = emptyList()
 ): Skin {
     val wear = parseWearFromName(marketHashName)
@@ -182,10 +180,9 @@ fun BackendSkinDto.toDomain(
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        steamPrice = price?.lowestPrice ?: price?.steamPrice ?: 0.0,
-        csFloatPrice = price?.csFloatPrice,
         skinportPrice = price?.skinportPrice,
         dmarketPrice = price?.dmarketPrice,
+        csgoMarketPrice = price?.csgoMarketPrice,
         priceChange24h = priceChange24h,
         volume24h = price?.volume24h ?: 0,
         floatMin = wear.floatRange.start,

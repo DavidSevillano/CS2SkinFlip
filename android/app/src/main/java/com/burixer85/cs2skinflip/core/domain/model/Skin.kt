@@ -10,11 +10,10 @@ data class Skin(
     val isStatTrak: Boolean = false,
     val isSouvenir: Boolean = false,
     val imageUrl: String,
-    val steamPrice: Double,
-    val csFloatPrice: Double?,
     val skinportPrice: Double?,
     val dmarketPrice: Double?,
-    val priceChange24h: Double,          // percentage
+    val csgoMarketPrice: Double?,
+    val priceChange24h: Double?,         // percentage, null if no history yet
     val volume24h: Int,
     val floatMin: Float,
     val floatMax: Float,
@@ -23,7 +22,7 @@ data class Skin(
     val collection: String? = null
 ) {
     val lowestMarketPrice: Double
-        get() = listOfNotNull(steamPrice, csFloatPrice, skinportPrice, dmarketPrice).minOrNull() ?: steamPrice
+        get() = listOfNotNull(skinportPrice, dmarketPrice, csgoMarketPrice).minOrNull() ?: 0.0
 
     val displayName: String
         get() = buildString {
@@ -65,8 +64,7 @@ data class MarketPrice(
 )
 
 enum class Marketplace(val displayName: String) {
-    STEAM("Steam"),
-    CSFLOAT("CSFloat"),
     SKINPORT("Skinport"),
-    DMARKET("DMarket")
+    DMARKET("DMarket"),
+    CSGO_MARKET("CS:GO Market")
 }
