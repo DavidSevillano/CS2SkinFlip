@@ -94,9 +94,10 @@ data class TopMoverDto(
     val marketHashName: String,
     val name: String,
     val iconUrl: String,
-    val cs2capPrice: Double?,
-    val csfloatPrice: Double?,
+    val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
+    val csdealsPrice: Double?,
+    val dmarketPrice: Double?,
     val lowestPrice: Double?,
     val priceChange24h: Double?,
     val volume24h: Int?,
@@ -126,19 +127,21 @@ data class BackendSkinDto(
 )
 
 data class BackendSkinPriceDto(
-    val cs2capPrice: Double?,         // USD — aggregated lowest from 38+ markets via CS2Cap
-    val csfloatPrice: Double?,        // USD — cheapest listing on CSFloat
-    val csgoMarketPrice: Double?,     // USD
-    val lowestPrice: Double?,         // USD
+    val skinportPrice: Double?,       // USD — Skinport
+    val csgoMarketPrice: Double?,     // USD — CS:GO Market
+    val csdealsPrice: Double?,        // USD — CS.Deals
+    val dmarketPrice: Double?,        // USD — DMarket aggregator
+    val lowestPrice: Double?,
     val volume24h: Int?,
     val priceChange24h: Double?,
 )
 
 /** Lightweight price-only payload returned by GET /prices/batch. */
 data class BatchSkinPriceDto(
-    val cs2capPrice: Double?,
-    val csfloatPrice: Double?,
+    val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
+    val csdealsPrice: Double?,
+    val dmarketPrice: Double?,
     val lowestPrice: Double?,
 )
 
@@ -211,9 +214,10 @@ fun TopMoverDto.toDomain(): Skin {
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        cs2capPrice = cs2capPrice,
-        csfloatPrice = csfloatPrice,
+        skinportPrice = skinportPrice,
         csgoMarketPrice = csgoMarketPrice,
+        csdealsPrice = csdealsPrice,
+        dmarketPrice = dmarketPrice,
         lowestPrice = lowestPrice,
         priceChange24h = priceChange24h,
         volume24h = volume24h ?: 0,
@@ -241,9 +245,10 @@ fun BackendSkinDto.toDomain(
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        cs2capPrice = price?.cs2capPrice,
-        csfloatPrice = price?.csfloatPrice,
+        skinportPrice = price?.skinportPrice,
         csgoMarketPrice = price?.csgoMarketPrice,
+        csdealsPrice = price?.csdealsPrice,
+        dmarketPrice = price?.dmarketPrice,
         lowestPrice = price?.lowestPrice,
         // priceChange24h from the API takes priority; caller can override if needed
         priceChange24h = price?.priceChange24h ?: priceChange24h,

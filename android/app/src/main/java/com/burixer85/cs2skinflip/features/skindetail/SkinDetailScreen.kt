@@ -233,22 +233,27 @@ private fun SkinDetailContent(
             val context = LocalContext.current
             val marketHashName = skin.name  // already includes wear in name from backend
 
-            // CS2Cap: item page via their search
-            fun cs2capUrl(name: String): String =
-                "https://cs2cap.com/en-US/item/${Uri.encode(name)}"
-
-            // CSFloat: market search sorted by lowest price
-            fun csfloatUrl(name: String): String =
-                Uri.parse("https://csfloat.com/market")
+            fun skinportUrl(name: String): String =
+                Uri.parse("https://skinport.com/market/730")
                     .buildUpon()
                     .appendQueryParameter("search", name)
-                    .appendQueryParameter("sort", "lowest_price")
-                    .appendQueryParameter("type", "buy_now")
+                    .appendQueryParameter("order", "asc")
                     .build().toString()
 
-            // CS:GO Market: item URL
             fun csgoMarketUrl(name: String): String =
                 "https://market.csgo.com/en/730/${Uri.encode(name)}"
+
+            fun csdealsUrl(name: String): String =
+                Uri.parse("https://cs.deals/market/csgo")
+                    .buildUpon()
+                    .appendQueryParameter("search", name)
+                    .build().toString()
+
+            fun dmarketUrl(name: String): String =
+                Uri.parse("https://dmarket.com/ingame-items/item-list/csgo-skins")
+                    .buildUpon()
+                    .appendQueryParameter("title", name)
+                    .build().toString()
 
             fun openUrl(url: String) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -262,9 +267,10 @@ private fun SkinDetailContent(
             )
 
             val entries = listOf(
-                MarketEntry(Marketplace.CS2CAP,      skin.cs2capPrice,     AccentOrange,         cs2capUrl(marketHashName)),
-                MarketEntry(Marketplace.CSFLOAT,     skin.csfloatPrice,    Color(0xFF9C59FF),    csfloatUrl(marketHashName)),
+                MarketEntry(Marketplace.SKINPORT,    skin.skinportPrice,   AccentOrange,         skinportUrl(marketHashName)),
                 MarketEntry(Marketplace.CSGO_MARKET, skin.csgoMarketPrice, AccentGreen,          csgoMarketUrl(marketHashName)),
+                MarketEntry(Marketplace.CSDEALS,     skin.csdealsPrice,    Color(0xFF4A90E2),    csdealsUrl(marketHashName)),
+                MarketEntry(Marketplace.DMARKET,     skin.dmarketPrice,    Color(0xFF9C59FF),    dmarketUrl(marketHashName)),
             )
             val lowestPrice = entries.mapNotNull { it.price }.minOrNull()
 

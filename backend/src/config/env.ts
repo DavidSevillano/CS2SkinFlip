@@ -14,8 +14,6 @@ const envSchema = z.object({
   MOBILE_DEEP_LINK: z.string().default('cs2skinflip://auth/callback'),
   DEBUG_SECRET: z.string().optional(),
   FCM_SERVICE_ACCOUNT_PATH: z.string().optional(),
-  CS2CAP_API_KEY: z.string().optional(),
-  CSFLOAT_API_KEY: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

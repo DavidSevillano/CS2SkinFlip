@@ -48,15 +48,21 @@ model Skin {
 model SkinPrice {
   id              String   @id @default(cuid())
   skinId          String   @unique
-  cs2capPrice     Float?
-  csfloatPrice    Float?
-  csgoMarketPrice Float?
+  // Four bulk-public marketplaces — each refreshed every 2h via a single HTTP call.
+  // No API keys, no rate-limit issues (12 requests/day per marketplace).
+  skinportPrice   Float?   // api.skinport.com (USD)
+  csgoMarketPrice Float?   // market.csgo.com (USD)
+  csdealsPrice    Float?   // cs.deals (USD)
+  dmarketPrice    Float?   // api.dmarket.com aggregator (USD, with 5× sanity filter)
   lowestPrice     Float?
   volume24h       Int?
   priceChange24h  Float?   // cached %, recomputed during each price refresh job
   updatedAt       DateTime @updatedAt
 
   skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)
+
+  @@index([priceChange24h(sort: Desc)])
+  @@index([lowestPrice])
 }
 
 model PriceHistory {
