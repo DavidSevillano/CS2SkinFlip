@@ -10,19 +10,24 @@ data class Skin(
     val isStatTrak: Boolean = false,
     val isSouvenir: Boolean = false,
     val imageUrl: String,
-    val skinportPrice: Double?,
-    val dmarketPrice: Double?,
-    val csgoMarketPrice: Double?,
-    val priceChange24h: Double?,         // percentage, null if no history yet
+    val skinportPrice: Double?,       // USD
+    val skinportPriceEur: Double?,    // EUR native — shown with € in detail screen
+    val dmarketPrice: Double?,        // USD
+    val csgoMarketPrice: Double?,     // USD
+    val lowestPrice: Double? = null,  // pre-computed lowest across all markets (from backend)
+    val priceChange24h: Double?,      // percentage, null if no history yet
     val volume24h: Int,
     val floatMin: Float,
     val floatMax: Float,
     val floatMedian: Float,
     val priceHistory: List<PricePoint> = emptyList(),
-    val collection: String? = null
+    val collection: String? = null,
 ) {
+    /** Uses backend's pre-computed lowest price; falls back to min of individual sources. */
     val lowestMarketPrice: Double
-        get() = listOfNotNull(skinportPrice, dmarketPrice, csgoMarketPrice).minOrNull() ?: 0.0
+        get() = lowestPrice
+            ?: listOfNotNull(skinportPrice, dmarketPrice, csgoMarketPrice).minOrNull()
+            ?: 0.0
 
     val displayName: String
         get() = buildString {

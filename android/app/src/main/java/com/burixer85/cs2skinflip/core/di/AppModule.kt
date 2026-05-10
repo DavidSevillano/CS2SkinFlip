@@ -9,6 +9,7 @@ import com.burixer85.cs2skinflip.BuildConfig
 import com.burixer85.cs2skinflip.core.data.local.AlertDao
 import com.burixer85.cs2skinflip.core.data.local.AppDatabase
 import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
+import com.burixer85.cs2skinflip.core.auth.AuthInterceptor
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.google.gson.GsonBuilder
@@ -83,12 +84,16 @@ object AppModule {
     @Provides
     @Singleton
     @Named("backend")
-    fun provideBackendRetrofit(client: OkHttpClient): Retrofit =
-        Retrofit.Builder()
+    fun provideBackendRetrofit(client: OkHttpClient, authInterceptor: AuthInterceptor): Retrofit {
+        val clientWithAuth = client.newBuilder()
+            .addInterceptor(authInterceptor)
+            .build()
+        return Retrofit.Builder()
             .baseUrl(BuildConfig.BACKEND_URL + "/")
-            .client(client)
+            .client(clientWithAuth)
             .addConverterFactory(GsonConverterFactory.create(GsonBuilder().create()))
             .build()
+    }
 
     @Provides
     @Singleton

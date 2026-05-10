@@ -2,64 +2,272 @@ package com.burixer85.cs2skinflip.features.alerts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.burixer85.cs2skinflip.core.data.mock.MockData
+import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
+import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.AlertRepository
+import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Alert
+import com.burixer85.cs2skinflip.core.domain.model.AlertType
+import com.burixer85.cs2skinflip.core.domain.model.Skin
+import com.burixer85.cs2skinflip.features.search.SearchFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed class AlertsUiState {
     object Loading : AlertsUiState()
-    data class Success(val alerts: List<Alert>, val isPremium: Boolean, val freeAlertsUsed: Int) : AlertsUiState()
+    object NotLoggedIn : AlertsUiState()
+    data class Success(
+        val alerts: List<Alert>,
+        val isPremium: Boolean,
+        val freeLimit: Int?,  // null = unlimited
+    ) : AlertsUiState() {
+        /** True when the user is on free tier and at the alert cap */
+        val atFreeLimit: Boolean get() = !isPremium && freeLimit != null && alerts.size >= freeLimit
+    }
     data class Error(val message: String) : AlertsUiState()
 }
 
+data class CreateAlertState(
+    val query: String = "",
+    val isSearching: Boolean = false,
+    val results: List<Skin> = emptyList(),
+    val selectedSkin: Skin? = null,
+    val type: AlertType = AlertType.BUY_BELOW,
+    val targetPrice: String = "",
+    val submitting: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+data class EditAlertState(
+    val alert: Alert? = null,           // non-null means the sheet is open
+    val type: AlertType = AlertType.BUY_BELOW,
+    val targetPrice: String = "",
+    val submitting: Boolean = false,
+    val errorMessage: String? = null,
+)
+
+data class AuthFormState(
+    val submitting: Boolean = false,
+    val errorMessage: String? = null,
+)
+
 @HiltViewModel
 class AlertsViewModel @Inject constructor(
-    private val alertRepository: AlertRepository
+    private val alertRepository: AlertRepository,
+    private val authRepository: AuthRepository,
+    private val skinRepository: SkinRepository,
+    private val analytics: AnalyticsService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AlertsUiState>(AlertsUiState.Loading)
     val uiState: StateFlow<AlertsUiState> = _uiState
 
-    // Demo: not premium
-    private val isPremium = false
-    private val freeAlertLimit = 5
+    private val _createState = MutableStateFlow(CreateAlertState())
+    val createState: StateFlow<CreateAlertState> = _createState
+
+    private val _editState = MutableStateFlow(EditAlertState())
+    val editState: StateFlow<EditAlertState> = _editState
+
+    private val _authState = MutableStateFlow(AuthFormState())
+    val authState: StateFlow<AuthFormState> = _authState
+
+    private var searchJob: Job? = null
 
     init {
         viewModelScope.launch {
-            if (alertRepository.countActive() == 0) {
-                MockData.mockAlerts.forEach { alertRepository.add(it) }
+            authRepository.isLoggedIn.collect { loggedIn ->
+                if (loggedIn) loadAlerts() else _uiState.value = AlertsUiState.NotLoggedIn
             }
         }
-        observeAlerts()
     }
 
-    private fun observeAlerts() {
+    fun loadAlerts() {
         viewModelScope.launch {
-            alertRepository.getAll()
-                .catch { e -> _uiState.value = AlertsUiState.Error(e.message ?: "Error") }
-                .collect { alerts ->
+            _uiState.value = AlertsUiState.Loading
+            runCatching { alertRepository.fetchAll() }
+                .onSuccess { state ->
                     _uiState.value = AlertsUiState.Success(
-                        alerts = alerts,
-                        isPremium = isPremium,
-                        freeAlertsUsed = alerts.count { it.isActive }
+                        alerts = state.alerts,
+                        isPremium = state.isPremium,
+                        freeLimit = state.freeLimit,
                     )
+                }
+                .onFailure { e ->
+                    _uiState.value = AlertsUiState.Error(e.message ?: "Failed to load alerts")
                 }
         }
     }
 
     fun toggleAlert(alert: Alert) {
         viewModelScope.launch {
-            alertRepository.setActive(alert, !alert.isActive)
+            runCatching { alertRepository.setActive(alert.id, !alert.isActive) }
+                .onSuccess { loadAlerts() }
         }
     }
 
-    fun deleteAlert(id: Long) {
-        viewModelScope.launch { alertRepository.delete(id) }
+    fun deleteAlert(id: String) {
+        viewModelScope.launch {
+            analytics.logAlertDeleted(id)
+            runCatching { alertRepository.delete(id) }
+                .onSuccess { loadAlerts() }
+        }
     }
+
+    // ─── Edit alert flow ──────────────────────────────────────────────────────
+
+    fun startEdit(alert: Alert) {
+        _editState.value = EditAlertState(
+            alert = alert,
+            type = alert.type,
+            targetPrice = "%.2f".format(alert.targetPrice),
+        )
+    }
+
+    fun cancelEdit() { _editState.value = EditAlertState() }
+
+    fun onEditTypeChange(type: AlertType) {
+        _editState.update { it.copy(type = type) }
+    }
+
+    fun onEditTargetPriceChange(value: String) {
+        val sanitized = value.filter { it.isDigit() || it == '.' }
+        _editState.update { it.copy(targetPrice = sanitized) }
+    }
+
+    /** Returns true on success — caller should dismiss the sheet. */
+    suspend fun submitEdit(): Boolean {
+        val s = _editState.value
+        val alert = s.alert ?: return false
+        val price = s.targetPrice.toDoubleOrNull()
+        if (price == null || price <= 0) {
+            _editState.update { it.copy(errorMessage = "Enter a valid target price") }
+            return false
+        }
+        _editState.update { it.copy(submitting = true, errorMessage = null) }
+        return runCatching {
+            alertRepository.update(alert.id, type = s.type, targetPrice = price)
+        }.fold(
+            onSuccess = {
+                analytics.logAlertEdited(alert.id, s.type.name, price)
+                _editState.value = EditAlertState()
+                loadAlerts()
+                true
+            },
+            onFailure = { e ->
+                _editState.update { it.copy(submitting = false, errorMessage = e.message ?: "Could not save changes") }
+                false
+            },
+        )
+    }
+
+    // ─── Auth ─────────────────────────────────────────────────────────────────
+
+    fun register(email: String, password: String, username: String?) {
+        viewModelScope.launch {
+            _authState.value = AuthFormState(submitting = true)
+            val error = authRepository.register(email, password, username)
+            _authState.value = AuthFormState(submitting = false, errorMessage = error)
+            // On success, the isLoggedIn flow will fire and loadAlerts() runs automatically
+        }
+    }
+
+    fun login(email: String, password: String) {
+        viewModelScope.launch {
+            _authState.value = AuthFormState(submitting = true)
+            val error = authRepository.login(email, password)
+            _authState.value = AuthFormState(submitting = false, errorMessage = error)
+        }
+    }
+
+    // ─── Create alert flow ────────────────────────────────────────────────────
+
+    fun resetCreateState() { _createState.value = CreateAlertState() }
+
+    fun onCreateQueryChange(q: String) {
+        _createState.update { it.copy(query = q, selectedSkin = null) }
+        searchJob?.cancel()
+        if (q.isBlank()) {
+            _createState.update { it.copy(results = emptyList(), isSearching = false) }
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(300)  // debounce
+            _createState.update { it.copy(isSearching = true) }
+            runCatching {
+                skinRepository.searchSkinsPage(
+                    query = q,
+                    filters = SearchFilters(),
+                    page = 1,
+                    limit = 8,
+                )
+            }.onSuccess { (skins, _, _) ->
+                _createState.update { it.copy(results = skins, isSearching = false) }
+            }.onFailure {
+                _createState.update { it.copy(results = emptyList(), isSearching = false) }
+            }
+        }
+    }
+
+    fun onCreateSkinSelected(skin: Skin) {
+        _createState.update {
+            it.copy(
+                selectedSkin = skin,
+                query = skin.name,
+                results = emptyList(),
+                targetPrice = if (skin.lowestMarketPrice > 0)
+                    "%.2f".format(skin.lowestMarketPrice) else "",
+            )
+        }
+    }
+
+    fun onCreateTypeChange(type: AlertType) {
+        _createState.update { it.copy(type = type) }
+    }
+
+    fun onCreateTargetPriceChange(value: String) {
+        // Allow only digits and one decimal point
+        val sanitized = value.filter { it.isDigit() || it == '.' }
+        _createState.update { it.copy(targetPrice = sanitized) }
+    }
+
+    /** Returns true on success — caller should dismiss the sheet. */
+    suspend fun submitCreateAlert(): Boolean {
+        val s = _createState.value
+        val skin = s.selectedSkin ?: run {
+            _createState.update { it.copy(errorMessage = "Pick a skin first") }
+            return false
+        }
+        val typed = s.targetPrice.toDoubleOrNull()
+        if (typed == null || typed <= 0) {
+            _createState.update { it.copy(errorMessage = "Enter a valid target price") }
+            return false
+        }
+        val priceUsd = typed  // always USD
+        _createState.update { it.copy(submitting = true, errorMessage = null) }
+        return runCatching {
+            alertRepository.create(skin.id, s.type, priceUsd)
+        }.fold(
+            onSuccess = {
+                analytics.logAlertCreated(skin.id, skin.name, s.type.name, priceUsd)
+                resetCreateState()
+                loadAlerts()
+                true
+            },
+            onFailure = { e ->
+                _createState.update {
+                    it.copy(submitting = false, errorMessage = e.message ?: "Could not create alert")
+                }
+                false
+            },
+        )
+    }
+}
+
+private inline fun <T> MutableStateFlow<T>.update(transform: (T) -> T) {
+    value = transform(value)
 }
