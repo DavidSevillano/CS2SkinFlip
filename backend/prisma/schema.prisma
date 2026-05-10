@@ -9,11 +9,15 @@ datasource db {
 
 model User {
   id           String    @id @default(cuid())
-  steamId      String    @unique
+  // Auth: at least one of (steamId) or (email + passwordHash)
+  steamId      String?   @unique
+  email        String?   @unique
+  passwordHash String?
   username     String
   avatarUrl    String?
   isPremium    Boolean   @default(false)
   premiumUntil DateTime?
+  fcmToken     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -22,6 +26,7 @@ model User {
   portfolio PortfolioItem[]
 
   @@index([steamId])
+  @@index([email])
 }
 
 model Skin {
@@ -48,6 +53,7 @@ model SkinPrice {
   csgoMarketPrice Float?
   lowestPrice     Float?
   volume24h       Int?
+  priceChange24h  Float?   // cached %, recomputed during each price refresh job
   updatedAt       DateTime @updatedAt
 
   skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)

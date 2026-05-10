@@ -1,5 +1,6 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
+import { fetchDMarketLivePrice } from '../jobs/populatePrices'
 import type { AggregatedPrices } from '../types'
 
 export class PriceService {
@@ -89,10 +90,31 @@ export class PriceService {
       }
     })
 
-    // Only cache if we actually have results
-    if (topMovers.length > 0) {
-      await redis.set(cacheKey, topMovers, { ex: CACHE_TTL.TOP_MOVERS })
+    // Enrich top-movers with live DMarket exchange prices before caching.
+    // This runs at most every 15 min (when the Redis cache expires), never per user request,
+    // so 20 parallel DMarket API calls here are well within rate limits.
+    // Results are also written to dm-live:{skinId} (5-min TTL) so the batch endpoint
+    // can serve correct DMarket prices without making any additional API calls.
+    const enriched = await Promise.all(
+      topMovers.map(async (mover) => {
+        try {
+          const live = await fetchDMarketLivePrice(mover.marketHashName, 'USD')
+          if (live === null) return mover
+          // Populate dm-live cache so /prices/batch picks it up for search results too
+          redis.set(`dm-live:${mover.skinId}`, live, { ex: CACHE_TTL.SKIN_PRICES }).catch(() => {})
+          const positives = [mover.skinportPrice, live, mover.csgoMarketPrice]
+            .filter((p): p is number => p != null && p > 0)
+          const lowestPrice = positives.length > 0 ? Math.min(...positives) : mover.lowestPrice
+          return { ...mover, dmarketPrice: live, lowestPrice }
+        } catch {
+          return mover
+        }
+      }),
+    )
+
+    if (enriched.length > 0) {
+      await redis.set(cacheKey, enriched, { ex: CACHE_TTL.TOP_MOVERS })
     }
-    return topMovers
+    return enriched
   }
 }

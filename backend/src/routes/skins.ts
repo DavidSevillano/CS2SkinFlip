@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
+import { fetchDMarketLivePrice, fetchSkinportLivePrice } from '../jobs/populatePrices'
 
 const priceService = new PriceService()
 
@@ -33,11 +34,23 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     // Build all filters as AND conditions to avoid field-merging conflicts
     const conditions: any[] = []
 
+    // Normalised search: strip every non-alphanumeric char from both sides
+    // so "awp dragonlore" matches "AWP | Dragon Lore" (the | and spaces vanish).
     if (q) {
-      conditions.push({ OR: [
-        { name: { contains: q, mode: 'insensitive' } },
-        { marketHashName: { contains: q, mode: 'insensitive' } },
-      ]})
+      const normalisedQ = q.toLowerCase().replace(/[^a-z0-9]/g, '')
+      if (normalisedQ.length > 0) {
+        const pattern = `%${normalisedQ}%`
+        const matches = await prisma.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "Skin"
+          WHERE regexp_replace(lower("marketHashName"), '[^a-z0-9]', '', 'g') LIKE ${pattern}
+             OR regexp_replace(lower("name"), '[^a-z0-9]', '', 'g') LIKE ${pattern}
+        `
+        const matchedIds = matches.map((r) => r.id)
+        if (matchedIds.length === 0) {
+          return { data: [], pagination: { page, limit, total: 0, pages: 0 } }
+        }
+        conditions.push({ id: { in: matchedIds } })
+      }
     }
     if (weapon) conditions.push({ weapon: { equals: weapon, mode: 'insensitive' } })
     if (rarity) conditions.push({ rarity: { equals: rarity, mode: 'insensitive' } })
@@ -53,6 +66,10 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     }
     // Without a search query: only show skins that already have a price
     if (!hasQuery) conditions.push({ price: { isNot: null } })
+    // When sorting by price, skip skins with no lowestPrice (NULL sorts first in Postgres DESC)
+    if (sort === 'price_asc' || sort === 'price_desc') {
+      conditions.push({ price: { is: { lowestPrice: { not: null } } } })
+    }
 
     const where: NonNullable<Parameters<typeof prisma.skin.findMany>[0]>['where'] =
       conditions.length > 0 ? { AND: conditions } : {}
@@ -83,7 +100,31 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy })
     }
 
-    return { data: skins, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
+    // Always recompute priceChange24h live from PriceHistory (same logic as /skins/:id)
+    // so values shown in search/home always match what the detail screen shows.
+    // The DB-cached column from the bulk job is stale between runs; prices can move in the interim.
+    const skinIds = skins.map((s: any) => s.id as string)
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const oldPrices = await prisma.priceHistory.findMany({
+      where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
+      orderBy: { timestamp: 'desc' },
+      distinct: ['skinId'],
+      select: { skinId: true, price: true },
+    })
+    const oldPriceMap = new Map(oldPrices.map((p) => [p.skinId, p.price]))
+
+    const enrichedSkins = skins.map((s: any) => {
+      if (!s.price) return s
+      const oldPrice = oldPriceMap.get(s.id)
+      const currentPrice = s.price.lowestPrice
+      const priceChange24h =
+        oldPrice != null && currentPrice != null && oldPrice > 0
+          ? ((currentPrice - oldPrice) / oldPrice) * 100
+          : s.price.priceChange24h ?? null  // fall back to bulk-job cache if no history entry
+      return { ...s, price: { ...s.price, priceChange24h } }
+    })
+
+    return { data: enrichedSkins, pagination: { page, limit, total, pages: Math.ceil(total / limit) } }
   })
 
   app.get('/skins/weapons', async () => {
@@ -102,10 +143,71 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
   app.get('/skins/:skinId', async (request, reply) => {
     const { skinId } = request.params as { skinId: string }
 
-    let skin = await prisma.skin.findUnique({ where: { id: skinId }, include: { price: true } })
+    const skin = await prisma.skin.findUnique({ where: { id: skinId }, include: { price: true } })
     if (!skin) return reply.status(404).send({ error: 'Skin not found' })
 
-    return skin
+    // Live price lookups — all in USD for consistency, plus Skinport in EUR for display.
+    // Skinport.com shows prices in EUR natively; fetching EUR avoids static-rate mismatch.
+    const [liveSkinportUsd, liveSkinportEur, liveDmarketUsd] = await Promise.all([
+      fetchSkinportLivePrice(skin.marketHashName, 'USD'),
+      fetchSkinportLivePrice(skin.marketHashName, 'EUR'),
+      fetchDMarketLivePrice(skin.marketHashName, 'USD'),
+    ])
+
+    const updatedSkinportUsd  = liveSkinportUsd  ?? skin.price?.skinportPrice   ?? null
+    const updatedDmarketUsd   = liveDmarketUsd   ?? skin.price?.dmarketPrice    ?? null
+    const updatedCsgoMarket   =                     skin.price?.csgoMarketPrice ?? null
+    const updatedSkinportEur  = liveSkinportEur  ?? null   // display-only, not stored
+
+    const lowestPrice = Math.min(
+      ...[updatedSkinportUsd, updatedDmarketUsd, updatedCsgoMarket]
+        .filter((p): p is number => p != null && p > 0)
+    ) || null
+
+    // Persist if anything changed by more than $0.50
+    const spChanged = liveSkinportUsd !== null &&
+      (!skin.price?.skinportPrice || Math.abs(skin.price.skinportPrice - liveSkinportUsd) > 0.5)
+    // Always persist when the exchange price is lower than the stored aggregator price —
+    // the aggregator can give inflated values; the exchange is always the true cheapest listing.
+    const dmChanged = liveDmarketUsd !== null &&
+      (!skin.price?.dmarketPrice ||
+       liveDmarketUsd < skin.price.dmarketPrice ||
+       Math.abs(skin.price.dmarketPrice - liveDmarketUsd) > 0.5)
+
+    if (skin.price && (spChanged || dmChanged)) {
+      await prisma.skinPrice.update({
+        where: { skinId },
+        data: {
+          ...(spChanged && { skinportPrice: liveSkinportUsd }),
+          ...(dmChanged && { dmarketPrice: liveDmarketUsd }),
+          lowestPrice: lowestPrice ?? skin.price.lowestPrice,
+          updatedAt: new Date(),
+        },
+      })
+    }
+
+    // 24h % change (USD history)
+    const oldEntry = await prisma.priceHistory.findFirst({
+      where: { skinId, timestamp: { lte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+      orderBy: { timestamp: 'desc' },
+    })
+    const priceChange24h = oldEntry && lowestPrice && oldEntry.price > 0
+      ? ((lowestPrice - oldEntry.price) / oldEntry.price) * 100
+      : null
+
+    return {
+      ...skin,
+      price: skin.price
+        ? {
+            ...skin.price,
+            skinportPrice:    updatedSkinportUsd,
+            skinportPriceEur: updatedSkinportEur,  // EUR native — shown as-is in the UI
+            dmarketPrice:     updatedDmarketUsd,
+            lowestPrice,
+            priceChange24h,
+          }
+        : skin.price,
+    }
   })
 
   app.get('/skins/:skinId/price-history', async (request, reply) => {

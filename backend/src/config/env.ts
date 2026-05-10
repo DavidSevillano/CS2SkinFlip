@@ -11,6 +11,9 @@ const envSchema = z.object({
   STEAM_API_KEY: z.string({ required_error: 'STEAM_API_KEY is required' }),
   STEAM_CALLBACK_URL: z.string().default('http://localhost:3000/auth/steam/callback'),
   FRONTEND_URL: z.string().default('http://localhost:8080'),
+  MOBILE_DEEP_LINK: z.string().default('cs2skinflip://auth/callback'),
+  DEBUG_SECRET: z.string().optional(),
+  FCM_SERVICE_ACCOUNT_PATH: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>
