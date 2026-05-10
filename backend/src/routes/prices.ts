@@ -36,11 +36,20 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
     const CONCURRENCY = 3
     const results: Array<{ id: string; skinportPrice: number | null; dmarketPrice: number | null; csgoMarketPrice: number | null; lowestPrice: number | null }> = []
 
+    const fetchWithRetry = async (fn: () => Promise<number | null>, retries = 2): Promise<number | null> => {
+      for (let i = 0; i < retries; i++) {
+        const result = await fn()
+        if (result !== null) return result
+        if (i < retries - 1) await new Promise(r => setTimeout(r, 200))
+      }
+      return null
+    }
+
     const processSkin = async (skin: typeof skins[number]) => {
       const [skinportPrice, dmarketPrice] = await Promise.all([
         fetchSkinportLivePrice(skin.marketHashName, 'USD')
           .then(p => p ?? skin.price?.skinportPrice ?? null),
-        fetchDMarketLivePrice(skin.marketHashName, 'USD')
+        fetchWithRetry(() => fetchDMarketLivePrice(skin.marketHashName, 'USD'))
           .then(p => p ?? skin.price?.dmarketPrice ?? null),  // fallback to DB if live fails
       ])
       
@@ -70,32 +79,61 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
       results.push(...batchResults)
     }
 
-    // Save all prices to DB in a single batch (faster than one by one)
+    // Save all prices to DB - only update if we have new values, preserve existing otherwise
     const updates = results
-      .filter(r => r.dmarketPrice !== null)
-      .map(r => prisma.skinPrice.update({
-        where: { skinId: r.id },
-        data: {
-          skinportPrice: r.skinportPrice,
-          dmarketPrice: r.dmarketPrice,
-          csgoMarketPrice: r.csgoMarketPrice,
-          lowestPrice: r.lowestPrice,
-          updatedAt: new Date(),
-        },
-      }).catch(() => null))
+      .map(r => {
+        const updateData: any = { updatedAt: new Date() }
+        
+        // Only update if we have a new value (not null)
+        if (r.skinportPrice != null) updateData.skinportPrice = r.skinportPrice
+        if (r.dmarketPrice != null) updateData.dmarketPrice = r.dmarketPrice
+        if (r.csgoMarketPrice != null) updateData.csgoMarketPrice = r.csgoMarketPrice
+        if (r.lowestPrice != null) updateData.lowestPrice = r.lowestPrice
+        
+        return prisma.skinPrice.update({
+          where: { skinId: r.id },
+          data: updateData,
+        }).catch(() => null)
+      })
 
     if (updates.length > 0) {
       await Promise.all(updates).catch(() => {})
     }
 
     const response: Record<string, object> = {}
+    // Get old prices for 24h change calculation
+    const skinIds = results.map(r => r.id)
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const oldPrices = await prisma.priceHistory.findMany({
+      where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
+      orderBy: { timestamp: 'desc' },
+      distinct: ['skinId'],
+      select: { skinId: true, price: true },
+    })
+    const oldPriceMap = new Map(oldPrices.map(p => [p.skinId, p.price]))
+
     for (const result of results) {
       app.log.info(`[BATCH] ${result.id}: sp=${result.skinportPrice}, dm=${result.dmarketPrice}, csgom=${result.csgoMarketPrice}, lowest=${result.lowestPrice}`)
+      // Ensure lowestPrice is always calculated from the actual prices, not cached
+      const actualLowest = Math.min(
+        result.skinportPrice ?? Infinity,
+        result.dmarketPrice ?? Infinity,
+        result.csgoMarketPrice ?? Infinity
+      )
+      const finalLowest = actualLowest === Infinity ? null : actualLowest
+
+      // Calculate 24h price change
+      const oldPrice = oldPriceMap.get(result.id)
+      const priceChange24h = oldPrice != null && finalLowest != null && oldPrice > 0
+        ? ((finalLowest - oldPrice) / oldPrice) * 100
+        : null
+
       response[result.id] = {
         skinportPrice: result.skinportPrice,
         dmarketPrice: result.dmarketPrice,
         csgoMarketPrice: result.csgoMarketPrice,
-        lowestPrice: result.lowestPrice,
+        lowestPrice: finalLowest,
+        priceChange24h,
       }
     }
 
