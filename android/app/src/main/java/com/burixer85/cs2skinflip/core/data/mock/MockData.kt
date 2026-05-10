@@ -2,8 +2,6 @@ package com.burixer85.cs2skinflip.core.data.mock
 
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
-import com.burixer85.cs2skinflip.core.domain.model.Portfolio
-import com.burixer85.cs2skinflip.core.domain.model.PortfolioItem
 import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
@@ -26,6 +24,7 @@ object MockData {
             wear = SkinWear.FIELD_TESTED,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEmwJQ7MMpiLuSoo_3i1C8-Bc5MTzyJIOWdlRsYQ7U-Vm5ku_njZC5vZ_LnHowtXE8pSGKlQ",
             skinportPrice = 23.10,
+            skinportPriceEur = null,
             dmarketPrice = 21.95,
             csgoMarketPrice = 22.30,
             priceChange24h = 2.3,
@@ -45,6 +44,7 @@ object MockData {
             wear = SkinWear.FIELD_TESTED,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FAR17PLfYQJD_9W7m5a0mvLwOq7c2DoI6p0h3rrE8Y3mitW1rxBjYG3qIoWRIAA4YV_SrFa-xO_shJW7vM6czCZiuCkqs2GdwUJBZyh9",
             skinportPrice = 62.80,
+            skinportPriceEur = null,
             dmarketPrice = 60.40,
             csgoMarketPrice = 61.50,
             priceChange24h = -1.8,
@@ -64,6 +64,7 @@ object MockData {
             wear = SkinWear.FIELD_TESTED,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhnwMzFJTwW09-vloWZh8j1OqzIgWoG65Zy2LyZp9ys2wKy_Us-YWn3INCQdFJoZF3S-lG9le_vhcC5vJvN13s3nXIsjDlmQrk",
             skinportPrice = 2050.00,
+            skinportPriceEur = null,
             dmarketPrice = 1950.00,
             csgoMarketPrice = 1980.00,
             priceChange24h = 0.8,
@@ -83,6 +84,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJf0ebcZThQ6t2zkIaZhsr_DK_Lg2yew9Wp9I_go9n231nkqRVuYz37cNjHIQFsNVuD_FO_xL_n15-5tZ3XnCFr6Cke93xYuQ",
             skinportPrice = 755.00,
+            skinportPriceEur = null,
             dmarketPrice = 730.00,
             csgoMarketPrice = 742.00,
             priceChange24h = 3.5,
@@ -102,6 +104,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposbaqKAxf0v73cCVQ74eKlY20kfbmMbfUqWdQ-sJ0xOuYoNijiVe3uEorNzH6cYeRJlVpN1nY_ge_wu_ug8Pv7czN12s2nCFuvlM",
             skinportPrice = 308.00,
+            skinportPriceEur = null,
             dmarketPrice = 295.00,
             csgoMarketPrice = 299.00,
             priceChange24h = -0.5,
@@ -120,6 +123,7 @@ object MockData {
             wear = SkinWear.FIELD_TESTED,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEmwJQ7MMpiLuSoo_3i1C8-Bc5MTyzIIaRd1Q5NV3Srla5x-m5hJ-47JrIm3U83SFQyQ",
             skinportPrice = 17.80,
+            skinportPriceEur = null,
             dmarketPrice = 17.20,
             csgoMarketPrice = 17.45,
             priceChange24h = 5.2,
@@ -138,6 +142,7 @@ object MockData {
             wear = SkinWear.FIELD_TESTED,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpopuP1FABz7ePdfi9Q6sqAkIGZmvbmNrfUqWdQ-sJ0xOuYoNimjlS1_ktrMTChdoTFIgJqNFGCq1i5yrju1ZO4u8jAnSY2pHUl-EUYTg",
             skinportPrice = 0.38,
+            skinportPriceEur = null,
             dmarketPrice = 0.36,
             csgoMarketPrice = 0.37,
             priceChange24h = -3.1,
@@ -156,6 +161,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpou-6kejhjxMzcdShQ7N2zkIaZh8j1OqzIgWoG65Zy2LyZp9ys2wKy_Us-YWuuJNCSdlU-YluCq1K_xO_vjpS5vZubnXFkuH0Eknr3Q",
             skinportPrice = 122.50,
+            skinportPriceEur = null,
             dmarketPrice = 118.90,
             csgoMarketPrice = 120.10,
             priceChange24h = 1.2,
@@ -174,6 +180,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgposr-3LghfwMvcYepHvYyJmImMn-O6Ma_um2pf4sN0xD-ToYr82wLh_BFpZWGncYCXIgRqYV6D_FDvk-i71J_p75nM1TFg7Cw50Jky1Q",
             skinportPrice = 422.00,
+            skinportPriceEur = null,
             dmarketPrice = 410.00,
             csgoMarketPrice = 415.00,
             priceChange24h = 4.1,
@@ -192,6 +199,7 @@ object MockData {
             wear = SkinWear.MINIMAL_WEAR,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpoo6m1FBRp3_bGcjhQ09-knpassGkh4LfDqWdQ-sJ0xOuYoNimjlKu4rBVuNW_dI-OQcVJoZF3S-lG9le_vhRjPGIuow",
             skinportPrice = 46.80,
+            skinportPriceEur = null,
             dmarketPrice = 44.70,
             csgoMarketPrice = 45.50,
             priceChange24h = -0.9,
@@ -210,6 +218,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot621FAZu7ObdGQJD_9W7m5a0mvLwOq7c2DoI6p0h3rrE8Y3mitW1rxBjYG3qIoWRIAA4YV_SrFa-xO_shJW7vM6czCZktnpPOEWb",
             skinportPrice = 1820.00,
+            skinportPriceEur = null,
             dmarketPrice = 1760.00,
             csgoMarketPrice = 1790.00,
             priceChange24h = -1.2,
@@ -229,6 +238,7 @@ object MockData {
             wear = SkinWear.FIELD_TESTED,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpot7HxfDhjxszJemkV09-5lpKKqPrxN7LEmwJQ7MMpiLuSoo_3i1C8-Bc5MTylJo-QIlA2YwjR-lW2xuy_hMK4u5_OwXFssnJp0Yvk8A",
             skinportPrice = 408.00,
+            skinportPriceEur = null,
             dmarketPrice = 392.00,
             csgoMarketPrice = 398.00,
             priceChange24h = 6.8,
@@ -248,6 +258,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpovbSsLQJf0ebcZThQ6t2zkIaZhsr_DK_Lg2yew9Wp9I_go9n231nkqRVuYz37cNjHIQFsNVuD_FO_xL_n15-5tZ3XnCFr6Cke93xYuQ",
             skinportPrice = 1130.00,
+            skinportPriceEur = null,
             dmarketPrice = 1085.00,
             csgoMarketPrice = 1100.00,
             priceChange24h = 2.1,
@@ -266,6 +277,7 @@ object MockData {
             wear = SkinWear.FACTORY_NEW,
             imageUrl = "$CDN/-9a81dlWLwJ2UUGcVs_nsVtzdOEdtWwKGZZLQHTxDZ7I56KU0Zwwo4NUX4oFJZEHLbXH5ApeO4YmlhxYQknCRvCo04DEVlxkKgpo1saZlhR7nOjcdDpX-t6zi4m0hOCgNqjQhm4G7sMmiLqZrY-j2FK3rhFkZWGhd4TIcFZpYAqD_VK_w-i90Je1vJvN1mtq63Ns52w",
             skinportPrice = 178.00,
+            skinportPriceEur = null,
             dmarketPrice = 171.00,
             csgoMarketPrice = 174.00,
             priceChange24h = 3.9,
@@ -279,74 +291,6 @@ object MockData {
 
     val trendingSkins: List<Skin>
         get() = skins.sortedByDescending { abs(it.priceChange24h ?: 0.0) }.take(10)
-
-    val mockPortfolio = Portfolio(
-        steamId = "76561198000000001",
-        username = "CS2Trader_Pro",
-        avatarUrl = "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg",
-        items = listOf(
-            PortfolioItem(
-                assetId = "1001",
-                skinId = "ak47_redline",
-                name = "AK-47 | Redline (Field-Tested)",
-                imageUrl = skins[0].imageUrl,
-                wear = SkinWear.FIELD_TESTED,
-                float = 0.22f,
-                isStatTrak = false,
-                currentPrice = 24.50,
-                acquirePrice = 21.00,
-                rarity = SkinRarity.CLASSIFIED
-            ),
-            PortfolioItem(
-                assetId = "1002",
-                skinId = "karambit_doppler",
-                name = "★ Karambit | Doppler (Factory New)",
-                imageUrl = skins[3].imageUrl,
-                wear = SkinWear.FACTORY_NEW,
-                float = 0.01f,
-                isStatTrak = false,
-                currentPrice = 780.00,
-                acquirePrice = 720.00,
-                rarity = SkinRarity.KNIFE
-            ),
-            PortfolioItem(
-                assetId = "1003",
-                skinId = "awp_asiimov",
-                name = "AWP | Asiimov (Field-Tested)",
-                imageUrl = skins[1].imageUrl,
-                wear = SkinWear.FIELD_TESTED,
-                float = 0.28f,
-                isStatTrak = true,
-                currentPrice = 65.20,
-                acquirePrice = 70.00,
-                rarity = SkinRarity.COVERT
-            ),
-            PortfolioItem(
-                assetId = "1004",
-                skinId = "m4a1s_printstream",
-                name = "M4A1-S | Printstream (Factory New)",
-                imageUrl = skins[7].imageUrl,
-                wear = SkinWear.FACTORY_NEW,
-                float = 0.008f,
-                isStatTrak = false,
-                currentPrice = 125.40,
-                acquirePrice = 115.00,
-                rarity = SkinRarity.COVERT
-            ),
-            PortfolioItem(
-                assetId = "1005",
-                skinId = "desert_eagle_blaze",
-                name = "Desert Eagle | Blaze (Factory New)",
-                imageUrl = skins[8].imageUrl,
-                wear = SkinWear.FACTORY_NEW,
-                float = 0.005f,
-                isStatTrak = false,
-                currentPrice = 428.00,
-                acquirePrice = 400.00,
-                rarity = SkinRarity.RESTRICTED
-            )
-        )
-    )
 
     val mockWatchlist: List<WatchlistItem> = listOf(
         WatchlistItem(
@@ -397,7 +341,7 @@ object MockData {
 
     val mockAlerts: List<Alert> = listOf(
         Alert(
-            id = 1,
+            id = "1",
             skinId = "m4a4_howl",
             skinName = "M4A4 | Howl (FT)",
             skinImageUrl = skins[2].imageUrl,
@@ -408,7 +352,7 @@ object MockData {
             isTriggered = false
         ),
         Alert(
-            id = 2,
+            id = "2",
             skinId = "ak47_fire_serpent",
             skinName = "AK-47 | Fire Serpent (FT)",
             skinImageUrl = skins[11].imageUrl,
@@ -419,7 +363,7 @@ object MockData {
             isTriggered = false
         ),
         Alert(
-            id = 3,
+            id = "3",
             skinId = "awp_asiimov",
             skinName = "AWP | Asiimov (FT)",
             skinImageUrl = skins[1].imageUrl,

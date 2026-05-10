@@ -1,7 +1,7 @@
 package com.burixer85.cs2skinflip.core.domain.model
 
 data class Alert(
-    val id: Long = 0,
+    val id: String = "",
     val skinId: String,
     val skinName: String,
     val skinImageUrl: String,
@@ -14,10 +14,10 @@ data class Alert(
     val triggeredAt: Long? = null
 ) {
     val percentageDiff: Double
-        get() = (currentPrice - targetPrice) / targetPrice * 100
+        get() = if (targetPrice > 0) (currentPrice - targetPrice) / targetPrice * 100 else 0.0
 }
 
-enum class AlertType(val displayName: String) {
-    BUY_BELOW("Buy below"),
-    SELL_ABOVE("Sell above")
+enum class AlertType(val displayName: String, val description: String) {
+    BUY_BELOW("Drops below",  "Notify when price drops below target"),
+    SELL_ABOVE("Rises above", "Notify when price rises above target")
 }

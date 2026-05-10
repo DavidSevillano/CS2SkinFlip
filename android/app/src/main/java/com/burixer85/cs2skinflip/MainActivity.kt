@@ -1,31 +1,72 @@
 package com.burixer85.cs2skinflip
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.ui.theme.Background
 import com.burixer85.cs2skinflip.core.ui.theme.CS2SkinFlipTheme
 import com.burixer85.cs2skinflip.navigation.AppNavigation
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var authRepository: AuthRepository
+
+    /** Skin ID coming from a push notification tap — triggers navigation in AppNavigation */
+    private var notificationSkinId by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleAuthIntent(intent)
+        handleNotificationIntent(intent)
         setContent {
             CS2SkinFlipTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = Background
                 ) {
-                    AppNavigation()
+                    AppNavigation(
+                        initialSkinId = notificationSkinId,
+                        onNavigatedToSkin = { notificationSkinId = null },
+                    )
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleAuthIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleAuthIntent(intent: Intent) {
+        val data = intent.data ?: return
+        if (data.scheme == "cs2skinflip" && data.host == "auth" && data.path == "/callback") {
+            val token = data.getQueryParameter("token") ?: return
+            lifecycleScope.launch {
+                authRepository.handleCallback(token)
+            }
+        }
+    }
+
+    private fun handleNotificationIntent(intent: Intent) {
+        val skinId = intent.getStringExtra("skinId") ?: return
+        notificationSkinId = skinId
     }
 }

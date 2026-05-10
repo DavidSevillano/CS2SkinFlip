@@ -18,16 +18,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -50,11 +46,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
+import com.burixer85.cs2skinflip.core.ui.LocalCurrency
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
 import com.burixer85.cs2skinflip.core.ui.components.PriceChangeChip
 import com.burixer85.cs2skinflip.core.ui.components.SkinListSkeleton
 import com.burixer85.cs2skinflip.core.ui.theme.AccentGreen
-import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.AccentRed
 import com.burixer85.cs2skinflip.core.ui.theme.Background
 import com.burixer85.cs2skinflip.core.ui.theme.DividerColor
@@ -67,7 +63,7 @@ import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 fun WatchlistScreen(
     onSkinClick: (String) -> Unit,
     onBack: () -> Unit,
-    viewModel: WatchlistViewModel = hiltViewModel()
+    viewModel: WatchlistViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -79,14 +75,14 @@ fun WatchlistScreen(
                     Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
         )
 
         when (val state = uiState) {
             is WatchlistUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
             is WatchlistUiState.Error -> ErrorState(
                 message = state.message,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
             is WatchlistUiState.Success -> {
                 if (state.items.isEmpty()) {
@@ -94,7 +90,7 @@ fun WatchlistScreen(
                         Text(
                             "No items in watchlist.\nBrowse skins and tap the bookmark icon.",
                             color = TextSecondary,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
                         )
                     }
                 } else {
@@ -102,11 +98,11 @@ fun WatchlistScreen(
                         item {
                             Row(
                                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     "${state.items.size} items tracked",
-                                    style = MaterialTheme.typography.labelMedium
+                                    style = MaterialTheme.typography.labelMedium,
                                 )
                                 Spacer(Modifier.weight(1f))
                                 Text("Swipe to remove", fontSize = 11.sp, color = TextSecondary)
@@ -118,7 +114,6 @@ fun WatchlistScreen(
                                 item = item,
                                 onClick = { onSkinClick(item.skinId) },
                                 onDelete = { viewModel.removeItem(item.id) },
-                                onToggleAlert = { enabled -> viewModel.toggleAlert(item.id, enabled) }
                             )
                             HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                         }
@@ -136,7 +131,6 @@ private fun WatchlistItemRow(
     item: WatchlistItem,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onToggleAlert: (Boolean) -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -144,8 +138,9 @@ private fun WatchlistItemRow(
                 onDelete()
                 true
             } else false
-        }
+        },
     )
+    val currency = LocalCurrency.current
 
     SwipeToDismissBox(
         state = dismissState,
@@ -154,16 +149,16 @@ private fun WatchlistItemRow(
                 if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart)
                     AccentRed.copy(alpha = 0.8f)
                 else Color.Transparent,
-                label = "swipe_bg"
+                label = "swipe_bg",
             )
             Box(
                 Modifier.fillMaxSize().background(color).padding(end = 16.dp),
-                contentAlignment = Alignment.CenterEnd
+                contentAlignment = Alignment.CenterEnd,
             ) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
             }
         },
-        enableDismissFromStartToEnd = false
+        enableDismissFromStartToEnd = false,
     ) {
         Row(
             modifier = Modifier
@@ -171,35 +166,38 @@ private fun WatchlistItemRow(
                 .background(Background)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(SurfaceElevated)
+                    .background(SurfaceElevated),
             ) {
                 AsyncImage(
                     model = item.skinImageUrl,
                     contentDescription = null,
                     modifier = Modifier.size(52.dp),
-                    contentScale = ContentScale.Fit
+                    contentScale = ContentScale.Fit,
                 )
             }
 
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
 
             Column(Modifier.weight(1f)) {
                 Text(
                     text = item.skinName,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${"$%.2f".format(item.currentPrice)}", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        currency.format(item.currentPrice.takeIf { it > 0 }),
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                    )
                     Spacer(Modifier.width(6.dp))
                     PriceChangeChip(change = item.priceChange24h)
                 }
@@ -207,41 +205,18 @@ private fun WatchlistItemRow(
                     val diff = (item.currentPrice - target) / target * 100
                     val color = if (diff <= 0) AccentGreen else TextSecondary
                     Text(
-                        "Target: ${"$%.2f".format(target)} (${if (diff <= 0) "" else "+"}${"%.1f".format(diff)}%)",
+                        "Target: ${currency.format(target)} (${if (diff <= 0) "" else "+"}${"%.1f".format(diff)}%)",
                         fontSize = 11.sp,
-                        color = color
+                        color = color,
                     )
                 }
                 item.targetSellPrice?.let { target ->
-                    val diff = (item.currentPrice - target) / target * 100
-                    val color = if (diff >= 0) AccentGreen else TextSecondary
                     Text(
-                        "Sell target: ${"$%.2f".format(target)}",
+                        "Sell target: ${currency.format(target)}",
                         fontSize = 11.sp,
-                        color = color
+                        color = AccentGreen,
                     )
                 }
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Switch(
-                    checked = item.alertEnabled,
-                    onCheckedChange = onToggleAlert,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = AccentOrange,
-                        checkedTrackColor = AccentOrange.copy(0.3f)
-                    ),
-                    thumbContent = {
-                        Icon(
-                            imageVector = if (item.alertEnabled) Icons.Default.NotificationsActive
-                            else Icons.Default.NotificationsOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                )
             }
         }
     }

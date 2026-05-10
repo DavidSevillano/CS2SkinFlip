@@ -4,8 +4,11 @@ import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
+import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
-import retrofit2.http.Header
+import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.text.SimpleDateFormat
@@ -44,11 +47,44 @@ interface CS2BackendApiService {
         @Query("days") days: Int = 30
     ): List<PriceHistoryDto>
 
+    @POST("auth/register")
+    suspend fun register(@Body body: RegisterRequest): AuthResponseDto
+
+    @POST("auth/login")
+    suspend fun login(@Body body: LoginRequest): AuthResponseDto
+
+    @GET("auth/me")
+    suspend fun getMe(): MeResponseDto
+
     @GET("alerts")
-    suspend fun getAlerts(@Header("Authorization") bearer: String): AlertsResponseDto
+    suspend fun getAlerts(): AlertsResponseDto
+
+    @POST("alerts")
+    suspend fun createAlert(@Body body: CreateAlertRequest): AlertDto
+
+    @PUT("alerts/{id}")
+    suspend fun updateAlert(@Path("id") id: String, @Body body: UpdateAlertRequest): AlertDto
+
+    @DELETE("alerts/{id}")
+    suspend fun deleteAlert(@Path("id") id: String)
 
     @GET("watchlist")
-    suspend fun getWatchlist(@Header("Authorization") bearer: String): List<WatchlistItemDto>
+    suspend fun getWatchlist(): List<WatchlistItemDto>
+
+    @PUT("auth/me/fcm-token")
+    suspend fun updateFcmToken(@Body body: FcmTokenRequest)
+
+    /**
+     * Batch price refresh — returns live prices for up to 50 skins in one call.
+     * Skinport comes from the server's in-memory map (instant), DMarket from the
+     * live exchange API with a 5-minute Redis cache. CS:GO Market is from the DB.
+     *
+     * Use this instead of calling [getSkin] 20 times after a list loads.
+     */
+    @GET("prices/batch")
+    suspend fun getPricesBatch(
+        @Query("ids") ids: String,   // comma-separated skin IDs, max 50
+    ): Map<String, BatchSkinPriceDto>
 }
 
 // ─── DTOs ─────────────────────────────────────────────────────────────────────
@@ -86,15 +122,25 @@ data class BackendSkinDto(
     val weapon: String,
     val rarity: String,
     val iconUrl: String,
-    val price: BackendSkinPriceDto?
+    val price: BackendSkinPriceDto?,
 )
 
 data class BackendSkinPriceDto(
+    val skinportPrice: Double?,       // USD
+    val skinportPriceEur: Double?,    // EUR native from Skinport API (shown as-is in detail)
+    val dmarketPrice: Double?,        // USD
+    val csgoMarketPrice: Double?,     // USD
+    val lowestPrice: Double?,         // USD
+    val volume24h: Int?,
+    val priceChange24h: Double?,
+)
+
+/** Lightweight price-only payload returned by GET /prices/batch. */
+data class BatchSkinPriceDto(
     val skinportPrice: Double?,
     val dmarketPrice: Double?,
     val csgoMarketPrice: Double?,
     val lowestPrice: Double?,
-    val volume24h: Int?
 )
 
 data class PriceHistoryDto(
@@ -111,8 +157,11 @@ data class AlertsResponseDto(
 data class AlertDto(
     val id: String,
     val skinId: String,
+    val skinName: String?,
+    val skinImageUrl: String?,
     val type: String,
     val targetPrice: Double,
+    val currentPrice: Double?,
     val isActive: Boolean,
     val isTriggered: Boolean,
     val createdAt: String
@@ -130,6 +179,18 @@ data class WatchlistItemDto(
     val targetBuyPrice: Double?,
     val targetSellPrice: Double?,
     val alertEnabled: Boolean
+)
+
+data class CreateAlertRequest(
+    val skinId: String,
+    val type: String,
+    val targetPrice: Double,
+)
+
+data class UpdateAlertRequest(
+    val targetPrice: Double? = null,
+    val isActive: Boolean? = null,
+    val type: String? = null,
 )
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -152,8 +213,10 @@ fun TopMoverDto.toDomain(): Skin {
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
         skinportPrice = skinportPrice,
+        skinportPriceEur = null,  // top-movers don't include EUR price
         dmarketPrice = dmarketPrice,
         csgoMarketPrice = csgoMarketPrice,
+        lowestPrice = lowestPrice,
         priceChange24h = priceChange24h,
         volume24h = volume24h ?: 0,
         floatMin = wear.floatRange.start,
@@ -181,14 +244,17 @@ fun BackendSkinDto.toDomain(
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
         skinportPrice = price?.skinportPrice,
+        skinportPriceEur = price?.skinportPriceEur,
         dmarketPrice = price?.dmarketPrice,
         csgoMarketPrice = price?.csgoMarketPrice,
-        priceChange24h = priceChange24h,
+        lowestPrice = price?.lowestPrice,
+        // priceChange24h from the API takes priority; caller can override if needed
+        priceChange24h = price?.priceChange24h ?: priceChange24h,
         volume24h = price?.volume24h ?: 0,
         floatMin = wear.floatRange.start,
         floatMax = wear.floatRange.endInclusive,
         floatMedian = (wear.floatRange.start + wear.floatRange.endInclusive) / 2f,
-        priceHistory = priceHistory
+        priceHistory = priceHistory,
     )
 }
 
@@ -223,3 +289,42 @@ fun parseRarityFromName(marketHashName: String): SkinRarity = when {
     marketHashName.startsWith("★") -> SkinRarity.KNIFE
     else -> SkinRarity.COVERT // default for top movers (no rarity in that endpoint)
 }
+
+// ─── Auth DTOs ───────────────────────────────────────────────────────────────
+
+data class RegisterRequest(
+    val email: String,
+    val password: String,
+    val username: String? = null,
+)
+
+data class LoginRequest(
+    val email: String,
+    val password: String,
+)
+
+data class FcmTokenRequest(
+    val token: String,
+)
+
+data class AuthResponseDto(
+    val token: String,
+    val user: AuthUserDto,
+)
+
+data class AuthUserDto(
+    val id: String,
+    val email: String?,
+    val username: String,
+    val isPremium: Boolean,
+)
+
+data class MeResponseDto(
+    val id: String,
+    val steamId: String?,
+    val email: String?,
+    val username: String,
+    val avatarUrl: String?,
+    val isPremium: Boolean,
+    val premiumUntil: String?,
+)

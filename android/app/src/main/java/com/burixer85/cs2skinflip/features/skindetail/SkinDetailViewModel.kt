@@ -3,6 +3,7 @@ package com.burixer85.cs2skinflip.features.skindetail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
@@ -23,7 +24,8 @@ sealed class SkinDetailUiState {
 class SkinDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val skinRepository: SkinRepository,
-    private val watchlistRepository: WatchlistRepository
+    private val watchlistRepository: WatchlistRepository,
+    private val analytics: AnalyticsService,
 ) : ViewModel() {
 
     private val skinId: String = checkNotNull(savedStateHandle["skinId"])
@@ -43,6 +45,7 @@ class SkinDetailViewModel @Inject constructor(
             } else {
                 val inWatchlist = watchlistRepository.isInWatchlist(skinId)
                 _uiState.value = SkinDetailUiState.Success(skin, inWatchlist)
+                analytics.logSkinViewed(skin.id, skin.name)
             }
         }
     }
@@ -53,6 +56,7 @@ class SkinDetailViewModel @Inject constructor(
             if (state.isInWatchlist) {
                 watchlistRepository.removeBySkinId(skinId)
             } else {
+                analytics.logSkinAddedToWatchlist(state.skin.id, state.skin.name)
                 watchlistRepository.add(
                     WatchlistItem(
                         skinId = state.skin.id,
@@ -60,8 +64,8 @@ class SkinDetailViewModel @Inject constructor(
                         skinImageUrl = state.skin.imageUrl,
                         targetBuyPrice = null,
                         targetSellPrice = null,
-                        currentPrice = state.skin.steamPrice,
-                        priceChange24h = state.skin.priceChange24h
+                        currentPrice = state.skin.lowestMarketPrice,
+                        priceChange24h = state.skin.priceChange24h ?: 0.0
                     )
                 )
             }

@@ -2,39 +2,58 @@ package com.burixer85.cs2skinflip.features.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
+import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+private const val PAGE_SIZE = 20
+
+enum class SortBy(val label: String, val apiValue: String) {
+    PRICE_DESC("Price: High → Low", "price_desc"),
+    PRICE_ASC("Price: Low → High", "price_asc"),
+    NAME("Name A → Z", "name"),
+}
+
 data class SearchFilters(
-    val weapon: String? = null,
-    val rarity: SkinRarity? = null,
     val wear: SkinWear? = null,
-    val statTrakOnly: Boolean = false
-)
+    val rarity: SkinRarity? = null,
+    val weapon: String? = null,
+    val statTrakOnly: Boolean = false,
+    val minPrice: Double? = null,
+    val maxPrice: Double? = null,
+    val sortBy: SortBy = SortBy.PRICE_DESC,
+) {
+    val activeCount: Int get() = listOfNotNull(
+        wear,
+        rarity,
+        weapon,
+        if (statTrakOnly) true else null,
+        if (minPrice != null || maxPrice != null) true else null,
+    ).size
+}
 
 sealed class SearchUiState {
-    object Idle : SearchUiState()
     object Loading : SearchUiState()
-    data class Success(val results: List<Skin>) : SearchUiState()
+    data class Success(
+        val results: List<Skin>,
+        val isLoadingMore: Boolean = false,
+        val hasMore: Boolean = false,
+        val totalCount: Int = 0,
+    ) : SearchUiState()
     data class Error(val message: String) : SearchUiState()
 }
 
-@OptIn(FlowPreview::class)
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val skinRepository: SkinRepository
+    private val skinRepository: SkinRepository,
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
@@ -43,47 +62,158 @@ class SearchViewModel @Inject constructor(
     private val _filters = MutableStateFlow(SearchFilters())
     val filters: StateFlow<SearchFilters> = _filters
 
-    private val _uiState = MutableStateFlow<SearchUiState>(SearchUiState.Idle)
+    private val _uiState = MutableStateFlow<SearchUiState>(SearchUiState.Loading)
     val uiState: StateFlow<SearchUiState> = _uiState
 
     private val _availableWeapons = MutableStateFlow<List<String>>(emptyList())
     val availableWeapons: StateFlow<List<String>> = _availableWeapons
 
+    /** Live skin suggestions shown in the autocomplete dropdown — debounced, top 6. */
+    private val _suggestions = MutableStateFlow<List<Skin>>(emptyList())
+    val suggestions: StateFlow<List<Skin>> = _suggestions
+
+    /** True while the autocomplete is fetching (drives the small spinner). */
+    private val _suggestionsLoading = MutableStateFlow(false)
+    val suggestionsLoading: StateFlow<Boolean> = _suggestionsLoading
+
+    private var currentPage = 1
+    private var searchJob: Job? = null
+    private var suggestJob: Job? = null
+
     init {
+        viewModelScope.launch { _availableWeapons.value = skinRepository.getAllWeapons() }
+        triggerSearch(resetPage = true)
+        // When the detail screen fetches live prices, update matching cards in-place so
+        // lowestPrice reflects the real-time DMarket exchange price immediately.
         viewModelScope.launch {
-            _availableWeapons.value = skinRepository.getAllWeapons()
-        }
-        viewModelScope.launch {
-            _query
-                .debounce(300)
-                .distinctUntilChanged()
-                .flatMapLatest { q ->
-                    val f = _filters.value
-                    _uiState.value = SearchUiState.Loading
-                    skinRepository.searchSkins(q, f.weapon, f.rarity, f.wear, f.statTrakOnly)
+            skinRepository.livePriceCache.collect { cache ->
+                val current = _uiState.value as? SearchUiState.Success ?: return@collect
+                if (cache.isEmpty()) return@collect
+                val updated = current.results.map { skin ->
+                    cache[skin.id]?.let { live ->
+                        skin.copy(
+                            skinportPrice   = live.skinportPrice,
+                            dmarketPrice    = live.dmarketPrice,
+                            csgoMarketPrice = live.csgoMarketPrice,
+                            lowestPrice     = live.lowestPrice,
+                            priceChange24h  = live.priceChange24h,
+                        )
+                    } ?: skin
                 }
-                .catch { e -> _uiState.value = SearchUiState.Error(e.message ?: "Error") }
-                .collect { results ->
-                    _uiState.value = SearchUiState.Success(results)
+                if (updated != current.results) {
+                    _uiState.value = current.copy(results = updated)
                 }
+            }
         }
     }
 
-    fun onQueryChange(query: String) { _query.value = query }
-
-    fun onFiltersChange(filters: SearchFilters) {
-        _filters.value = filters
-        triggerSearch()
+    fun onQueryChange(q: String) {
+        _query.value = q
+        triggerSearch(resetPage = true, debounceMs = 300)
+        triggerSuggestions(q)
     }
 
-    private fun triggerSearch() {
+    /** Cancels any pending suggestion lookups (e.g. when the dropdown closes). */
+    fun clearSuggestions() {
+        suggestJob?.cancel()
+        _suggestions.value = emptyList()
+        _suggestionsLoading.value = false
+    }
+
+    private fun triggerSuggestions(q: String) {
+        suggestJob?.cancel()
+        if (q.isBlank()) {
+            _suggestions.value = emptyList()
+            _suggestionsLoading.value = false
+            return
+        }
+        suggestJob = viewModelScope.launch {
+            delay(250)  // debounce — slightly tighter than the main search to feel snappy
+            _suggestionsLoading.value = true
+            runCatching {
+                skinRepository.searchSkinsPage(
+                    query = q,
+                    filters = SearchFilters(),  // ignore active filters in the suggestion list
+                    page = 1,
+                    limit = 6,
+                )
+            }.onSuccess { (skins, _, _) ->
+                _suggestions.value = skins
+            }.onFailure {
+                _suggestions.value = emptyList()
+            }
+            _suggestionsLoading.value = false
+        }
+    }
+
+    fun onFiltersChange(f: SearchFilters) {
+        _filters.value = f
+        triggerSearch(resetPage = true)
+    }
+
+    fun clearFilters() {
+        _filters.value = SearchFilters(sortBy = _filters.value.sortBy)
+        triggerSearch(resetPage = true)
+    }
+
+    fun loadMore() {
+        val current = _uiState.value as? SearchUiState.Success ?: return
+        if (!current.hasMore || current.isLoadingMore) return
+        _uiState.value = current.copy(isLoadingMore = true)
+        currentPage++
         viewModelScope.launch {
+            runCatching {
+                skinRepository.searchSkinsPage(
+                    query = _query.value,
+                    filters = _filters.value,
+                    page = currentPage,
+                    limit = PAGE_SIZE,
+                )
+            }.onSuccess { (skins, hasMore, total) ->
+                // Deduplicate by ID to guard against the same item appearing on two pages
+                // (e.g., a row inserted between fetches shifts the OFFSET window).
+                val existingIds = current.results.map { it.id }.toHashSet()
+                val newSkins = skins.filter { it.id !in existingIds }
+                // Fetch live prices for the new page before appending — same guarantee
+                // as the initial load: correct DMarket prices from the first render.
+                val liveNewSkins = skinRepository.refreshSkinPricesBatch(newSkins)
+                _uiState.value = SearchUiState.Success(
+                    results = current.results + liveNewSkins,
+                    isLoadingMore = false,
+                    hasMore = hasMore,
+                    totalCount = total,
+                )
+            }.onFailure {
+                _uiState.value = current.copy(isLoadingMore = false)
+            }
+        }
+    }
+
+    private fun triggerSearch(resetPage: Boolean = true, debounceMs: Long = 0) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            if (debounceMs > 0) delay(debounceMs)
+            if (resetPage) currentPage = 1
             _uiState.value = SearchUiState.Loading
-            val q = _query.value
-            val f = _filters.value
-            skinRepository.searchSkins(q, f.weapon, f.rarity, f.wear, f.statTrakOnly)
-                .catch { e -> _uiState.value = SearchUiState.Error(e.message ?: "Error") }
-                .collect { results -> _uiState.value = SearchUiState.Success(results) }
+            runCatching {
+                skinRepository.searchSkinsPage(
+                    query = _query.value,
+                    filters = _filters.value,
+                    page = 1,
+                    limit = PAGE_SIZE,
+                )
+            }.onSuccess { (skins, hasMore, total) ->
+                // Fetch live prices before showing — cards display the correct DMarket
+                // exchange price from the first render, no flicker.
+                val liveSkins = skinRepository.refreshSkinPricesBatch(skins)
+                _uiState.value = SearchUiState.Success(
+                    results = liveSkins,
+                    hasMore = hasMore,
+                    totalCount = total,
+                )
+            }.onFailure { e ->
+                _uiState.value = SearchUiState.Error(e.message ?: "Search failed")
+            }
         }
     }
 }

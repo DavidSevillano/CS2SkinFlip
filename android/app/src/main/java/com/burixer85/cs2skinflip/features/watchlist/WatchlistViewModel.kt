@@ -2,7 +2,6 @@ package com.burixer85.cs2skinflip.features.watchlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.burixer85.cs2skinflip.core.data.mock.MockData
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,19 +19,18 @@ sealed class WatchlistUiState {
 
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
-    private val watchlistRepository: WatchlistRepository
+    private val watchlistRepository: WatchlistRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
     val uiState: StateFlow<WatchlistUiState> = _uiState
 
     init {
-        // Pre-seed with mock data on first run for demo purposes
+        // One-time cleanup: remove pre-seeded mock items from older versions.
+        // Their skin IDs don't match real backend cuids, so user-added items aren't affected.
         viewModelScope.launch {
-            if (watchlistRepository.isInWatchlist(MockData.mockWatchlist[0].skinId).not()) {
-                MockData.mockWatchlist.forEach { item ->
-                    watchlistRepository.add(item)
-                }
+            listOf("m4a4_howl", "awp_dragon_lore", "glock_fade", "butterfly_marble_fade").forEach {
+                watchlistRepository.removeBySkinId(it)
             }
         }
         observeWatchlist()
@@ -48,9 +46,5 @@ class WatchlistViewModel @Inject constructor(
 
     fun removeItem(id: Long) {
         viewModelScope.launch { watchlistRepository.remove(id) }
-    }
-
-    fun toggleAlert(id: Long, enabled: Boolean) {
-        viewModelScope.launch { watchlistRepository.toggleAlert(id, enabled) }
     }
 }

@@ -1,13 +1,14 @@
 package com.burixer85.cs2skinflip.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -29,12 +30,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.Surface
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 import com.burixer85.cs2skinflip.features.alerts.AlertsScreen
 import com.burixer85.cs2skinflip.features.home.HomeScreen
-import com.burixer85.cs2skinflip.features.portfolio.PortfolioScreen
 import com.burixer85.cs2skinflip.features.search.SearchScreen
 import com.burixer85.cs2skinflip.features.settings.SettingsScreen
 import com.burixer85.cs2skinflip.features.skindetail.SkinDetailScreen
@@ -50,13 +51,24 @@ private data class BottomNavItem(
 private val bottomNavItems = listOf(
     BottomNavItem("Home", Screen.Home.route, Icons.Filled.Home, Icons.Outlined.Home),
     BottomNavItem("Search", Screen.Search.route, Icons.Filled.Search, Icons.Outlined.Search),
-    BottomNavItem("Portfolio", Screen.Portfolio.route, Icons.Filled.Inventory2, Icons.Outlined.Inventory2),
+    BottomNavItem("Alerts", Screen.Alerts.route, Icons.Filled.Notifications, Icons.Outlined.Notifications),
     BottomNavItem("Settings", Screen.Settings.route, Icons.Filled.Settings, Icons.Outlined.Settings)
 )
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    initialSkinId: String? = null,
+    onNavigatedToSkin: () -> Unit = {},
+) {
     val navController = rememberNavController()
+
+    // Handle notification tap: navigate to skin detail once navController is ready
+    LaunchedEffect(initialSkinId) {
+        if (initialSkinId != null) {
+            navController.navigate(Screen.SkinDetail.createRoute(initialSkinId))
+            onNavigatedToSkin()
+        }
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
@@ -90,21 +102,18 @@ fun AppNavigation() {
                 )
             }
 
-            composable(Screen.Portfolio.route) {
-                PortfolioScreen(
+            composable(Screen.Alerts.route) {
+                AlertsScreen(
                     onSkinClick = { skinId ->
                         navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    },
-                    onWatchlistClick = {
-                        navController.navigate(Screen.Watchlist.route)
                     }
                 )
             }
 
             composable(Screen.Settings.route) {
                 SettingsScreen(
-                    onAlertsClick = {
-                        navController.navigate(Screen.Alerts.route)
+                    onWatchlistClick = {
+                        navController.navigate(Screen.Watchlist.route)
                     }
                 )
             }
@@ -114,12 +123,6 @@ fun AppNavigation() {
                     onSkinClick = { skinId ->
                         navController.navigate(Screen.SkinDetail.createRoute(skinId))
                     },
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable(Screen.Alerts.route) {
-                AlertsScreen(
                     onBack = { navController.popBackStack() }
                 )
             }
