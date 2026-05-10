@@ -27,6 +27,15 @@ backend/prisma/migrations/
 # ─── Claude Code worktrees ────────────────────────────────
 .claude/
 
+# ─── Firebase (sensitive) ─────────────────────────────────
+android/app/google-services.json
+backend/firebase-service-account.json
+backend/firebase-service-account.json.json
+
+# ─── Agent config ─────────────────────────────────────────
+**/.agents/
+**/skills-lock.json
+
 # ─── Misc ─────────────────────────────────────────────────
 build/
 local.properties
