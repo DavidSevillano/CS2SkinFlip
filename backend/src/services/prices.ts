@@ -44,51 +44,55 @@ export class PriceService {
   }
 
   async getTopMovers(limit = 20): Promise<Array<AggregatedPrices & { name: string; iconUrl: string }>> {
-    const cacheKey = `top-movers:${limit}`
-    const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
-    if (cached) return cached
-
-    // Only skins with a real price, shuffled for variety
+    // Always fetch fresh prices - no cache to ensure correct prices on first load
+    // Get all skins with prices, then calculate 24h change and sort by biggest gainers
     const skins = await prisma.skin.findMany({
       include: { price: true },
       where: { price: { lowestPrice: { gt: 0 } } },
-      orderBy: { price: { lowestPrice: 'desc' } },
-      take: limit * 5,
     })
 
-    // Shuffle to show variety each time, then take top N
-    const shuffled = skins.sort(() => Math.random() - 0.5).slice(0, limit)
-
-    // Batch fetch price history for all selected skins (avoid N+1)
-    const skinIds = shuffled.map((s) => s.id)
+    // Get price history from 24h ago for all skins
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const histories = await prisma.priceHistory.findMany({
-      where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
+      where: { timestamp: { lte: dayAgo } },
       orderBy: { timestamp: 'desc' },
       distinct: ['skinId'],
     })
     const historyMap = new Map(histories.map((h) => [h.skinId, h.price]))
 
-    const topMovers = shuffled.map((skin) => {
+    // Calculate price change and sort by biggest gainers
+    const skinsWithChange = skins.map((skin) => {
       const current = skin.price?.lowestPrice ?? null
       const prev = historyMap.get(skin.id) ?? null
-      const priceChange24h = current !== null && prev !== null
+      const priceChange24h = current !== null && prev !== null && prev > 0
         ? ((current - prev) / prev) * 100
         : null
-      return {
-        skinId: skin.id,
-        marketHashName: skin.marketHashName,
-        name: skin.name,
-        iconUrl: skin.iconUrl,
-        skinportPrice: skin.price?.skinportPrice ?? null,
-        dmarketPrice: skin.price?.dmarketPrice ?? null,
-        csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
-        lowestPrice: current,
-        priceChange24h,
-        volume24h: skin.price?.volume24h ?? null,
-        updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
-      }
+      return { skin, priceChange24h }
     })
+
+    // Sort by biggest price increase (or by price if no change data)
+    const sorted = skinsWithChange.sort((a, b) => {
+      if (a.priceChange24h !== null && b.priceChange24h !== null) {
+        return b.priceChange24h - a.priceChange24h // biggest gainers first
+      }
+      if (a.priceChange24h !== null) return -1
+      if (b.priceChange24h !== null) return 1
+      return (b.skin.price?.lowestPrice ?? 0) - (a.skin.price?.lowestPrice ?? 0)
+    })
+
+    const topMovers = sorted.slice(0, limit).map(({ skin, priceChange24h }) => ({
+      skinId: skin.id,
+      marketHashName: skin.marketHashName,
+      name: skin.name,
+      iconUrl: skin.iconUrl,
+      skinportPrice: skin.price?.skinportPrice ?? null,
+      dmarketPrice: skin.price?.dmarketPrice ?? null,
+      csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
+      lowestPrice: skin.price?.lowestPrice ?? null,
+      priceChange24h,
+      volume24h: skin.price?.volume24h ?? null,
+      updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
+    }))
 
     // Enrich top-movers with live DMarket exchange prices before caching.
     // This runs at most every 15 min (when the Redis cache expires), never per user request,
@@ -112,9 +116,6 @@ export class PriceService {
       }),
     )
 
-    if (enriched.length > 0) {
-      await redis.set(cacheKey, enriched, { ex: CACHE_TTL.TOP_MOVERS })
-    }
     return enriched
   }
 }

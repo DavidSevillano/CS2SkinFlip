@@ -82,7 +82,9 @@ export async function fetchSkinportLivePrice(
   // 1. In-memory cache for this currency
   const cached = _skinportMaps.get(cur)
   if (cached && (Date.now() - cached.fetchedAt) < SKINPORT_MEM_TTL_MS) {
-    return cached.map.get(marketHashName)?.price ?? null
+    const price = cached.map.get(marketHashName)?.price ?? null
+    console.log(`[Skinport] ${marketHashName}: in-memory cache price=${price}`)
+    return price
   }
 
   // 2. Redis backup (USD only — we don't persist non-USD maps)
@@ -94,14 +96,19 @@ export async function fetchSkinportLivePrice(
       if (redisCached) {
         const map = new Map(Object.entries(redisCached))
         _skinportMaps.set('USD', { map, fetchedAt: Date.now() })
-        return map.get(marketHashName)?.price ?? null
+        const price = map.get(marketHashName)?.price ?? null
+        console.log(`[Skinport] ${marketHashName}: redis cache price=${price}`)
+        return price
       }
     } catch { /* ignore */ }
   }
 
   // 3. Refetch from Skinport API in the requested currency
+  console.log(`[Skinport] ${marketHashName}: refetching from API for currency ${cur}`)
   const map = await fetchSkinportPrices(undefined, cur)
-  return map.get(marketHashName)?.price ?? null
+  const price = map.get(marketHashName)?.price ?? null
+  console.log(`[Skinport] ${marketHashName}: API price=${price}`)
+  return price
 }
 
 // ─── CS:GO Market ────────────────────────────────────────────────────────────

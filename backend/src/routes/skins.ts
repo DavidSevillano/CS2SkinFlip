@@ -92,12 +92,13 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       const shuffled = allIds.sort(() => Math.random() - 0.5).slice(skip, skip + limit)
       const ids = shuffled.map((s) => s.id)
       skins = await prisma.skin.findMany({ where: { id: { in: ids } }, include: { price: true } })
-    } else {
-      const orderBy: NonNullable<Parameters<typeof prisma.skin.findMany>[0]>['orderBy'] =
-        sort === 'price_asc'  ? { price: { lowestPrice: 'asc' } }  :
-        sort === 'price_desc' ? { price: { lowestPrice: 'desc' } } :
-        { name: 'asc' }
+    } else if (sort === 'price_asc' || sort === 'price_desc') {
+      // sort by price from DB (already updated by batch when user visits app)
+      const orderBy: any = sort === 'price_asc' ? { price: { lowestPrice: 'asc' } } : { price: { lowestPrice: 'desc' } }
       skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy })
+    } else {
+      // sort === 'name'
+      skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy: { name: 'asc' } })
     }
 
     // Always recompute priceChange24h live from PriceHistory (same logic as /skins/:id)
