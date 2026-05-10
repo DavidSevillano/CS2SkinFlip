@@ -8,7 +8,8 @@ declare module '@fastify/jwt' {
 
 export interface JwtPayload {
   userId: string
-  steamId: string
+  // Optional — null for users who registered via email/password without linking Steam
+  steamId: string | null
 }
 
 export interface SteamPlayer {

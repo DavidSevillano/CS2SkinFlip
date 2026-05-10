@@ -67,6 +67,10 @@ export const portfolioRoutes: FastifyPluginAsync = async (app) => {
   app.post('/portfolio/sync', { onRequest: [authenticate] }, async (request, reply) => {
     const { userId, steamId } = request.user
 
+    if (!steamId) {
+      return reply.status(400).send({ error: 'Steam account required to sync inventory' })
+    }
+
     const inventoryItems = await steam.getInventory(steamId)
 
     // Upsert only items that are already in our skin catalogue

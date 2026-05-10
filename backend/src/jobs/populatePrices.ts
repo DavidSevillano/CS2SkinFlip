@@ -1,10 +1,32 @@
 import axios from 'axios'
 import { prisma } from '../db/prisma'
-import { redis } from '../redis/client'
+import { redis, CACHE_TTL } from '../redis/client'
 import type { FastifyBaseLogger } from 'fastify'
 
 // ─── Skinport ────────────────────────────────────────────────────────────────
-// Free public bulk API — returns all CS2 items with prices in one call
+// Free public bulk API — returns all ~20k CS2 items in one call.
+// We keep the full price map in process memory (30 min TTL) for fast per-skin
+// live lookups — Redis is used as a secondary backup but the in-memory map is
+// the primary source so key-encoding or size issues never cause stale fallbacks.
+
+const SKINPORT_MAP_KEY_PREFIX = 'skinport:price-map'
+const SKINPORT_MEM_TTL_MS = CACHE_TTL.SKINPORT_MAP * 1000  // 30 min in ms
+
+// Skinport supports these natively. Anything else falls back to USD.
+const SKINPORT_SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'PLN'] as const
+type SkinportCurrency = typeof SKINPORT_SUPPORTED_CURRENCIES[number]
+
+function normalizeSkinportCurrency(c: string): SkinportCurrency {
+  const up = c.toUpperCase()
+  return (SKINPORT_SUPPORTED_CURRENCIES as readonly string[]).includes(up)
+    ? (up as SkinportCurrency)
+    : 'USD'
+}
+
+// One in-memory map per currency — Skinport prices natively in EUR and converts internally,
+// so converting USD→EUR with a static fx rate gives the wrong number.
+const _skinportMaps: Map<string, { map: Map<string, { price: number; volume: number }>; fetchedAt: number }> =
+  new Map()
 
 interface SkinportItem {
   market_hash_name: string
@@ -12,11 +34,14 @@ interface SkinportItem {
   quantity: number | null
 }
 
-async function fetchSkinportPrices(log: FastifyBaseLogger): Promise<Map<string, { price: number; volume: number }>> {
+async function fetchSkinportPrices(
+  log?: FastifyBaseLogger,
+  currency: SkinportCurrency = 'USD',
+): Promise<Map<string, { price: number; volume: number }>> {
   const map = new Map<string, { price: number; volume: number }>()
   try {
     const { data } = await axios.get<SkinportItem[]>('https://api.skinport.com/v1/items', {
-      params: { app_id: 730, currency: 'USD' },
+      params: { app_id: 730, currency },
       timeout: 60000,
       headers: { 'Accept': 'application/json', 'Accept-Encoding': 'gzip, deflate, br' },
     })
@@ -25,11 +50,58 @@ async function fetchSkinportPrices(log: FastifyBaseLogger): Promise<Map<string, 
         map.set(item.market_hash_name, { price: item.min_price, volume: item.quantity ?? 0 })
       }
     }
-    log.info(`[Prices] Skinport: ${map.size} items with prices`)
+
+    _skinportMaps.set(currency, { map, fetchedAt: Date.now() })
+
+    // Redis backup — only USD (used by the bulk job that populates DB prices)
+    if (currency === 'USD') {
+      try {
+        const obj: Record<string, { price: number; volume: number }> = {}
+        map.forEach((v, k) => { obj[k] = v })
+        await redis.set(`${SKINPORT_MAP_KEY_PREFIX}:USD`, obj, { ex: CACHE_TTL.SKINPORT_MAP })
+      } catch { /* Redis backup optional */ }
+    }
+
+    log?.info(`[Prices] Skinport (${currency}): ${map.size} items with prices`)
   } catch (err) {
-    log.error(`[Prices] Skinport failed: ${err}`)
+    log?.error(`[Prices] Skinport (${currency}) failed: ${err}`)
   }
   return map
+}
+
+/**
+ * Live per-skin Skinport price in the requested currency. Uses an in-memory map per
+ * currency so we serve Skinport's native EUR/GBP/etc. price (their internal fx ≠ ours).
+ */
+export async function fetchSkinportLivePrice(
+  marketHashName: string,
+  currency: string = 'USD',
+): Promise<number | null> {
+  const cur = normalizeSkinportCurrency(currency)
+
+  // 1. In-memory cache for this currency
+  const cached = _skinportMaps.get(cur)
+  if (cached && (Date.now() - cached.fetchedAt) < SKINPORT_MEM_TTL_MS) {
+    return cached.map.get(marketHashName)?.price ?? null
+  }
+
+  // 2. Redis backup (USD only — we don't persist non-USD maps)
+  if (cur === 'USD') {
+    try {
+      const redisCached = await redis.get<Record<string, { price: number; volume: number }>>(
+        `${SKINPORT_MAP_KEY_PREFIX}:USD`,
+      )
+      if (redisCached) {
+        const map = new Map(Object.entries(redisCached))
+        _skinportMaps.set('USD', { map, fetchedAt: Date.now() })
+        return map.get(marketHashName)?.price ?? null
+      }
+    } catch { /* ignore */ }
+  }
+
+  // 3. Refetch from Skinport API in the requested currency
+  const map = await fetchSkinportPrices(undefined, cur)
+  return map.get(marketHashName)?.price ?? null
 }
 
 // ─── CS:GO Market ────────────────────────────────────────────────────────────
@@ -62,10 +134,42 @@ async function fetchCsgoMarketPrices(log: FastifyBaseLogger): Promise<Map<string
 }
 
 // ─── DMarket ─────────────────────────────────────────────────────────────────
-// Aggregated prices endpoint — cap of 10k items per page (limit param ignored).
-// Pagination: capital-O `Offset` param. Total is ~51k across all games;
-// filter to GameID==='a8db' for CS2 only. 6 pages → ~25k CS2 items.
-// BestPrice is already in USD dollars (not cents).
+// Exchange API (per-item): fetches the real cheapest listing for a given skin.
+// Prices are in USD cents → divide by 100.
+// Used for on-demand lookups; bulk fallback uses price-aggregator (approximate).
+
+interface DMarketExchangeItem {
+  title: string
+  price: Record<string, number>  // e.g. { USD: 1234 } or { EUR: 1100 } — minor units
+}
+
+const DMARKET_SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY'] as const
+function normalizeDMarketCurrency(c: string): string {
+  const up = c.toUpperCase()
+  return (DMARKET_SUPPORTED_CURRENCIES as readonly string[]).includes(up) ? up : 'USD'
+}
+
+export async function fetchDMarketLivePrice(
+  marketHashName: string,
+  currency: string = 'USD',
+): Promise<number | null> {
+  const cur = normalizeDMarketCurrency(currency)
+  try {
+    const { data } = await axios.get<{ objects: DMarketExchangeItem[] }>(
+      'https://api.dmarket.com/exchange/v1/market/items',
+      {
+        params: { side: 'market', orderBy: 'price', orderDir: 'asc', title: marketHashName, gameId: 'a8db', currency: cur, limit: 1 },
+        timeout: 10000,
+      }
+    )
+    const item = data.objects?.[0]
+    const minor = item?.price?.[cur]
+    if (minor == null) return null
+    return minor / 100
+  } catch {
+    return null
+  }
+}
 
 interface DMarketAggregatedItem {
   MarketHashName: string
@@ -92,7 +196,7 @@ async function fetchDMarketPrices(log: FastifyBaseLogger): Promise<Map<string, n
       if (items.length === 0) break
 
       for (const item of items) {
-        if (item.GameID !== 'a8db') continue   // skip Dota2, Rust, TF2 etc.
+        if (item.GameID !== 'a8db') continue
         const name = item.MarketHashName
         if (!name) continue
         const price = parseFloat(item.Offers?.BestPrice ?? '0')
@@ -102,7 +206,7 @@ async function fetchDMarketPrices(log: FastifyBaseLogger): Promise<Map<string, n
       offset += PAGE_SIZE
     }
 
-    log.info(`[Prices] DMarket: ${map.size} CS2 items (total across all games: ${total})`)
+    log.info(`[Prices] DMarket: ${map.size} CS2 items`)
   } catch (err) {
     log.warn(`[Prices] DMarket failed: ${err}`)
   }
@@ -130,6 +234,16 @@ export async function populatePricesFromSkinport(log: FastifyBaseLogger): Promis
   const skins = await prisma.skin.findMany({ select: { id: true, marketHashName: true } })
   log.info(`[PricePopulate] Merging prices for ${skins.length} skins...`)
 
+  // Batch-load the most recent history entry per skin (used for 24h price-change calculation)
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const recentHistory = await prisma.priceHistory.findMany({
+    where: { timestamp: { lte: dayAgo } },
+    orderBy: { timestamp: 'desc' },
+    distinct: ['skinId'],
+    select: { skinId: true, price: true },
+  })
+  const oldPriceMap = new Map(recentHistory.map((h) => [h.skinId, h.price]))
+
   let updated = 0
   const BATCH = 100
 
@@ -142,13 +256,27 @@ export async function populatePricesFromSkinport(log: FastifyBaseLogger): Promis
 
       if (!sp && !dm && !cgm) return  // no data for this skin
 
-      const skinportPrice   = sp?.price ?? null
-      const dmarketPrice    = dm ?? null
-      const csgoMarketPrice = cgm ?? null
+      const skinportPrice    = sp?.price ?? null
+      const rawDmarketPrice  = dm ?? null
+      const csgoMarketPrice  = cgm ?? null
+
+      // The DMarket price-aggregator sometimes returns inflated "BestPrice" values
+      // (e.g. a single whale-seller listing at $10 000 for a $1 skin).
+      // Discard DMarket if it is more than 5× the cheapest of the other two markets.
+      const otherMin = calcLowestPrice(skinportPrice, csgoMarketPrice)
+      const dmarketPrice = (rawDmarketPrice !== null && otherMin !== null && rawDmarketPrice > otherMin * 5)
+        ? null
+        : rawDmarketPrice
+
       const volume = sp?.volume ?? 0
       const lowestPrice = calcLowestPrice(skinportPrice, dmarketPrice, csgoMarketPrice)
 
       if (!lowestPrice) return
+
+      const oldPrice = oldPriceMap.get(skin.id) ?? null
+      const priceChange24h = oldPrice && oldPrice > 0
+        ? ((lowestPrice - oldPrice) / oldPrice) * 100
+        : null
 
       await prisma.skinPrice.upsert({
         where: { skinId: skin.id },
@@ -158,6 +286,7 @@ export async function populatePricesFromSkinport(log: FastifyBaseLogger): Promis
           csgoMarketPrice,
           lowestPrice,
           volume24h: volume,
+          priceChange24h,
           updatedAt: new Date(),
         },
         create: {
@@ -167,6 +296,7 @@ export async function populatePricesFromSkinport(log: FastifyBaseLogger): Promis
           csgoMarketPrice,
           lowestPrice,
           volume24h: volume,
+          priceChange24h,
         },
       })
       updated++
@@ -174,10 +304,9 @@ export async function populatePricesFromSkinport(log: FastifyBaseLogger): Promis
   }
 
   // Save price history — max once per 24h per skin to avoid DB bloat
-  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const recentIds = new Set(
     (await prisma.priceHistory.findMany({
-      where: { timestamp: { gte: dayAgo } },
+      where: { timestamp: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
       select: { skinId: true },
       distinct: ['skinId'],
     })).map((h) => h.skinId)
@@ -189,7 +318,11 @@ export async function populatePricesFromSkinport(log: FastifyBaseLogger): Promis
       const sp  = skinportMap.get(s.marketHashName)
       const dm  = dmarketMap.get(s.marketHashName)
       const cgm = csgoMarketMap.get(s.marketHashName)
-      const lowestPrice = calcLowestPrice(sp?.price, dm, cgm)
+      const spPrice  = sp?.price ?? null
+      const cgmPrice = cgm ?? null
+      const otherMin = calcLowestPrice(spPrice, cgmPrice)
+      const dmPrice  = (dm !== undefined && dm !== null && otherMin !== null && dm > otherMin * 5) ? null : (dm ?? null)
+      const lowestPrice = calcLowestPrice(spPrice, dmPrice, cgmPrice)
       if (!lowestPrice) return []
       return [{ skinId: s.id, price: lowestPrice, source: 'bulk' }]
     })

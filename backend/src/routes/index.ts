@@ -5,6 +5,7 @@ import { portfolioRoutes } from './portfolio'
 import { watchlistRoutes } from './watchlist'
 import { alertRoutes } from './alerts'
 import { priceRoutes } from './prices'
+import { debugRoutes } from './debug'
 
 export async function registerRoutes(app: FastifyInstance) {
   await app.register(authRoutes)
@@ -13,4 +14,5 @@ export async function registerRoutes(app: FastifyInstance) {
   await app.register(watchlistRoutes)
   await app.register(alertRoutes)
   await app.register(priceRoutes)
+  await app.register(debugRoutes)
 }

@@ -11,3 +11,7 @@ prisma/migrations/
 # IDE
 .vscode/
 .idea/
+
+# Firebase service account (contains private key — never commit)
+firebase-service-account.json
+*-firebase-adminsdk-*.json
