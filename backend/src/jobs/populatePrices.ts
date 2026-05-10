@@ -155,18 +155,27 @@ export async function fetchDMarketLivePrice(
 ): Promise<number | null> {
   const cur = normalizeDMarketCurrency(currency)
   try {
-    const { data } = await axios.get<{ objects: DMarketExchangeItem[] }>(
-      'https://api.dmarket.com/exchange/v1/market/items',
-      {
-        params: { side: 'market', orderBy: 'price', orderDir: 'asc', title: marketHashName, gameId: 'a8db', currency: cur, limit: 1 },
-        timeout: 10000,
-      }
-    )
+    const url = 'https://api.dmarket.com/exchange/v1/market/items'
+    const params = { side: 'market', orderBy: 'price', orderDir: 'asc', title: marketHashName, gameId: 'a8db', currency: cur, limit: 1 }
+    console.log(`[DMarket] Request: ${marketHashName}, params: ${JSON.stringify(params)}`)
+    
+    const { data } = await axios.get<{ objects: DMarketExchangeItem[] }>(url, { params, timeout: 10000 })
+    console.log(`[DMarket] Response for ${marketHashName}: ${JSON.stringify(data).substring(0, 200)}`)
+    
     const item = data.objects?.[0]
+    if (!item) {
+      console.log(`[DMarket] No item found for: ${marketHashName}`)
+      return null
+    }
     const minor = item?.price?.[cur]
-    if (minor == null) return null
+    if (minor == null) {
+      console.log(`[DMarket] No price for ${marketHashName}: ${JSON.stringify(item?.price)}`)
+      return null
+    }
+    console.log(`[DMarket] SUCCESS: ${marketHashName} = ${minor / 100}`)
     return minor / 100
-  } catch {
+  } catch (e: any) {
+    console.log(`[DMarket] Error fetching ${marketHashName}: ${e.message || e}`)
     return null
   }
 }
@@ -178,6 +187,8 @@ interface DMarketAggregatedItem {
 }
 
 async function fetchDMarketPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
+  // Use DMarket price-aggregator for bulk prices (fast but can be inflated for rare items)
+  // The 5× filter in the save logic handles inflated prices
   const map = new Map<string, number>()
   try {
     const PAGE_SIZE = 10000

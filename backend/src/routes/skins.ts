@@ -164,26 +164,20 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
         .filter((p): p is number => p != null && p > 0)
     ) || null
 
-    // Persist if anything changed by more than $0.50
-    const spChanged = liveSkinportUsd !== null &&
-      (!skin.price?.skinportPrice || Math.abs(skin.price.skinportPrice - liveSkinportUsd) > 0.5)
-    // Always persist when the exchange price is lower than the stored aggregator price —
-    // the aggregator can give inflated values; the exchange is always the true cheapest listing.
-    const dmChanged = liveDmarketUsd !== null &&
-      (!skin.price?.dmarketPrice ||
-       liveDmarketUsd < skin.price.dmarketPrice ||
-       Math.abs(skin.price.dmarketPrice - liveDmarketUsd) > 0.5)
+    request.log.info(`[DETAIL] ${skinId}: sp=${liveSkinportUsd}, dm=${liveDmarketUsd}, csgom=${updatedCsgoMarket}, lowest=${lowestPrice}`)
 
-    if (skin.price && (spChanged || dmChanged)) {
+    // Always persist live DMarket price when available — this ensures the batch
+    // endpoint has fresh prices for next time (avoids rate limiting issues).
+    if (skin.price && liveDmarketUsd !== null) {
       await prisma.skinPrice.update({
         where: { skinId },
         data: {
-          ...(spChanged && { skinportPrice: liveSkinportUsd }),
-          ...(dmChanged && { dmarketPrice: liveDmarketUsd }),
+          dmarketPrice: liveDmarketUsd,
           lowestPrice: lowestPrice ?? skin.price.lowestPrice,
           updatedAt: new Date(),
         },
       })
+      request.log.info(`[DETAIL] Saved DMarket price ${liveDmarketUsd} for ${skinId}`)
     }
 
     // 24h % change (USD history)
