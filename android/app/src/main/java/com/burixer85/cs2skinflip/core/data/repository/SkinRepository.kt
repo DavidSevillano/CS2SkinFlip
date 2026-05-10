@@ -121,8 +121,8 @@ class SkinRepository @Inject constructor(
             val updated = skins.map { skin ->
                 patches[skin.id]?.let { p ->
                     skin.copy(
-                        skinportPrice   = p.skinportPrice,
-                        dmarketPrice    = p.dmarketPrice,
+                        cs2capPrice     = p.cs2capPrice,
+                        csfloatPrice    = p.csfloatPrice,
                         csgoMarketPrice = p.csgoMarketPrice,
                         lowestPrice     = p.lowestPrice,
                     )

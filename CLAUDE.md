@@ -43,6 +43,8 @@ Copy `.env` and fill in:
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash Redis (serverless) |
 | `JWT_SECRET` | Min 32 chars |
 | `FRONTEND_URL` | Used for CORS allowlist |
+| `CS2CAP_API_KEY` | CS2Cap API key (`Authorization: Bearer <key>`) |
+| `CSFLOAT_API_KEY` | CSFloat API key (bare header, no "Bearer" prefix) |
 | `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |
 
 The Firebase service account file (`firebase-service-account.json`) is gitignored. Download from Firebase console → Project Settings → Service Accounts.
@@ -54,10 +56,10 @@ Fastify + Prisma + TypeScript. No test suite yet.
 ### Startup sequence (`app.ts`)
 
 ```
-buildServer() → listen → populateSkins() → populatePricesFromSkinport() → startPriceRefreshJob()
+buildServer() → listen → populateSkins() → populatePrices() → startPriceRefreshJob()
 ```
 
-`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePricesFromSkinport` runs the full bulk price fetch on startup and re-runs every 2 hours.
+`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePrices` runs the full bulk price fetch on startup and re-runs every 2 hours.
 
 ### Route structure (`src/routes/`)
 
@@ -72,19 +74,18 @@ buildServer() → listen → populateSkins() → populatePricesFromSkinport() �
 
 ### Price pipeline
 
-Three bulk sources are fetched in parallel on startup and every 2h:
+Two bulk sources are fetched on startup and every 2h (`populatePrices`):
 
-1. **Skinport** (`fetchSkinportPrices`) — `api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items, no auth. Full price map is also kept in memory (`_skinportMaps`) with a 30-min TTL per currency for fast live lookups.
-2. **DMarket** (`fetchDMarketPrices`) — `price-aggregator/v1/aggregated-prices`. 10k items per page; use capital-`Offset` param. Filter by `GameID === 'a8db'` for CS2 items. `BestPrice` is USD dollars (not cents). Do NOT use `exchange/v1/market/items` for bulk — it returns per-seller listings alphabetically without price sort. **Known limitation**: the aggregator sometimes returns inflated prices when only whale-priced listings exist (e.g. $10 000 for a $1 skin). The bulk job sanity-filters these by nullifying `dmarketPrice` when it exceeds 5× the cheapest of Skinport/CS:GO Market.
-3. **CS:GO Market** (`fetchCsgoMarketPrices`) — `market.csgo.com/api/v2/prices/USD.json`, ~25k items, `price` field is a USD string.
+1. **CS2Cap** (`fetchCS2CapBulkPrices`) — `POST https://api.cs2c.app/v1/prices/batch`, up to 100 items/call, 5 concurrent batches. Aggregates lowest ask across 38+ marketplaces. Auth: `Authorization: Bearer <CS2CAP_API_KEY>`. Prices in USD cents → divide by 100.
+2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `market.csgo.com/api/v2/prices/USD.json`, ~25k items, `price` field is a USD string.
 
 `calcLowestPrice()` takes the MIN of all non-null, positive values. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
 
-**Live detail prices** (`GET /skins/:id`): fetches fresh Skinport USD + EUR and DMarket USD in parallel; recomputes `lowestPrice` live. Always persists when DMarket exchange price is lower than the stored aggregator price (progressively corrects aggregator inflation as users browse). `fetchDMarketLivePrice()` uses `exchange/v1/market/items` with `orderBy=price&orderDir=asc`; prices are in USD cents → divide by 100.
+**Live detail prices** (`GET /skins/:id`): fetches fresh CS2Cap USD and CSFloat USD in parallel; recomputes `lowestPrice` live. Persists results to DB and `csfloat-live` Redis cache. `fetchCS2CapLivePrice()` — `GET /prices?market_hash_name=...`. `fetchCSFloatLivePrice()` — `GET https://csfloat.com/api/v1/listings?sort_by=lowest_price&limit=1`; auth header is bare key (no "Bearer" prefix); prices in USD cents.
 
-**Batch price refresh** (`GET /prices/batch?ids=...`): called by Android once after each list load. Skinport from in-memory map (zero outbound calls). DMarket uses three-tier lookup: (1) Redis `dm-live:{skinId}` cache (instant); (2) live DMarket exchange call — only for skins where the DB aggregator price is null or inflated (would fail the 5× check), concurrency capped at 5 to avoid rate limits, results cached to `dm-live`; (3) DB aggregator with 5× sanity filter for skins with a reasonable DB price. CS:GO Market from DB. Android awaits this before showing results so cards display correct prices on first render.
+**Batch price refresh** (`GET /prices/batch?ids=...`): called by Android once after each list load. Three phases: (1) DB prices + `csfloat-live:{skinId}` Redis cache (instant); (2a) live CS2Cap call for skins with null DB cs2capPrice, concurrency 5; (2b) live CSFloat call for cache misses, concurrency 5; (3) assemble response with `cs2capPrice`, `csfloatPrice`, `csgoMarketPrice`, `lowestPrice`. Android awaits this before showing results so cards display correct prices on first render.
 
-**Top-movers DMarket enrichment** (`PriceService.getTopMovers()`): when the 15-min Redis cache expires and the list is rebuilt, 20 parallel `fetchDMarketLivePrice` calls are made (server-to-server, well within rate limits at that cadence). Results are stored both in the `top-movers:20` cache AND in individual `dm-live:{skinId}` keys, so subsequent batch-endpoint calls for those skins skip the DMarket API entirely.
+**Top-movers CSFloat enrichment** (`PriceService.getTopMovers()`): when the 15-min Redis cache expires, 20 parallel `fetchCSFloatLivePrice` calls are made. Results stored in `top-movers:20` AND `csfloat-live:{skinId}` keys.
 
 ### Alert notifications (FCM)
 
@@ -112,14 +113,13 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 | `steam:inventory:{steamId}` | 10 min |
 | `prices:{skinId}` | 5 min |
 | `top-movers:20` | 15 min |
-| `skinport:price-map:USD` | 30 min |
-| `dm-live:{skinId}` | 5 min |
+| `csfloat-live:{skinId}` | 5 min |
 
 `top-movers:20` is explicitly invalidated at the end of every bulk price run.
 
 ### Schema notes
 
-`SkinPrice`: `skinportPrice`, `dmarketPrice`, `csgoMarketPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting.
+`SkinPrice`: `cs2capPrice`, `csfloatPrice`, `csgoMarketPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting.
 
 `User`: has `fcmToken String?` for FCM push notifications.
 
@@ -201,7 +201,7 @@ navigation/     — AppNavigation (NavHost + bottom bar), Screen sealed class
 
 ### Key data flow
 
-- **`Skin`** is the central domain model. `lowestMarketPrice` is a computed property that first uses `lowestPrice` (pre-computed minimum sent by the backend across all three markets), then falls back to `min(skinportPrice, dmarketPrice, csgoMarketPrice)`.
+- **`Skin`** is the central domain model. `lowestMarketPrice` is a computed property that first uses `lowestPrice` (pre-computed minimum sent by the backend across all three markets), then falls back to `min(cs2capPrice, csfloatPrice, csgoMarketPrice)`.
 - **`CS2BackendApiService`** is the main remote source. DTOs are mapped to `Skin` via `BackendSkinDto.toDomain()` and `TopMoverDto.toDomain()` in `CS2BackendApiService.kt`. Mappers live in the same file as the DTOs.
 - **`SkinRepository`** always falls back to `MockData` if the network call fails. It exposes `livePriceCache: StateFlow<Map<String, Skin>>` — populated by `getSkinById()` (detail view) and `refreshSkinPricesBatch()`. `refreshSkinPricesBatch(skins)` calls `GET /prices/batch`, applies live prices, and **returns the patched list** — callers await it before setting Success state so cards always show the correct price on first render with no flicker. It also writes into `livePriceCache` so detail-screen price updates propagate back to list cards. `loadMore()` in `SearchViewModel` applies the same batch fetch to each new page before appending.
 - **Pagination** in `SearchViewModel` uses `currentPage` + `SearchUiState.Success.isLoadingMore` to prevent duplicate page fetches.

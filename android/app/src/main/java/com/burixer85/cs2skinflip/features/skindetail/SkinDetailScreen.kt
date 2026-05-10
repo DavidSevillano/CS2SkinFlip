@@ -231,38 +231,24 @@ private fun SkinDetailContent(
             Spacer(Modifier.height(12.dp))
 
             val context = LocalContext.current
-            val marketHashName = "${skin.name} (${skin.wear.displayName})"
+            val marketHashName = skin.name  // already includes wear in name from backend
 
-            // Convert "AWP | Dragon Lore (Field-Tested)" → "awp-dragon-lore-field-tested".
-            // Used by Skinport's item page and DMarket's product page (same slug convention).
-            fun toSlug(name: String): String = name
-                .replace("★ ", "")
-                .replace("™", "")
-                .lowercase()
-                .replace(" | ", "-")
-                .replace(" (", "-")
-                .replace(")", "")
-                .replace(" ", "-")
-                .replace(Regex("-+"), "-")
-                .trim('-')
+            // CS2Cap: item page via their search
+            fun cs2capUrl(name: String): String =
+                "https://cs2cap.com/en-US/item/${Uri.encode(name)}"
 
-            // Skinport: deep link directly to the item page. `cur=EUR` shows EUR prices (native).
-            fun skinportUrl(name: String): String =
-                "https://skinport.com/item/${toSlug(name)}?cur=EUR"
-
-            // DMarket: title-search query navigates directly to the matching item.
-            fun dmarketUrl(name: String): String =
-                Uri.parse("https://dmarket.com/ingame-items/item-list/csgo-skins")
+            // CSFloat: market search sorted by lowest price
+            fun csfloatUrl(name: String): String =
+                Uri.parse("https://csfloat.com/market")
                     .buildUpon()
-                    .appendQueryParameter("title", name)
-                    .appendQueryParameter("gameId", "a8db")
+                    .appendQueryParameter("search", name)
+                    .appendQueryParameter("sort", "lowest_price")
+                    .appendQueryParameter("type", "buy_now")
                     .build().toString()
 
-            // CS:GO Market: their item URLs live under /en/<game>/<exact name>/.
-            fun csgoMarketUrl(name: String): String {
-                val encoded = Uri.encode(name)
-                return "https://market.csgo.com/en/730/$encoded"
-            }
+            // CS:GO Market: item URL
+            fun csgoMarketUrl(name: String): String =
+                "https://market.csgo.com/en/730/${Uri.encode(name)}"
 
             fun openUrl(url: String) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -270,30 +256,22 @@ private fun SkinDetailContent(
 
             data class MarketEntry(
                 val marketplace: Marketplace,
-                val price: Double?,        // USD (for lowest comparison)
-                val displayPrice: Double?, // shown to user (may differ from price for Skinport EUR)
-                val isEur: Boolean = false,
+                val price: Double?,
                 val color: Color,
                 val url: String,
             )
 
             val entries = listOf(
-                MarketEntry(
-                    Marketplace.SKINPORT, skin.skinportPrice,
-                    displayPrice = skin.skinportPriceEur ?: skin.skinportPrice,
-                    isEur = skin.skinportPriceEur != null,
-                    AccentOrange, skinportUrl(marketHashName)
-                ),
-                MarketEntry(Marketplace.DMARKET,     skin.dmarketPrice,    skin.dmarketPrice,    color = Color(0xFF9C59FF), url = dmarketUrl(marketHashName)),
-                MarketEntry(Marketplace.CSGO_MARKET, skin.csgoMarketPrice, skin.csgoMarketPrice, color = AccentGreen,       url = csgoMarketUrl(marketHashName)),
+                MarketEntry(Marketplace.CS2CAP,      skin.cs2capPrice,     AccentOrange,         cs2capUrl(marketHashName)),
+                MarketEntry(Marketplace.CSFLOAT,     skin.csfloatPrice,    Color(0xFF9C59FF),    csfloatUrl(marketHashName)),
+                MarketEntry(Marketplace.CSGO_MARKET, skin.csgoMarketPrice, AccentGreen,          csgoMarketUrl(marketHashName)),
             )
             val lowestPrice = entries.mapNotNull { it.price }.minOrNull()
 
             entries.forEach { entry ->
                 MarketplacePriceRow(
                     name = entry.marketplace.displayName,
-                    displayPrice = entry.displayPrice,
-                    isEur = entry.isEur,
+                    displayPrice = entry.price,
                     color = entry.color,
                     isLowest = entry.price != null && entry.price == lowestPrice,
                     onClick = if (entry.price != null) ({ openUrl(entry.url) }) else null
@@ -390,7 +368,6 @@ private fun SkinDetailContent(
 private fun MarketplacePriceRow(
     name: String,
     displayPrice: Double?,
-    isEur: Boolean = false,
     color: Color,
     isLowest: Boolean,
     onClick: (() -> Unit)? = null
@@ -415,7 +392,6 @@ private fun MarketplacePriceRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Color dot — greyed out when not listed
                 Box(
                     modifier = Modifier
                         .size(8.dp)
@@ -441,8 +417,7 @@ private fun MarketplacePriceRow(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (isListed) {
                     Text(
-                        text = if (isEur) Currency.formatEur(displayPrice)
-                               else Currency.format(displayPrice),
+                        text = Currency.format(displayPrice),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = if (isLowest) color else TextPrimary

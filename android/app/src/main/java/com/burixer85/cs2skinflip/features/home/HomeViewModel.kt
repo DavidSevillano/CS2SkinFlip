@@ -35,8 +35,8 @@ class HomeViewModel @Inject constructor(
                 val updated = current.trendingSkins.map { skin ->
                     cache[skin.id]?.let { live ->
                         skin.copy(
-                            skinportPrice   = live.skinportPrice,
-                            dmarketPrice    = live.dmarketPrice,
+                            cs2capPrice     = live.cs2capPrice,
+                            csfloatPrice    = live.csfloatPrice,
                             csgoMarketPrice = live.csgoMarketPrice,
                             lowestPrice     = live.lowestPrice,
                             priceChange24h  = live.priceChange24h,

@@ -2,23 +2,24 @@ import { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
 import { PriceService } from '../services/prices'
-import { fetchSkinportLivePrice, fetchDMarketLivePrice } from '../jobs/populatePrices'
+import { fetchCS2CapLivePrice, fetchCSFloatLivePrice } from '../jobs/populatePrices'
 
 const priceService = new PriceService()
 
 export const priceRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/debug/dmarket/:name', async (request, reply) => {
-    const { name } = request.params as { name: string }
-    const decoded = decodeURIComponent(name)
-    const dmarketPrice = await fetchDMarketLivePrice(decoded, 'USD')
-    const skinportPrice = await fetchSkinportLivePrice(decoded, 'USD')
-    return { dmarketPrice, skinportPrice, name: decoded }
-  })
   /**
    * GET /prices/batch?ids=id1,id2,...
    *
    * Returns accurate prices for up to 50 skins in a single round-trip.
-   * Always fetches live DMarket prices to ensure accurate lowest price.
+   *
+   * - CS2Cap:     DB value from bulk job (2h). If null, calls live CS2Cap API
+   *               (concurrency capped at 5) to get the aggregated lowest ask.
+   * - CSFloat:    Redis `csfloat-live:{id}` cache (5-min TTL) first; if not
+   *               cached, calls live CSFloat API (concurrency capped at 5);
+   *               falls back to DB CSFloat price.
+   * - CS:GO Market: DB value (reliable, refreshed by bulk job every 2h).
+   *
+   * Android calls this once after each list load so cards display correct prices on first render.
    */
   app.get('/prices/batch', async (request, reply) => {
     const { ids } = request.query as { ids?: string }
@@ -32,109 +33,84 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
       include: { price: true },
     })
 
-    // Fetch live prices - parallel with concurrency limit for speed
-    const CONCURRENCY = 3
-    const results: Array<{ id: string; skinportPrice: number | null; dmarketPrice: number | null; csgoMarketPrice: number | null; lowestPrice: number | null }> = []
-
-    const fetchWithRetry = async (fn: () => Promise<number | null>, retries = 2): Promise<number | null> => {
-      for (let i = 0; i < retries; i++) {
-        const result = await fn()
-        if (result !== null) return result
-        if (i < retries - 1) await new Promise(r => setTimeout(r, 200))
-      }
-      return null
+    // ── Phase 1: gather DB prices + csfloat-live cache in parallel ───────────
+    type SkinPhase1 = {
+      skin: typeof skins[number]
+      dbCS2Cap: number | null
+      dbCsfloat: number | null
+      csgoMarketPrice: number | null
+      csfloatLiveCached: number | null
     }
 
-    const processSkin = async (skin: typeof skins[number]) => {
-      const [skinportPrice, dmarketPrice] = await Promise.all([
-        fetchSkinportLivePrice(skin.marketHashName, 'USD')
-          .then(p => p ?? skin.price?.skinportPrice ?? null),
-        fetchWithRetry(() => fetchDMarketLivePrice(skin.marketHashName, 'USD'))
-          .then(p => p ?? skin.price?.dmarketPrice ?? null),  // fallback to DB if live fails
-      ])
-      
-      const csgoMarketPrice = skin.price?.csgoMarketPrice ?? null
-
-      const prices = [skinportPrice, dmarketPrice, csgoMarketPrice]
-        .filter((p): p is number => p != null && p > 0)
-      
-      const lowestPrice = prices.length > 0 ? Math.min(...prices) : null
-
-      return {
-        id: skin.id,
-        skinportPrice,
-        dmarketPrice,
-        csgoMarketPrice,
-        lowestPrice,
-        skin,
-      }
-    }
-
-    // Process in batches of CONCURRENCY to avoid rate limiting
-    for (let i = 0; i < skins.length; i += CONCURRENCY) {
-      const batch = skins.slice(i, i + CONCURRENCY)
-      // Add small delay between batches
-      if (i > 0) await new Promise(r => setTimeout(r, 100))
-      const batchResults = await Promise.all(batch.map(processSkin))
-      results.push(...batchResults)
-    }
-
-    // Save all prices to DB - only update if we have new values, preserve existing otherwise
-    const updates = results
-      .map(r => {
-        const updateData: any = { updatedAt: new Date() }
-        
-        // Only update if we have a new value (not null)
-        if (r.skinportPrice != null) updateData.skinportPrice = r.skinportPrice
-        if (r.dmarketPrice != null) updateData.dmarketPrice = r.dmarketPrice
-        if (r.csgoMarketPrice != null) updateData.csgoMarketPrice = r.csgoMarketPrice
-        if (r.lowestPrice != null) updateData.lowestPrice = r.lowestPrice
-        
-        return prisma.skinPrice.update({
-          where: { skinId: r.id },
-          data: updateData,
-        }).catch(() => null)
+    const phase1 = await Promise.allSettled(
+      skins.map(async (skin): Promise<SkinPhase1> => {
+        const csfloatLiveCached = await redis.get<number>(`csfloat-live:${skin.id}`).catch(() => null)
+        return {
+          skin,
+          dbCS2Cap: skin.price?.cs2capPrice ?? null,
+          dbCsfloat: skin.price?.csfloatPrice ?? null,
+          csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
+          csfloatLiveCached,
+        }
       })
+    )
 
-    if (updates.length > 0) {
-      await Promise.all(updates).catch(() => {})
+    const phase1Data: SkinPhase1[] = phase1
+      .filter(r => r.status === 'fulfilled')
+      .map(r => (r as PromiseFulfilledResult<SkinPhase1>).value)
+
+    const CONCURRENCY = 5
+
+    // ── Phase 2a: live CS2Cap for skins with null DB price ───────────────────
+    const needsCS2CapLive = phase1Data.filter(d => d.dbCS2Cap === null)
+    const liveCS2CapMap = new Map<string, number>()
+
+    for (let i = 0; i < needsCS2CapLive.length; i += CONCURRENCY) {
+      const batch = needsCS2CapLive.slice(i, i + CONCURRENCY)
+      const results = await Promise.allSettled(
+        batch.map(({ skin }) =>
+          fetchCS2CapLivePrice(skin.marketHashName).then(price => ({ id: skin.id, price }))
+        )
+      )
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.price !== null) {
+          liveCS2CapMap.set(r.value.id, r.value.price)
+        }
+      }
     }
 
-    const response: Record<string, object> = {}
-    // Get old prices for 24h change calculation
-    const skinIds = results.map(r => r.id)
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const oldPrices = await prisma.priceHistory.findMany({
-      where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
-      orderBy: { timestamp: 'desc' },
-      distinct: ['skinId'],
-      select: { skinId: true, price: true },
-    })
-    const oldPriceMap = new Map(oldPrices.map(p => [p.skinId, p.price]))
+    // ── Phase 2b: live CSFloat for skins with no csfloat-live cache ──────────
+    const needsCSFloatLive = phase1Data.filter(d => d.csfloatLiveCached === null)
+    const liveCSFloatMap = new Map<string, number>()
 
-    for (const result of results) {
-      app.log.info(`[BATCH] ${result.id}: sp=${result.skinportPrice}, dm=${result.dmarketPrice}, csgom=${result.csgoMarketPrice}, lowest=${result.lowestPrice}`)
-      // Ensure lowestPrice is always calculated from the actual prices, not cached
-      const actualLowest = Math.min(
-        result.skinportPrice ?? Infinity,
-        result.dmarketPrice ?? Infinity,
-        result.csgoMarketPrice ?? Infinity
+    for (let i = 0; i < needsCSFloatLive.length; i += CONCURRENCY) {
+      const batch = needsCSFloatLive.slice(i, i + CONCURRENCY)
+      const results = await Promise.allSettled(
+        batch.map(({ skin }) =>
+          fetchCSFloatLivePrice(skin.marketHashName).then(price => ({ id: skin.id, price }))
+        )
       )
-      const finalLowest = actualLowest === Infinity ? null : actualLowest
-
-      // Calculate 24h price change
-      const oldPrice = oldPriceMap.get(result.id)
-      const priceChange24h = oldPrice != null && finalLowest != null && oldPrice > 0
-        ? ((finalLowest - oldPrice) / oldPrice) * 100
-        : null
-
-      response[result.id] = {
-        skinportPrice: result.skinportPrice,
-        dmarketPrice: result.dmarketPrice,
-        csgoMarketPrice: result.csgoMarketPrice,
-        lowestPrice: finalLowest,
-        priceChange24h,
+      for (const r of results) {
+        if (r.status === 'fulfilled' && r.value.price !== null) {
+          liveCSFloatMap.set(r.value.id, r.value.price)
+          redis.set(`csfloat-live:${r.value.id}`, r.value.price, { ex: CACHE_TTL.SKIN_PRICES }).catch(() => {})
+        }
       }
+    }
+
+    // ── Phase 3: assemble response ────────────────────────────────────────────
+    const response: Record<string, object> = {}
+    for (const { skin, dbCS2Cap, dbCsfloat, csgoMarketPrice, csfloatLiveCached } of phase1Data) {
+      const cs2capPrice  = liveCS2CapMap.get(skin.id) ?? dbCS2Cap
+      const csfloatPrice = liveCSFloatMap.get(skin.id)
+        ?? (csfloatLiveCached !== null ? csfloatLiveCached : null)
+        ?? dbCsfloat
+
+      const positives = [cs2capPrice, csfloatPrice, csgoMarketPrice].filter(
+        (p): p is number => p != null && p > 0,
+      )
+      const lowestPrice = positives.length > 0 ? Math.min(...positives) : null
+      response[skin.id] = { cs2capPrice, csfloatPrice, csgoMarketPrice, lowestPrice }
     }
 
     return response
@@ -158,7 +134,6 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
     const skin = await prisma.skin.findUnique({ where: { id: skinId } })
     if (!skin) return reply.status(404).send({ error: 'Skin not found' })
 
-    // Delegate to service — it will re-fetch and re-cache
     const prices = await priceService.getPricesForSkin(skinId, skin.marketHashName)
     return prices
   })

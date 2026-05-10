@@ -94,8 +94,8 @@ data class TopMoverDto(
     val marketHashName: String,
     val name: String,
     val iconUrl: String,
-    val skinportPrice: Double?,
-    val dmarketPrice: Double?,
+    val cs2capPrice: Double?,
+    val csfloatPrice: Double?,
     val csgoMarketPrice: Double?,
     val lowestPrice: Double?,
     val priceChange24h: Double?,
@@ -126,9 +126,8 @@ data class BackendSkinDto(
 )
 
 data class BackendSkinPriceDto(
-    val skinportPrice: Double?,       // USD
-    val skinportPriceEur: Double?,    // EUR native from Skinport API (shown as-is in detail)
-    val dmarketPrice: Double?,        // USD
+    val cs2capPrice: Double?,         // USD — aggregated lowest from 38+ markets via CS2Cap
+    val csfloatPrice: Double?,        // USD — cheapest listing on CSFloat
     val csgoMarketPrice: Double?,     // USD
     val lowestPrice: Double?,         // USD
     val volume24h: Int?,
@@ -137,8 +136,8 @@ data class BackendSkinPriceDto(
 
 /** Lightweight price-only payload returned by GET /prices/batch. */
 data class BatchSkinPriceDto(
-    val skinportPrice: Double?,
-    val dmarketPrice: Double?,
+    val cs2capPrice: Double?,
+    val csfloatPrice: Double?,
     val csgoMarketPrice: Double?,
     val lowestPrice: Double?,
 )
@@ -212,9 +211,8 @@ fun TopMoverDto.toDomain(): Skin {
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        skinportPrice = skinportPrice,
-        skinportPriceEur = null,  // top-movers don't include EUR price
-        dmarketPrice = dmarketPrice,
+        cs2capPrice = cs2capPrice,
+        csfloatPrice = csfloatPrice,
         csgoMarketPrice = csgoMarketPrice,
         lowestPrice = lowestPrice,
         priceChange24h = priceChange24h,
@@ -243,9 +241,8 @@ fun BackendSkinDto.toDomain(
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
         imageUrl = iconUrl,
-        skinportPrice = price?.skinportPrice,
-        skinportPriceEur = price?.skinportPriceEur,
-        dmarketPrice = price?.dmarketPrice,
+        cs2capPrice = price?.cs2capPrice,
+        csfloatPrice = price?.csfloatPrice,
         csgoMarketPrice = price?.csgoMarketPrice,
         lowestPrice = price?.lowestPrice,
         // priceChange24h from the API takes priority; caller can override if needed
