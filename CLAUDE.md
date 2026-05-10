@@ -43,9 +43,9 @@ Copy `.env` and fill in:
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash Redis (serverless) |
 | `JWT_SECRET` | Min 32 chars |
 | `FRONTEND_URL` | Used for CORS allowlist |
-| `CS2CAP_API_KEY` | CS2Cap API key (`Authorization: Bearer <key>`) |
-| `CSFLOAT_API_KEY` | CSFloat API key (bare header, no "Bearer" prefix) |
 | `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |
+
+The price aggregator uses only public bulk endpoints — no marketplace API keys are required.
 
 The Firebase service account file (`firebase-service-account.json`) is gitignored. Download from Firebase console → Project Settings → Service Accounts.
 
@@ -74,18 +74,19 @@ buildServer() → listen → populateSkins() → populatePrices() → startPrice
 
 ### Price pipeline
 
-Two bulk sources are fetched on startup and every 2h (`populatePrices`):
+Four marketplaces are fetched in parallel on startup and every 2h (`populatePrices`).
+**All endpoints are bulk and public — no API keys, no rate-limit concerns** (12 calls/day per marketplace):
 
-1. **CS2Cap** (`fetchCS2CapBulkPrices`) — `POST https://api.cs2c.app/v1/prices/batch`, up to 100 items/call, 5 concurrent batches. Aggregates lowest ask across 38+ marketplaces. Auth: `Authorization: Bearer <CS2CAP_API_KEY>`. Prices in USD cents → divide by 100.
-2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `market.csgo.com/api/v2/prices/USD.json`, ~25k items, `price` field is a USD string.
+1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items.
+2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `GET https://market.csgo.com/api/v2/prices/USD.json`, ~25k items.
+3. **CSDeals** (`fetchCsdealsPrices`) — `GET https://cs.deals/API/IPricing/GetLowestPrices/v1?appid=730`.
+4. **DMarket** (`fetchDmarketPrices`) — `GET https://api.dmarket.com/price-aggregator/v1/aggregated-prices`, paginated 10k/page, filtered by `GameID === 'a8db'`. Sanity-filtered: nullified when > 5× the cheapest of the other three (the aggregator occasionally returns inflated whale prices).
 
-`calcLowestPrice()` takes the MIN of all non-null, positive values. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
+`calcLowestPrice()` takes the MIN of all non-null positive values across the four. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
 
-**Live detail prices** (`GET /skins/:id`): fetches fresh CS2Cap USD and CSFloat USD in parallel; recomputes `lowestPrice` live. Persists results to DB and `csfloat-live` Redis cache. `fetchCS2CapLivePrice()` — `GET /prices?market_hash_name=...`. `fetchCSFloatLivePrice()` — `GET https://csfloat.com/api/v1/listings?sort_by=lowest_price&limit=1`; auth header is bare key (no "Bearer" prefix); prices in USD cents.
+**No live calls anywhere.** The DB is the single source of truth. `GET /skins/:id`, `GET /prices/batch`, and the search/top-movers endpoints all read straight from `SkinPrice` — search responses already contain the four marketplace prices and `lowestPrice` correct on first render. The Android `SkinRepository` is correspondingly simple: no `livePriceCache`, no batch refresh after list loads.
 
-**Batch price refresh** (`GET /prices/batch?ids=...`): called by Android once after each list load. Three phases: (1) DB prices + `csfloat-live:{skinId}` Redis cache (instant); (2a) live CS2Cap call for skins with null DB cs2capPrice, concurrency 5; (2b) live CSFloat call for cache misses, concurrency 5; (3) assemble response with `cs2capPrice`, `csfloatPrice`, `csgoMarketPrice`, `lowestPrice`. Android awaits this before showing results so cards display correct prices on first render.
-
-**Top-movers CSFloat enrichment** (`PriceService.getTopMovers()`): when the 15-min Redis cache expires, 20 parallel `fetchCSFloatLivePrice` calls are made. Results stored in `top-movers:20` AND `csfloat-live:{skinId}` keys.
+**Top movers** (`PriceService.getTopMovers()`): pure DB read, ordered by the indexed `priceChange24h` column (kept fresh by the bulk job). `priceChange24h` is then refined per skin from the `PriceHistory` table for accuracy between bulk runs.
 
 ### Alert notifications (FCM)
 
@@ -113,13 +114,12 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 | `steam:inventory:{steamId}` | 10 min |
 | `prices:{skinId}` | 5 min |
 | `top-movers:20` | 15 min |
-| `csfloat-live:{skinId}` | 5 min |
 
 `top-movers:20` is explicitly invalidated at the end of every bulk price run.
 
 ### Schema notes
 
-`SkinPrice`: `cs2capPrice`, `csfloatPrice`, `csgoMarketPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting.
+`SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `csdealsPrice`, `dmarketPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
 
 `User`: has `fcmToken String?` for FCM push notifications.
 
@@ -201,9 +201,9 @@ navigation/     — AppNavigation (NavHost + bottom bar), Screen sealed class
 
 ### Key data flow
 
-- **`Skin`** is the central domain model. `lowestMarketPrice` is a computed property that first uses `lowestPrice` (pre-computed minimum sent by the backend across all three markets), then falls back to `min(cs2capPrice, csfloatPrice, csgoMarketPrice)`.
-- **`CS2BackendApiService`** is the main remote source. DTOs are mapped to `Skin` via `BackendSkinDto.toDomain()` and `TopMoverDto.toDomain()` in `CS2BackendApiService.kt`. Mappers live in the same file as the DTOs.
-- **`SkinRepository`** always falls back to `MockData` if the network call fails. It exposes `livePriceCache: StateFlow<Map<String, Skin>>` — populated by `getSkinById()` (detail view) and `refreshSkinPricesBatch()`. `refreshSkinPricesBatch(skins)` calls `GET /prices/batch`, applies live prices, and **returns the patched list** — callers await it before setting Success state so cards always show the correct price on first render with no flicker. It also writes into `livePriceCache` so detail-screen price updates propagate back to list cards. `loadMore()` in `SearchViewModel` applies the same batch fetch to each new page before appending.
+- **`Skin`** is the central domain model. `lowestMarketPrice` first uses `lowestPrice` (pre-computed by the backend), falling back to `min(skinportPrice, csgoMarketPrice, csdealsPrice, dmarketPrice)`.
+- **`CS2BackendApiService`** is the main remote source. DTOs are mapped to `Skin` via `BackendSkinDto.toDomain()` and `TopMoverDto.toDomain()`. Mappers live in the same file as the DTOs.
+- **`SkinRepository`** always falls back to `MockData` if the network call fails. It is a thin pass-through — backend responses already contain final prices (no client-side batch refresh, no `livePriceCache`).
 - **Pagination** in `SearchViewModel` uses `currentPage` + `SearchUiState.Success.isLoadingMore` to prevent duplicate page fetches.
 
 ### DI (AppModule)

@@ -1,6 +1,5 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
-import { fetchCSFloatLivePrice } from '../jobs/populatePrices'
 import type { AggregatedPrices } from '../types'
 
 export class PriceService {
@@ -17,13 +16,14 @@ export class PriceService {
     const prices: AggregatedPrices = {
       skinId,
       marketHashName,
-      cs2capPrice: row?.cs2capPrice ?? null,
-      csfloatPrice: row?.csfloatPrice ?? null,
+      skinportPrice:   row?.skinportPrice   ?? null,
       csgoMarketPrice: row?.csgoMarketPrice ?? null,
-      lowestPrice: row?.lowestPrice ?? null,
+      csdealsPrice:    row?.csdealsPrice    ?? null,
+      dmarketPrice:    row?.dmarketPrice    ?? null,
+      lowestPrice:     row?.lowestPrice     ?? null,
       priceChange24h,
-      volume24h: row?.volume24h ?? null,
-      updatedAt: row?.updatedAt.toISOString() ?? new Date().toISOString(),
+      volume24h:       row?.volume24h       ?? null,
+      updatedAt:       row?.updatedAt.toISOString() ?? new Date().toISOString(),
     }
 
     await redis.set(cacheKey, prices, { ex: CACHE_TTL.SKIN_PRICES })
@@ -43,13 +43,20 @@ export class PriceService {
     return ((currentPrice - record.price) / record.price) * 100
   }
 
+  /**
+   * Top movers: skins with the highest 24h price growth.
+   *
+   * Pure DB read — no external API calls. The bulk job keeps both `lowestPrice`
+   * and `priceChange24h` fresh every 2h, and `priceChange24h` is indexed for
+   * fast sorting. We then refine the values from the more accurate `PriceHistory`
+   * table to handle prices that moved between bulk runs.
+   */
   async getTopMovers(limit = 20): Promise<Array<AggregatedPrices & { name: string; iconUrl: string }>> {
     const cacheKey = `top-movers:${limit}`
     const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
     if (cached) return cached
 
-    // Fetch candidates pre-sorted by DB priceChange24h (kept fresh by bulk job every 2h).
-    // A wider pool (limit * 3) ensures we still have enough after nulls are sorted last.
+    // Pre-sorted by DB priceChange24h (indexed). Wide pool to absorb any nulls.
     const skins = await prisma.skin.findMany({
       include: { price: true },
       where: { price: { lowestPrice: { gt: 0 } } },
@@ -66,8 +73,6 @@ export class PriceService {
     })
     const historyMap = new Map(histories.map((h) => [h.skinId, h.price]))
 
-    // Recalculate priceChange24h live from PriceHistory (more accurate than the bulk-job
-    // column between runs). Fall back to the DB column when no history entry exists yet.
     const topMovers = skins
       .map((skin) => {
         const current = skin.price?.lowestPrice ?? null
@@ -81,42 +86,22 @@ export class PriceService {
           marketHashName: skin.marketHashName,
           name: skin.name,
           iconUrl: skin.iconUrl,
-          cs2capPrice: skin.price?.cs2capPrice ?? null,
-          csfloatPrice: skin.price?.csfloatPrice ?? null,
+          skinportPrice:   skin.price?.skinportPrice   ?? null,
           csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
+          csdealsPrice:    skin.price?.csdealsPrice    ?? null,
+          dmarketPrice:    skin.price?.dmarketPrice    ?? null,
           lowestPrice: current,
           priceChange24h,
           volume24h: skin.price?.volume24h ?? null,
           updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
         }
       })
-      // Sort by highest price growth (nulls go last); take the top `limit`.
       .sort((a, b) => (b.priceChange24h ?? -Infinity) - (a.priceChange24h ?? -Infinity))
       .slice(0, limit)
 
-    // Enrich with live CSFloat prices before caching.
-    // Runs at most every 15 min (when the Redis cache expires) — well within rate limits.
-    // Results are also written to csfloat-live:{skinId} (5-min TTL) so the batch
-    // endpoint serves correct CSFloat prices without any extra API calls.
-    const enriched = await Promise.all(
-      topMovers.map(async (mover) => {
-        try {
-          const live = await fetchCSFloatLivePrice(mover.marketHashName)
-          if (live === null) return mover
-          redis.set(`csfloat-live:${mover.skinId}`, live, { ex: CACHE_TTL.SKIN_PRICES }).catch(() => {})
-          const positives = [mover.cs2capPrice, live, mover.csgoMarketPrice]
-            .filter((p): p is number => p != null && p > 0)
-          const lowestPrice = positives.length > 0 ? Math.min(...positives) : mover.lowestPrice
-          return { ...mover, csfloatPrice: live, lowestPrice }
-        } catch {
-          return mover
-        }
-      }),
-    )
-
-    if (enriched.length > 0) {
-      await redis.set(cacheKey, enriched, { ex: CACHE_TTL.TOP_MOVERS })
+    if (topMovers.length > 0) {
+      await redis.set(cacheKey, topMovers, { ex: CACHE_TTL.TOP_MOVERS })
     }
-    return enriched
+    return topMovers
   }
 }

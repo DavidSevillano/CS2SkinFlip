@@ -83,28 +83,6 @@ class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch { _availableWeapons.value = skinRepository.getAllWeapons() }
         triggerSearch(resetPage = true)
-        // When the detail screen fetches live prices, update matching cards in-place so
-        // lowestPrice reflects the real-time DMarket exchange price immediately.
-        viewModelScope.launch {
-            skinRepository.livePriceCache.collect { cache ->
-                val current = _uiState.value as? SearchUiState.Success ?: return@collect
-                if (cache.isEmpty()) return@collect
-                val updated = current.results.map { skin ->
-                    cache[skin.id]?.let { live ->
-                        skin.copy(
-                            cs2capPrice     = live.cs2capPrice,
-                            csfloatPrice    = live.csfloatPrice,
-                            csgoMarketPrice = live.csgoMarketPrice,
-                            lowestPrice     = live.lowestPrice,
-                            priceChange24h  = live.priceChange24h,
-                        )
-                    } ?: skin
-                }
-                if (updated != current.results) {
-                    _uiState.value = current.copy(results = updated)
-                }
-            }
-        }
     }
 
     fun onQueryChange(q: String) {
@@ -174,11 +152,8 @@ class SearchViewModel @Inject constructor(
                 // (e.g., a row inserted between fetches shifts the OFFSET window).
                 val existingIds = current.results.map { it.id }.toHashSet()
                 val newSkins = skins.filter { it.id !in existingIds }
-                // Fetch live prices for the new page before appending — same guarantee
-                // as the initial load: correct DMarket prices from the first render.
-                val liveNewSkins = skinRepository.refreshSkinPricesBatch(newSkins)
                 _uiState.value = SearchUiState.Success(
-                    results = current.results + liveNewSkins,
+                    results = current.results + newSkins,
                     isLoadingMore = false,
                     hasMore = hasMore,
                     totalCount = total,
@@ -203,11 +178,8 @@ class SearchViewModel @Inject constructor(
                     limit = PAGE_SIZE,
                 )
             }.onSuccess { (skins, hasMore, total) ->
-                // Fetch live prices before showing — cards display the correct DMarket
-                // exchange price from the first render, no flicker.
-                val liveSkins = skinRepository.refreshSkinPricesBatch(skins)
                 _uiState.value = SearchUiState.Success(
-                    results = liveSkins,
+                    results = skins,
                     hasMore = hasMore,
                     totalCount = total,
                 )

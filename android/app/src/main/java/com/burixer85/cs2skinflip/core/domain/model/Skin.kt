@@ -10,9 +10,10 @@ data class Skin(
     val isStatTrak: Boolean = false,
     val isSouvenir: Boolean = false,
     val imageUrl: String,
-    val cs2capPrice: Double?,       // USD — aggregated lowest ask from 38+ markets via CS2Cap
-    val csfloatPrice: Double?,      // USD — cheapest listing on CSFloat exchange
-    val csgoMarketPrice: Double?,   // USD — CS:GO Market price
+    val skinportPrice: Double?,     // USD — Skinport
+    val csgoMarketPrice: Double?,   // USD — CS:GO Market
+    val csdealsPrice: Double?,      // USD — CS.Deals
+    val dmarketPrice: Double?,      // USD — DMarket aggregator (sanity-filtered)
     val lowestPrice: Double? = null,  // pre-computed lowest across all markets (from backend)
     val priceChange24h: Double?,      // percentage, null if no history yet
     val volume24h: Int,
@@ -25,7 +26,7 @@ data class Skin(
     /** Uses backend's pre-computed lowest price; falls back to min of individual sources. */
     val lowestMarketPrice: Double
         get() = lowestPrice
-            ?: listOfNotNull(cs2capPrice, csfloatPrice, csgoMarketPrice).minOrNull()
+            ?: listOfNotNull(skinportPrice, csgoMarketPrice, csdealsPrice, dmarketPrice).minOrNull()
             ?: 0.0
 
     val displayName: String
@@ -68,7 +69,8 @@ data class MarketPrice(
 )
 
 enum class Marketplace(val displayName: String) {
-    CS2CAP("CS2Cap"),
-    CSFLOAT("CSFloat"),
-    CSGO_MARKET("CS:GO Market")
+    SKINPORT("Skinport"),
+    CSGO_MARKET("CS:GO Market"),
+    CSDEALS("CS.Deals"),
+    DMARKET("DMarket"),
 }
