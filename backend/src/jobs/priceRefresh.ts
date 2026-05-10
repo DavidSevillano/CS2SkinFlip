@@ -1,4 +1,4 @@
-import { populatePricesFromSkinport } from './populatePrices'
+import { populatePrices } from './populatePrices'
 import { AlertService } from '../services/alerts'
 import type { FastifyBaseLogger } from 'fastify'
 
@@ -7,7 +7,7 @@ const alertService = new AlertService()
 
 export function startPriceRefreshJob(log: FastifyBaseLogger) {
   const run = async () => {
-    await populatePricesFromSkinport(log)
+    await populatePrices(log)
     log.info('[AlertCheck] Checking active alerts after price refresh…')
     await alertService.checkAll()
     log.info('[AlertCheck] Done')

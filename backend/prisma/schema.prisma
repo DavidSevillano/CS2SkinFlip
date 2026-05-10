@@ -48,8 +48,8 @@ model Skin {
 model SkinPrice {
   id              String   @id @default(cuid())
   skinId          String   @unique
-  skinportPrice   Float?
-  dmarketPrice    Float?
+  cs2capPrice     Float?
+  csfloatPrice    Float?
   csgoMarketPrice Float?
   lowestPrice     Float?
   volume24h       Int?

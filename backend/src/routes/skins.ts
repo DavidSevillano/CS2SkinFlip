@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
-import { fetchDMarketLivePrice, fetchSkinportLivePrice } from '../jobs/populatePrices'
+import { fetchCS2CapLivePrice, fetchCSFloatLivePrice } from '../jobs/populatePrices'
 
 const priceService = new PriceService()
 
@@ -93,9 +93,28 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       const ids = shuffled.map((s) => s.id)
       skins = await prisma.skin.findMany({ where: { id: { in: ids } }, include: { price: true } })
     } else if (sort === 'price_asc' || sort === 'price_desc') {
-      // sort by price from DB (already updated by batch when user visits app)
-      const orderBy: any = sort === 'price_asc' ? { price: { lowestPrice: 'asc' } } : { price: { lowestPrice: 'desc' } }
-      skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy })
+      // Use DB lowestPrice (kept fresh by 2h bulk job) for price-sorted results.
+      // Live CSFloat lookups happen in the batch endpoint after Android receives the list.
+      const candidates = await prisma.skin.findMany({
+        where,
+        include: { price: true },
+        orderBy: { price: { lowestPrice: sort === 'price_asc' ? 'asc' : 'desc' } },
+        take: limit * 2,
+      })
+
+      const withFreshPrices = candidates.map(skin => ({
+        skin,
+        lowestPrice: skin.price?.lowestPrice ?? 0,
+      }))
+
+      // Sort by fresh lowest price
+      const asc = sort === 'price_asc'
+      withFreshPrices.sort((a, b) => {
+        return asc ? a.lowestPrice - b.lowestPrice : b.lowestPrice - a.lowestPrice
+      })
+
+      // Apply pagination
+      skins = withFreshPrices.slice(skip, skip + limit).map(r => r.skin)
     } else {
       // sort === 'name'
       skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy: { name: 'asc' } })
@@ -147,38 +166,40 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     const skin = await prisma.skin.findUnique({ where: { id: skinId }, include: { price: true } })
     if (!skin) return reply.status(404).send({ error: 'Skin not found' })
 
-    // Live price lookups — all in USD for consistency, plus Skinport in EUR for display.
-    // Skinport.com shows prices in EUR natively; fetching EUR avoids static-rate mismatch.
-    const [liveSkinportUsd, liveSkinportEur, liveDmarketUsd] = await Promise.all([
-      fetchSkinportLivePrice(skin.marketHashName, 'USD'),
-      fetchSkinportLivePrice(skin.marketHashName, 'EUR'),
-      fetchDMarketLivePrice(skin.marketHashName, 'USD'),
+    // Live price lookups — CS2Cap (aggregated lowest) and CSFloat in parallel.
+    const [liveCS2Cap, liveCSFloat] = await Promise.all([
+      fetchCS2CapLivePrice(skin.marketHashName),
+      fetchCSFloatLivePrice(skin.marketHashName),
     ])
 
-    const updatedSkinportUsd  = liveSkinportUsd  ?? skin.price?.skinportPrice   ?? null
-    const updatedDmarketUsd   = liveDmarketUsd   ?? skin.price?.dmarketPrice    ?? null
-    const updatedCsgoMarket   =                     skin.price?.csgoMarketPrice ?? null
-    const updatedSkinportEur  = liveSkinportEur  ?? null   // display-only, not stored
+    const updatedCS2Cap    = liveCS2Cap  ?? skin.price?.cs2capPrice    ?? null
+    const updatedCSFloat   = liveCSFloat ?? skin.price?.csfloatPrice   ?? null
+    const updatedCsgoMarket =              skin.price?.csgoMarketPrice ?? null
 
     const lowestPrice = Math.min(
-      ...[updatedSkinportUsd, updatedDmarketUsd, updatedCsgoMarket]
+      ...[updatedCS2Cap, updatedCSFloat, updatedCsgoMarket]
         .filter((p): p is number => p != null && p > 0)
     ) || null
 
-    request.log.info(`[DETAIL] ${skinId}: sp=${liveSkinportUsd}, dm=${liveDmarketUsd}, csgom=${updatedCsgoMarket}, lowest=${lowestPrice}`)
-
-    // Always persist live DMarket price when available — this ensures the batch
-    // endpoint has fresh prices for next time (avoids rate limiting issues).
-    if (skin.price && liveDmarketUsd !== null) {
-      await prisma.skinPrice.update({
-        where: { skinId },
-        data: {
-          dmarketPrice: liveDmarketUsd,
-          lowestPrice: lowestPrice ?? skin.price.lowestPrice,
-          updatedAt: new Date(),
-        },
-      })
-      request.log.info(`[DETAIL] Saved DMarket price ${liveDmarketUsd} for ${skinId}`)
+    // Persist fresh live prices so the batch endpoint has them cached in DB.
+    // Also write CSFloat to the csfloat-live Redis cache for the batch endpoint.
+    if (skin.price) {
+      const needsPersist = (liveCS2Cap !== null || liveCSFloat !== null)
+      if (needsPersist) {
+        await prisma.skinPrice.update({
+          where: { skinId },
+          data: {
+            ...(liveCS2Cap  !== null && { cs2capPrice:  liveCS2Cap }),
+            ...(liveCSFloat !== null && { csfloatPrice: liveCSFloat }),
+            lowestPrice: lowestPrice ?? skin.price.lowestPrice,
+            updatedAt: new Date(),
+          },
+        })
+      }
+      if (liveCSFloat !== null) {
+        const { redis, CACHE_TTL } = await import('../redis/client')
+        redis.set(`csfloat-live:${skinId}`, liveCSFloat, { ex: CACHE_TTL.SKIN_PRICES }).catch(() => {})
+      }
     }
 
     // 24h % change (USD history)
@@ -195,9 +216,8 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       price: skin.price
         ? {
             ...skin.price,
-            skinportPrice:    updatedSkinportUsd,
-            skinportPriceEur: updatedSkinportEur,  // EUR native — shown as-is in the UI
-            dmarketPrice:     updatedDmarketUsd,
+            cs2capPrice:    updatedCS2Cap,
+            csfloatPrice:   updatedCSFloat,
             lowestPrice,
             priceChange24h,
           }

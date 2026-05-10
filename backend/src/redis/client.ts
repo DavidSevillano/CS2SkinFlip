@@ -11,5 +11,4 @@ export const CACHE_TTL = {
   TOP_MOVERS: 60 * 15,         // 15 min
   INVENTORY: 60 * 10,          // 10 min
   PLAYER_SUMMARY: 60 * 60,     // 1 hour
-  SKINPORT_MAP: 60 * 30,       // 30 min — full Skinport price map
 } as const

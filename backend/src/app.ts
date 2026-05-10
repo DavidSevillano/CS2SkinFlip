@@ -4,7 +4,7 @@ import { env } from './config/env'
 import { prisma } from './db/prisma'
 import { startPriceRefreshJob } from './jobs/priceRefresh'
 import { populateSkins } from './jobs/populateSkins'
-import { populatePricesFromSkinport } from './jobs/populatePrices'
+import { populatePrices } from './jobs/populatePrices'
 import { redis } from './redis/client'
 
 async function main() {
@@ -29,7 +29,7 @@ async function main() {
 
     // Chain: populate skins → populate prices → start refresh job
     populateSkins(app.log)
-      .then(() => populatePricesFromSkinport(app.log))
+      .then(() => populatePrices(app.log))
       .then(() => startPriceRefreshJob(app.log))
       .catch((err) => app.log.error('[Startup] Job chain failed:', err))
   } catch (err) {
