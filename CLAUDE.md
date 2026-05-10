@@ -1,0 +1,241 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Monorepo structure
+
+```
+CS2SkinFlip/
+├── android/    ← Native Android app (Kotlin + Jetpack Compose + Hilt + MVVM)
+└── backend/    ← REST API (Fastify + TypeScript + Prisma + PostgreSQL + Upstash Redis)
+```
+
+---
+
+# Backend
+
+## Commands
+
+```bash
+# Development (hot reload)
+npm run dev
+
+# Type-check only (no emit)
+npx tsc --noEmit
+
+# Database
+npm run db:push        # push schema changes without migration files
+npm run db:migrate     # create a migration file + apply
+npm run db:studio      # open Prisma Studio in browser
+npm run db:reset       # reset DB and re-seed (destructive)
+
+# Production build
+npm run build && npm start
+```
+
+## Environment
+
+Copy `.env` and fill in:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Neon (PostgreSQL) connection string |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash Redis (serverless) |
+| `JWT_SECRET` | Min 32 chars |
+| `FRONTEND_URL` | Used for CORS allowlist |
+| `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |
+
+The Firebase service account file (`firebase-service-account.json`) is gitignored. Download from Firebase console → Project Settings → Service Accounts.
+
+## Architecture
+
+Fastify + Prisma + TypeScript. No test suite yet.
+
+### Startup sequence (`app.ts`)
+
+```
+buildServer() → listen → populateSkins() → populatePricesFromSkinport() → startPriceRefreshJob()
+```
+
+`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePricesFromSkinport` runs the full bulk price fetch on startup and re-runs every 2 hours.
+
+### Route structure (`src/routes/`)
+
+| File | Prefix | Notes |
+|---|---|---|
+| `skins.ts` | `/skins` | Public — search, detail, price history, top-movers |
+| `auth.ts` | `/auth` | Email/password register + login → JWT; `PUT /auth/me/fcm-token` to save FCM token |
+| `watchlist.ts` | `/watchlist` | Auth required |
+| `alerts.ts` | `/alerts` | Auth required |
+| `portfolio.ts` | `/portfolio` | Auth required |
+| `prices.ts` | `/prices` | On-demand single-skin and batch price refresh |
+
+### Price pipeline
+
+Three bulk sources are fetched in parallel on startup and every 2h:
+
+1. **Skinport** (`fetchSkinportPrices`) — `api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items, no auth. Full price map is also kept in memory (`_skinportMaps`) with a 30-min TTL per currency for fast live lookups.
+2. **DMarket** (`fetchDMarketPrices`) — `price-aggregator/v1/aggregated-prices`. 10k items per page; use capital-`Offset` param. Filter by `GameID === 'a8db'` for CS2 items. `BestPrice` is USD dollars (not cents). Do NOT use `exchange/v1/market/items` for bulk — it returns per-seller listings alphabetically without price sort. **Known limitation**: the aggregator sometimes returns inflated prices when only whale-priced listings exist (e.g. $10 000 for a $1 skin). The bulk job sanity-filters these by nullifying `dmarketPrice` when it exceeds 5× the cheapest of Skinport/CS:GO Market.
+3. **CS:GO Market** (`fetchCsgoMarketPrices`) — `market.csgo.com/api/v2/prices/USD.json`, ~25k items, `price` field is a USD string.
+
+`calcLowestPrice()` takes the MIN of all non-null, positive values. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
+
+**Live detail prices** (`GET /skins/:id`): fetches fresh Skinport USD + EUR and DMarket USD in parallel; recomputes `lowestPrice` live. Always persists when DMarket exchange price is lower than the stored aggregator price (progressively corrects aggregator inflation as users browse). `fetchDMarketLivePrice()` uses `exchange/v1/market/items` with `orderBy=price&orderDir=asc`; prices are in USD cents → divide by 100.
+
+**Batch price refresh** (`GET /prices/batch?ids=...`): called by Android once after each list load. Skinport from in-memory map (zero outbound calls). DMarket uses three-tier lookup: (1) Redis `dm-live:{skinId}` cache (instant); (2) live DMarket exchange call — only for skins where the DB aggregator price is null or inflated (would fail the 5× check), concurrency capped at 5 to avoid rate limits, results cached to `dm-live`; (3) DB aggregator with 5× sanity filter for skins with a reasonable DB price. CS:GO Market from DB. Android awaits this before showing results so cards display correct prices on first render.
+
+**Top-movers DMarket enrichment** (`PriceService.getTopMovers()`): when the 15-min Redis cache expires and the list is rebuilt, 20 parallel `fetchDMarketLivePrice` calls are made (server-to-server, well within rate limits at that cadence). Results are stored both in the `top-movers:20` cache AND in individual `dm-live:{skinId}` keys, so subsequent batch-endpoint calls for those skins skip the DMarket API entirely.
+
+### Alert notifications (FCM)
+
+`src/services/fcm.ts` lazily initialises the Firebase Admin SDK from `FCM_SERVICE_ACCOUNT_PATH`. `sendAlertNotification()` sends a data-only FCM message (no `notification` key) so the Android app builds the notification in-process and can attach the `skinId` for tap navigation.
+
+The alert-check job (`src/services/alerts.ts`) fetches the user's `fcmToken` from the DB after triggering an alert and calls `sendAlertNotification` if a token exists.
+
+### Alert updates (`PUT /alerts/:id`)
+
+Supports partial updates: `isActive`, `targetPrice`, and `type`. When `targetPrice` or `type` changes, the alert is automatically re-armed (`isTriggered = false`, `isActive = true`).
+
+### Skin catalog (`populateSkins.ts`)
+
+Source: `ByMykel/CSGO-API` GitHub JSON. Each skin × wear combination = one DB row. StatTrak variants:
+- Regular: `StatTrak™ {name} ({wear})`
+- Knives (`★`-prefix): `★ StatTrak™ {nameWithoutStar} ({wear})`
+
+Skin IDs are slugs derived from `marketHashName` via `slugify()`.
+
+### Caching (Redis / Upstash)
+
+| Key | TTL |
+|---|---|
+| `steam:player:{steamId}` | 1 hour |
+| `steam:inventory:{steamId}` | 10 min |
+| `prices:{skinId}` | 5 min |
+| `top-movers:20` | 15 min |
+| `skinport:price-map:USD` | 30 min |
+| `dm-live:{skinId}` | 5 min |
+
+`top-movers:20` is explicitly invalidated at the end of every bulk price run.
+
+### Schema notes
+
+`SkinPrice`: `skinportPrice`, `dmarketPrice`, `csgoMarketPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting.
+
+`User`: has `fcmToken String?` for FCM push notifications.
+
+### Filtering (`GET /skins`)
+
+All filters are combined as `AND` conditions. Wear is matched via `marketHashName ILIKE '%(${wear}%)'`. StatTrak via `ILIKE '%StatTrak%'`. Search uses `regexp_replace(lower(...), '[^a-z0-9]', '', 'g')` to strip punctuation before matching.
+
+---
+
+# Android
+
+## Build commands
+
+```bash
+# Debug APK
+./gradlew assembleDebug
+
+# Release APK
+./gradlew assembleRelease
+
+# Install on connected device/emulator
+./gradlew installDebug
+
+# Run all tests
+./gradlew test
+
+# Run a single test class
+./gradlew test --tests "com.burixer85.cs2skinflip.ExampleUnitTest"
+
+# Fast type-check (no APK)
+./gradlew :app:compileDebugKotlin
+
+# Lint check
+./gradlew lint
+```
+
+## Configuration
+
+### `android/local.properties`
+```
+BACKEND_URL=http://10.0.2.2:3000
+STEAM_API_KEY=your_key_here
+```
+`10.0.2.2` is the Android emulator's alias for `localhost`. Use the device's actual LAN IP for physical devices.
+
+### `app/google-services.json`
+Required for Firebase (Analytics + FCM). Download from the Firebase console for project `cs2skinflip-304c6`, package `com.burixer85.cs2skinflip`. The file is gitignored — never commit it.
+
+### Room database
+Uses `fallbackToDestructiveMigration()` — bump `version` in `AppDatabase.kt` whenever entities change. Only `watchlist` and `alerts` tables are persisted locally; skin data is always fetched from the backend.
+
+## Architecture
+
+Single-module Android app using **Jetpack Compose + Hilt + MVVM**.
+
+### Layer structure
+
+```
+core/
+  di/           — Hilt AppModule (single source of truth for all DI)
+  analytics/    — AnalyticsService (Firebase Analytics wrapper, @Singleton)
+  auth/         — AuthRepository (JWT token storage + email/password login/register + FCM token update)
+  domain/model  — Pure Kotlin data classes: Skin, WatchlistItem, Alert, PortfolioItem
+  data/
+    remote/     — Retrofit interfaces + DTOs + mappers (CS2BackendApiService, SteamApiService)
+    local/      — Room database, Entities, DAOs
+    repository  — SkinRepository, WatchlistRepository, AlertRepository, PortfolioRepository
+    mock/       — MockData fallback used when backend is unreachable
+features/
+  home/         — Top movers list (HomeViewModel → SkinRepository.getTrendingSkins)
+  search/       — Paginated search with filters bottom sheet (SearchViewModel)
+  skindetail/   — Single skin with price history (SkinDetailViewModel)
+  portfolio/    — Manual portfolio tracking
+  watchlist/    — Tracked skins with target prices
+  alerts/       — Price alert management (create, edit, toggle, delete)
+  settings/     — Settings screen + entry point to Alerts
+navigation/     — AppNavigation (NavHost + bottom bar), Screen sealed class
+```
+
+### Key data flow
+
+- **`Skin`** is the central domain model. `lowestMarketPrice` is a computed property that first uses `lowestPrice` (pre-computed minimum sent by the backend across all three markets), then falls back to `min(skinportPrice, dmarketPrice, csgoMarketPrice)`.
+- **`CS2BackendApiService`** is the main remote source. DTOs are mapped to `Skin` via `BackendSkinDto.toDomain()` and `TopMoverDto.toDomain()` in `CS2BackendApiService.kt`. Mappers live in the same file as the DTOs.
+- **`SkinRepository`** always falls back to `MockData` if the network call fails. It exposes `livePriceCache: StateFlow<Map<String, Skin>>` — populated by `getSkinById()` (detail view) and `refreshSkinPricesBatch()`. `refreshSkinPricesBatch(skins)` calls `GET /prices/batch`, applies live prices, and **returns the patched list** — callers await it before setting Success state so cards always show the correct price on first render with no flicker. It also writes into `livePriceCache` so detail-screen price updates propagate back to list cards. `loadMore()` in `SearchViewModel` applies the same batch fetch to each new page before appending.
+- **Pagination** in `SearchViewModel` uses `currentPage` + `SearchUiState.Success.isLoadingMore` to prevent duplicate page fetches.
+
+### DI (AppModule)
+
+Two named Retrofit instances:
+- `@Named("steam")` → `https://api.steampowered.com/`
+- `@Named("backend")` → `BuildConfig.BACKEND_URL` — has `AuthInterceptor` attached
+
+Room DB name: `cs2skinflip.db`.
+
+### Firebase
+
+**Analytics** (`AnalyticsService`, `@Singleton`): wraps `FirebaseAnalytics`. Methods: `logScreenView`, `logSkinViewed` (SELECT_ITEM), `logSkinAddedToWatchlist`, `logAlertCreated`, `logAlertEdited`, `logAlertDeleted`, `logSearch`. Injected into `AlertsViewModel`, `SkinDetailViewModel`.
+
+**FCM** (`CS2SkinFlipMessagingService`): annotated `@AndroidEntryPoint`. Uses a manual `CoroutineScope(Dispatchers.IO + SupervisorJob())` because `FirebaseMessagingService` has no lifecycle. `onNewToken` calls `authRepository.updateFcmToken(token)`. `onMessageReceived` builds and shows a notification with a `PendingIntent` that puts `skinId` as an extra on the launch `Intent`.
+
+**Notification tap → skin detail**: `MainActivity` reads `intent.getStringExtra("skinId")` in both `onCreate` and `onNewIntent`, stores it in `var notificationSkinId by mutableStateOf<String?>(null)`. `AppNavigation` receives `initialSkinId` + `onNavigatedToSkin` and uses `LaunchedEffect(initialSkinId)` to navigate once then clear the ID.
+
+### Alerts feature
+
+`AlertsViewModel` manages three state flows:
+- `uiState` — the list of alerts (Loading / NotLoggedIn / Success / Error)
+- `createState` — the "create alert" bottom sheet (skin search, type, price)
+- `editState` — the "edit alert" bottom sheet (type + price for an existing alert)
+- `authState` — the login/register form shown when not logged in
+
+`EditAlertState.alert != null` signals the edit sheet is open. `submitEdit()` and `submitCreateAlert()` are `suspend` functions that return `true` on success so the caller can dismiss the sheet.
+
+### Theme
+
+Dark-only theme. Colors in `core/ui/theme/Color.kt`. Primary accent: `AccentOrange (#FF6B35)`. Rarity colors follow the standard CS2 naming convention.
+
+### Wear parsing
+
+Wear is parsed from the `marketHashName` suffix in `parseWearFromName()` inside `CS2BackendApiService.kt` — there is no separate `wear` field in the backend DTO.
