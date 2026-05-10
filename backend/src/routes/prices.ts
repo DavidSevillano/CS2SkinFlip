@@ -7,24 +7,18 @@ import { fetchSkinportLivePrice, fetchDMarketLivePrice } from '../jobs/populateP
 const priceService = new PriceService()
 
 export const priceRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/debug/dmarket/:name', async (request, reply) => {
+    const { name } = request.params as { name: string }
+    const decoded = decodeURIComponent(name)
+    const dmarketPrice = await fetchDMarketLivePrice(decoded, 'USD')
+    const skinportPrice = await fetchSkinportLivePrice(decoded, 'USD')
+    return { dmarketPrice, skinportPrice, name: decoded }
+  })
   /**
    * GET /prices/batch?ids=id1,id2,...
    *
    * Returns accurate prices for up to 50 skins in a single round-trip.
-   *
-   * - Skinport:     in-memory map (refreshed every 30 min) — zero outbound API calls.
-   * - DMarket:      Three-tier lookup:
-   *     1. Redis `dm-live:{id}` cache (5-min TTL) — instant, no API call.
-   *     2. Live DMarket exchange call — ONLY for skins where the DB aggregator price is
-   *        null or would be filtered by the 5× sanity check (inflated whale-listing price).
-   *        These are precisely the skins where DMarket might be the real cheapest market
-   *        but the aggregator hides that fact. Concurrency capped at 5 to stay within
-   *        DMarket rate limits; results are cached into dm-live for 5 min.
-   *     3. DB aggregator value with 5× sanity filter — for skins with a reasonable DB
-   *        DMarket price (not inflated), used as-is.
-   * - CS:GO Market: DB value (reliable, refreshed by bulk job every 2 h).
-   *
-   * Android calls this once after each list load so cards display correct prices on first render.
+   * Always fetches live DMarket prices to ensure accurate lowest price.
    */
   app.get('/prices/batch', async (request, reply) => {
     const { ids } = request.query as { ids?: string }
@@ -38,94 +32,71 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
       include: { price: true },
     })
 
-    // ── Phase 1: gather Skinport (in-memory), dm-live cache, and CS:GO Market in parallel ──
-    type SkinPhase1 = {
-      skin: typeof skins[number]
-      skinportPrice: number | null
-      csgoMarketPrice: number | null
-      dmLiveCached: number | null   // null = cache miss or Redis error
-      dbDmarketPrice: number | null
-    }
+    // Fetch live prices - parallel with concurrency limit for speed
+    const CONCURRENCY = 3
+    const results: Array<{ id: string; skinportPrice: number | null; dmarketPrice: number | null; csgoMarketPrice: number | null; lowestPrice: number | null }> = []
 
-    const phase1 = await Promise.allSettled(
-      skins.map(async (skin): Promise<SkinPhase1> => {
-        const [skinportPrice, dmLiveCached] = await Promise.all([
-          fetchSkinportLivePrice(skin.marketHashName, 'USD')
-            .then(p => p ?? skin.price?.skinportPrice ?? null),
-          redis.get<number>(`dm-live:${skin.id}`).catch(() => null),
-        ])
-        return {
-          skin,
-          skinportPrice,
-          csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
-          dmLiveCached,
-          dbDmarketPrice: skin.price?.dmarketPrice ?? null,
-        }
-      })
-    )
+    const processSkin = async (skin: typeof skins[number]) => {
+      const [skinportPrice, dmarketPrice] = await Promise.all([
+        fetchSkinportLivePrice(skin.marketHashName, 'USD')
+          .then(p => p ?? skin.price?.skinportPrice ?? null),
+        fetchDMarketLivePrice(skin.marketHashName, 'USD')
+          .then(p => p ?? skin.price?.dmarketPrice ?? null),  // fallback to DB if live fails
+      ])
+      
+      const csgoMarketPrice = skin.price?.csgoMarketPrice ?? null
 
-    const phase1Data: SkinPhase1[] = phase1
-      .filter(r => r.status === 'fulfilled')
-      .map(r => (r as PromiseFulfilledResult<SkinPhase1>).value)
+      const prices = [skinportPrice, dmarketPrice, csgoMarketPrice]
+        .filter((p): p is number => p != null && p > 0)
+      
+      const lowestPrice = prices.length > 0 ? Math.min(...prices) : null
 
-    // ── Phase 2: live DMarket fetch for skins where aggregator price is inflated/null ──
-    // The DMarket price-aggregator (used by the bulk job) sometimes returns wildly inflated
-    // values when only whale listings exist. In those cases the 5× filter nulls out DMarket,
-    // so lowestPrice = min(Skinport, CS:GO Market) even though DMarket exchange might be
-    // cheaper. We fix this by calling the exchange directly — but ONLY for problematic skins
-    // to keep concurrency low. Cap at 5 simultaneous calls to avoid rate limits.
-    const needsLiveDmarket = phase1Data.filter(({ dmLiveCached, dbDmarketPrice, skinportPrice, csgoMarketPrice }) => {
-      if (dmLiveCached !== null) return false  // fresh cache hit — no call needed
-      const otherPrices = [skinportPrice, csgoMarketPrice].filter((p): p is number => p != null && p > 0)
-      const otherMin = otherPrices.length > 0 ? Math.min(...otherPrices) : null
-      const isInflated = dbDmarketPrice !== null && otherMin !== null && dbDmarketPrice > otherMin * 5
-      const isNull = dbDmarketPrice === null
-      return isInflated || isNull
-    })
-
-    const liveDmarketMap = new Map<string, number>()
-    const CONCURRENCY = 5
-    for (let i = 0; i < needsLiveDmarket.length; i += CONCURRENCY) {
-      const batch = needsLiveDmarket.slice(i, i + CONCURRENCY)
-      const results = await Promise.allSettled(
-        batch.map(({ skin }) =>
-          fetchDMarketLivePrice(skin.marketHashName, 'USD')
-            .then(price => ({ id: skin.id, price }))
-        )
-      )
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value.price !== null) {
-          liveDmarketMap.set(r.value.id, r.value.price)
-          // Cache so subsequent batch calls and detail-page visits are instant
-          redis.set(`dm-live:${r.value.id}`, r.value.price, { ex: CACHE_TTL.SKIN_PRICES }).catch(() => {})
-        }
+      return {
+        id: skin.id,
+        skinportPrice,
+        dmarketPrice,
+        csgoMarketPrice,
+        lowestPrice,
+        skin,
       }
     }
 
-    // ── Phase 3: assemble response ─────────────────────────────────────────────
+    // Process in batches of CONCURRENCY to avoid rate limiting
+    for (let i = 0; i < skins.length; i += CONCURRENCY) {
+      const batch = skins.slice(i, i + CONCURRENCY)
+      // Add small delay between batches
+      if (i > 0) await new Promise(r => setTimeout(r, 100))
+      const batchResults = await Promise.all(batch.map(processSkin))
+      results.push(...batchResults)
+    }
+
+    // Save all prices to DB in a single batch (faster than one by one)
+    const updates = results
+      .filter(r => r.dmarketPrice !== null)
+      .map(r => prisma.skinPrice.update({
+        where: { skinId: r.id },
+        data: {
+          skinportPrice: r.skinportPrice,
+          dmarketPrice: r.dmarketPrice,
+          csgoMarketPrice: r.csgoMarketPrice,
+          lowestPrice: r.lowestPrice,
+          updatedAt: new Date(),
+        },
+      }).catch(() => null))
+
+    if (updates.length > 0) {
+      await Promise.all(updates).catch(() => {})
+    }
+
     const response: Record<string, object> = {}
-    for (const { skin, skinportPrice, csgoMarketPrice, dmLiveCached, dbDmarketPrice } of phase1Data) {
-      let dmarketPrice: number | null
-      if (liveDmarketMap.has(skin.id)) {
-        // Fresh live exchange price (most accurate)
-        dmarketPrice = liveDmarketMap.get(skin.id)!
-      } else if (dmLiveCached !== null) {
-        // Warm Redis cache (populated by top-movers enrichment or a prior detail visit)
-        dmarketPrice = dmLiveCached
-      } else {
-        // DB aggregator — apply 5× sanity filter to discard whale-inflated outliers
-        const otherPrices = [skinportPrice, csgoMarketPrice].filter((p): p is number => p != null && p > 0)
-        const otherMin = otherPrices.length > 0 ? Math.min(...otherPrices) : null
-        dmarketPrice = (dbDmarketPrice !== null && otherMin !== null && dbDmarketPrice > otherMin * 5)
-          ? null
-          : dbDmarketPrice
+    for (const result of results) {
+      app.log.info(`[BATCH] ${result.id}: sp=${result.skinportPrice}, dm=${result.dmarketPrice}, csgom=${result.csgoMarketPrice}, lowest=${result.lowestPrice}`)
+      response[result.id] = {
+        skinportPrice: result.skinportPrice,
+        dmarketPrice: result.dmarketPrice,
+        csgoMarketPrice: result.csgoMarketPrice,
+        lowestPrice: result.lowestPrice,
       }
-
-      const positives = [skinportPrice, dmarketPrice, csgoMarketPrice].filter(
-        (p): p is number => p != null && p > 0,
-      )
-      const lowestPrice = positives.length > 0 ? Math.min(...positives) : null
-      response[skin.id] = { skinportPrice, dmarketPrice, csgoMarketPrice, lowestPrice }
     }
 
     return response
