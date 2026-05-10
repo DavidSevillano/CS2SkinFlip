@@ -48,16 +48,16 @@ export class PriceService {
     const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
     if (cached) return cached
 
+    // Fetch candidates pre-sorted by DB priceChange24h (kept fresh by bulk job every 2h).
+    // A wider pool (limit * 3) ensures we still have enough after nulls are sorted last.
     const skins = await prisma.skin.findMany({
       include: { price: true },
       where: { price: { lowestPrice: { gt: 0 } } },
-      orderBy: { price: { lowestPrice: 'desc' } },
-      take: limit * 5,
+      orderBy: { price: { priceChange24h: 'desc' } },
+      take: limit * 3,
     })
 
-    const shuffled = skins.sort(() => Math.random() - 0.5).slice(0, limit)
-
-    const skinIds = shuffled.map((s) => s.id)
+    const skinIds = skins.map((s) => s.id)
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const histories = await prisma.priceHistory.findMany({
       where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
@@ -66,32 +66,38 @@ export class PriceService {
     })
     const historyMap = new Map(histories.map((h) => [h.skinId, h.price]))
 
-    const topMovers = shuffled.map((skin) => {
-      const current = skin.price?.lowestPrice ?? null
-      const prev = historyMap.get(skin.id) ?? null
-      const priceChange24h = current !== null && prev !== null
-        ? ((current - prev) / prev) * 100
-        : null
-      return {
-        skinId: skin.id,
-        marketHashName: skin.marketHashName,
-        name: skin.name,
-        iconUrl: skin.iconUrl,
-        cs2capPrice: skin.price?.cs2capPrice ?? null,
-        csfloatPrice: skin.price?.csfloatPrice ?? null,
-        csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
-        lowestPrice: current,
-        priceChange24h,
-        volume24h: skin.price?.volume24h ?? null,
-        updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
-      }
-    })
+    // Recalculate priceChange24h live from PriceHistory (more accurate than the bulk-job
+    // column between runs). Fall back to the DB column when no history entry exists yet.
+    const topMovers = skins
+      .map((skin) => {
+        const current = skin.price?.lowestPrice ?? null
+        const prev = historyMap.get(skin.id) ?? null
+        const priceChange24h =
+          current !== null && prev !== null && prev > 0
+            ? ((current - prev) / prev) * 100
+            : (skin.price?.priceChange24h ?? null)
+        return {
+          skinId: skin.id,
+          marketHashName: skin.marketHashName,
+          name: skin.name,
+          iconUrl: skin.iconUrl,
+          cs2capPrice: skin.price?.cs2capPrice ?? null,
+          csfloatPrice: skin.price?.csfloatPrice ?? null,
+          csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
+          lowestPrice: current,
+          priceChange24h,
+          volume24h: skin.price?.volume24h ?? null,
+          updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
+        }
+      })
+      // Sort by highest price growth (nulls go last); take the top `limit`.
+      .sort((a, b) => (b.priceChange24h ?? -Infinity) - (a.priceChange24h ?? -Infinity))
+      .slice(0, limit)
 
-    // Enrich top-movers with live CSFloat prices before caching.
-    // Runs at most every 15 min (when the Redis cache expires), never per user request —
-    // 20 parallel CSFloat calls are well within rate limits at that cadence.
+    // Enrich with live CSFloat prices before caching.
+    // Runs at most every 15 min (when the Redis cache expires) — well within rate limits.
     // Results are also written to csfloat-live:{skinId} (5-min TTL) so the batch
-    // endpoint serves correct CSFloat prices without any additional API calls.
+    // endpoint serves correct CSFloat prices without any extra API calls.
     const enriched = await Promise.all(
       topMovers.map(async (mover) => {
         try {

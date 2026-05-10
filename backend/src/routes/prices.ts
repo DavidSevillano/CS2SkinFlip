@@ -79,8 +79,11 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    // ── Phase 2b: live CSFloat for skins with no csfloat-live cache ──────────
-    const needsCSFloatLive = phase1Data.filter(d => d.csfloatLiveCached === null)
+    // ── Phase 2b: live CSFloat for skins with no csfloat-live cache AND no DB value ──
+    // Skins that already have a DB csfloatPrice (written by the detail endpoint or a
+    // previous batch call) skip the live call — the DB value is recent enough.
+    // Live calls only happen when we have absolutely no data for a skin.
+    const needsCSFloatLive = phase1Data.filter(d => d.csfloatLiveCached === null && d.dbCsfloat === null)
     const liveCSFloatMap = new Map<string, number>()
 
     for (let i = 0; i < needsCSFloatLive.length; i += CONCURRENCY) {
