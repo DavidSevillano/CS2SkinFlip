@@ -28,8 +28,7 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
       response[row.skinId] = {
         skinportPrice:   row.skinportPrice,
         csgoMarketPrice: row.csgoMarketPrice,
-        csdealsPrice:    row.csdealsPrice,
-        dmarketPrice:    row.dmarketPrice,
+        waxpeerPrice:    row.waxpeerPrice,
         lowestPrice:     row.lowestPrice,
       }
     }

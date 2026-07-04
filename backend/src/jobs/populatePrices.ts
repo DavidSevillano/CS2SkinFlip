@@ -1,7 +1,11 @@
 import axios from 'axios'
+import zlib from 'zlib'
+import { promisify } from 'util'
 import { prisma } from '../db/prisma'
 import { redis } from '../redis/client'
 import type { FastifyBaseLogger } from 'fastify'
+
+const brotliDecompress = promisify(zlib.brotliDecompress)
 
 // ─── Bulk price fetchers ──────────────────────────────────────────────────────
 // Strategy: each marketplace exposes a single bulk endpoint that returns the
@@ -11,8 +15,14 @@ import type { FastifyBaseLogger } from 'fastify'
 // All endpoints below are PUBLIC and require NO authentication:
 //   • Skinport      — api.skinport.com/v1/items
 //   • CS:GO Market  — market.csgo.com/api/v2/prices/USD.json
-//   • CSDeals       — cs.deals/API/IPricing/GetLowestPrices/v1
-//   • DMarket       — api.dmarket.com/price-aggregator (paginated, 10k/page)
+//   • Waxpeer       — api.waxpeer.com/v1/prices
+//
+// CSDeals and DMarket dropped (2026-07): CSDeals' bulk endpoint only lists
+// ~2.6k actively-stocked items (vs ~20-25k for the other marketplaces), so it
+// almost never matched anything outside the most common skins. DMarket's
+// public bulk aggregator was retired outright — its replacement requires
+// signed API-key auth and per-title lookups, incompatible with the no-keys
+// bulk-fetch design here.
 
 // ─── Skinport ────────────────────────────────────────────────────────────────
 
@@ -25,15 +35,21 @@ interface SkinportItem {
 async function fetchSkinportPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
   const map = new Map<string, number>()
   try {
-    const { data } = await axios.get<SkinportItem[]>(
+    // Skinport requires Brotli compression — fetch as arraybuffer and decompress manually
+    // because axios/Node http doesn't auto-decompress Brotli.
+    const { data } = await axios.get<Buffer>(
       'https://api.skinport.com/v1/items',
       {
         params: { app_id: 730, currency: 'USD', tradable: 0 },
         timeout: 30000,
         headers: { 'Accept-Encoding': 'br' },
+        responseType: 'arraybuffer',
+        decompress: false,
       },
     )
-    for (const item of data ?? []) {
+    const decompressed = await brotliDecompress(Buffer.from(data))
+    const items: SkinportItem[] = JSON.parse(decompressed.toString('utf8'))
+    for (const item of items ?? []) {
       if (typeof item.min_price === 'number' && item.min_price > 0 && item.market_hash_name) {
         map.set(item.market_hash_name, item.min_price)
       }
@@ -74,89 +90,42 @@ async function fetchCsgoMarketPrices(log: FastifyBaseLogger): Promise<Map<string
   return map
 }
 
-// ─── CSDeals ─────────────────────────────────────────────────────────────────
+// ─── Waxpeer ─────────────────────────────────────────────────────────────────
+// Bulk endpoint, no auth, ~20k items. `min` is USD × 1000 (e.g. 32079 → $32.079).
 
-interface CsdealsResponse {
-  success: boolean
-  response: {
-    items: Array<{ marketname: string; lowest_price: string }>
-  }
+interface WaxpeerItem {
+  name: string
+  min: number
 }
 
-async function fetchCsdealsPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
+interface WaxpeerResponse {
+  success: boolean
+  items: WaxpeerItem[]
+}
+
+async function fetchWaxpeerPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
   const map = new Map<string, number>()
   try {
-    const { data } = await axios.get<CsdealsResponse>(
-      'https://cs.deals/API/IPricing/GetLowestPrices/v1',
+    const { data } = await axios.get<WaxpeerResponse>(
+      'https://api.waxpeer.com/v1/prices',
       {
-        params: { appid: 730 },
+        params: { game: 'csgo' },
         timeout: 30000,
-        headers: { 'User-Agent': 'Mozilla/5.0' },
       },
     )
-    if (!data?.success || !data.response?.items) {
-      log.warn('[Prices] CSDeals: response not in expected format')
+    if (!data?.success || !data.items) {
+      log.warn('[Prices] Waxpeer: response not in expected format')
       return map
     }
-    for (const item of data.response.items) {
-      const price = parseFloat(item.lowest_price)
-      if (price > 0 && item.marketname) {
-        map.set(item.marketname, price)
+    for (const item of data.items) {
+      const price = item.min / 1000
+      if (price > 0 && item.name) {
+        map.set(item.name, price)
       }
     }
-    log.info(`[Prices] CSDeals: ${map.size} items`)
+    log.info(`[Prices] Waxpeer: ${map.size} items`)
   } catch (err) {
-    log.warn(`[Prices] CSDeals failed: ${(err as Error).message}`)
-  }
-  return map
-}
-
-// ─── DMarket aggregator ──────────────────────────────────────────────────────
-// Paginated endpoint, 10k items per page, no auth. Use capital-Offset.
-// Filter for CS2 (GameID 'a8db'). BestPrice is USD as a string.
-// Known issue: returns inflated prices when only whale-priced listings exist —
-// we apply a 5× sanity filter against the other markets in the merge step.
-
-interface DmarketAggregatedTitle {
-  Title: string
-  GameID: string
-  Markets?: {
-    dmarket?: { Offers?: { BestPrice?: string } }
-  }
-}
-
-interface DmarketResponse {
-  AggregatedTitles?: DmarketAggregatedTitle[]
-  Total?: { Offers?: number }
-}
-
-async function fetchDmarketPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
-  const map = new Map<string, number>()
-  const PAGE_SIZE = 10000
-  const MAX_PAGES = 5  // 50k items is more than enough for CS2
-  try {
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const { data } = await axios.get<DmarketResponse>(
-        'https://api.dmarket.com/price-aggregator/v1/aggregated-prices',
-        {
-          params: { Limit: PAGE_SIZE, Offset: page * PAGE_SIZE },
-          timeout: 30000,
-        },
-      )
-      const titles = data?.AggregatedTitles ?? []
-      if (titles.length === 0) break
-      for (const t of titles) {
-        if (t.GameID !== 'a8db') continue
-        const best = t.Markets?.dmarket?.Offers?.BestPrice
-        if (!best) continue
-        const price = parseFloat(best)
-        if (price > 0 && t.Title) map.set(t.Title, price)
-      }
-      if (titles.length < PAGE_SIZE) break
-    }
-    log.info(`[Prices] DMarket: ${map.size} items`)
-  } catch (err) {
-    log.warn(`[Prices] DMarket failed: ${(err as Error).message}`)
+    log.warn(`[Prices] Waxpeer failed: ${(err as Error).message}`)
   }
   return map
 }
@@ -168,29 +137,13 @@ function calcLowestPrice(...prices: (number | null | undefined)[]): number | nul
   return valid.length > 0 ? Math.min(...valid) : null
 }
 
-/**
- * Sanity-filter DMarket against the other markets — the aggregator occasionally
- * returns inflated whale prices (e.g. $10 000 for a $1 skin). Drop the DMarket
- * value when it exceeds 5× the cheapest of the other three.
- */
-function sanityCheckDmarket(
-  dmarket: number | null,
-  others: (number | null)[],
-): number | null {
-  if (dmarket === null) return null
-  const cheapest = calcLowestPrice(...others)
-  if (cheapest === null) return dmarket  // no reference → trust it
-  return dmarket > cheapest * 5 ? null : dmarket
-}
-
 export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
-  log.info('[PricePopulate] Fetching prices from 4 marketplaces in parallel...')
+  log.info('[PricePopulate] Fetching prices from 3 marketplaces in parallel...')
 
-  const [skinportMap, csgoMarketMap, csdealsMap, dmarketMap] = await Promise.all([
+  const [skinportMap, csgoMarketMap, waxpeerMap] = await Promise.all([
     fetchSkinportPrices(log),
     fetchCsgoMarketPrices(log),
-    fetchCsdealsPrices(log),
-    fetchDmarketPrices(log),
+    fetchWaxpeerPrices(log),
   ])
 
   const skins = await prisma.skin.findMany({ select: { id: true, marketHashName: true } })
@@ -215,15 +168,11 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
       batch.map(async (skin) => {
         const skinport = skinportMap.get(skin.marketHashName) ?? null
         const csgo     = csgoMarketMap.get(skin.marketHashName) ?? null
-        const csdeals  = csdealsMap.get(skin.marketHashName) ?? null
-        const dmarket  = sanityCheckDmarket(
-          dmarketMap.get(skin.marketHashName) ?? null,
-          [skinport, csgo, csdeals],
-        )
+        const waxpeer  = waxpeerMap.get(skin.marketHashName) ?? null
 
-        if (!skinport && !csgo && !csdeals && !dmarket) return
+        if (!skinport && !csgo && !waxpeer) return
 
-        const lowestPrice = calcLowestPrice(skinport, csgo, csdeals, dmarket)
+        const lowestPrice = calcLowestPrice(skinport, csgo, waxpeer)
         if (!lowestPrice) return
 
         const oldPrice = oldPriceMap.get(skin.id) ?? null
@@ -236,8 +185,7 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
           update: {
             skinportPrice:   skinport,
             csgoMarketPrice: csgo,
-            csdealsPrice:    csdeals,
-            dmarketPrice:    dmarket,
+            waxpeerPrice:    waxpeer,
             lowestPrice,
             priceChange24h,
             updatedAt: new Date(),
@@ -246,8 +194,7 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
             skinId: skin.id,
             skinportPrice:   skinport,
             csgoMarketPrice: csgo,
-            csdealsPrice:    csdeals,
-            dmarketPrice:    dmarket,
+            waxpeerPrice:    waxpeer,
             lowestPrice,
             priceChange24h,
           },
@@ -271,12 +218,8 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
     .flatMap((s) => {
       const skinport = skinportMap.get(s.marketHashName) ?? null
       const csgo     = csgoMarketMap.get(s.marketHashName) ?? null
-      const csdeals  = csdealsMap.get(s.marketHashName) ?? null
-      const dmarket  = sanityCheckDmarket(
-        dmarketMap.get(s.marketHashName) ?? null,
-        [skinport, csgo, csdeals],
-      )
-      const lowestPrice = calcLowestPrice(skinport, csgo, csdeals, dmarket)
+      const waxpeer  = waxpeerMap.get(s.marketHashName) ?? null
+      const lowestPrice = calcLowestPrice(skinport, csgo, waxpeer)
       if (!lowestPrice) return []
       return [{ skinId: s.id, price: lowestPrice, source: 'bulk' }]
     })
