@@ -74,17 +74,18 @@ buildServer() → listen → populateSkins() → populatePrices() → startPrice
 
 ### Price pipeline
 
-Four marketplaces are fetched in parallel on startup and every 2h (`populatePrices`).
+Three marketplaces are fetched in parallel on startup and every 2h (`populatePrices`).
 **All endpoints are bulk and public — no API keys, no rate-limit concerns** (12 calls/day per marketplace):
 
 1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items.
 2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `GET https://market.csgo.com/api/v2/prices/USD.json`, ~25k items.
-3. **CSDeals** (`fetchCsdealsPrices`) — `GET https://cs.deals/API/IPricing/GetLowestPrices/v1?appid=730`.
-4. **DMarket** (`fetchDmarketPrices`) — `GET https://api.dmarket.com/price-aggregator/v1/aggregated-prices`, paginated 10k/page, filtered by `GameID === 'a8db'`. Sanity-filtered: nullified when > 5× the cheapest of the other three (the aggregator occasionally returns inflated whale prices).
+3. **Waxpeer** (`fetchWaxpeerPrices`) — `GET https://api.waxpeer.com/v1/prices?game=csgo`, ~20k items. `min` field is USD × 1000 (divide by 1000).
 
-`calcLowestPrice()` takes the MIN of all non-null positive values across the four. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
+**CSDeals and DMarket dropped** (2026-07): CSDeals' bulk endpoint only lists ~2.6k actively-stocked items (vs ~20-25k for the others), so it almost never matched anything outside the most common skins. DMarket's public bulk aggregator (`price-aggregator/v1/aggregated-prices`) was retired outright; its replacement requires signed API-key auth and per-title lookups, incompatible with the no-keys bulk design here.
 
-**No live calls anywhere.** The DB is the single source of truth. `GET /skins/:id`, `GET /prices/batch`, and the search/top-movers endpoints all read straight from `SkinPrice` — search responses already contain the four marketplace prices and `lowestPrice` correct on first render. The Android `SkinRepository` is correspondingly simple: no `livePriceCache`, no batch refresh after list loads.
+`calcLowestPrice()` takes the MIN of all non-null positive values across the three. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
+
+**No live calls anywhere.** The DB is the single source of truth. `GET /skins/:id`, `GET /prices/batch`, and the search/top-movers endpoints all read straight from `SkinPrice` — search responses already contain the marketplace prices and `lowestPrice` correct on first render. The Android `SkinRepository` is correspondingly simple: no `livePriceCache`, no batch refresh after list loads.
 
 **Top movers** (`PriceService.getTopMovers()`): pure DB read, ordered by the indexed `priceChange24h` column (kept fresh by the bulk job). `priceChange24h` is then refined per skin from the `PriceHistory` table for accuracy between bulk runs.
 
@@ -119,7 +120,7 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 
 ### Schema notes
 
-`SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `csdealsPrice`, `dmarketPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
+`SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `waxpeerPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
 
 `User`: has `fcmToken String?` for FCM push notifications.
 
@@ -201,7 +202,7 @@ navigation/     — AppNavigation (NavHost + bottom bar), Screen sealed class
 
 ### Key data flow
 
-- **`Skin`** is the central domain model. `lowestMarketPrice` first uses `lowestPrice` (pre-computed by the backend), falling back to `min(skinportPrice, csgoMarketPrice, csdealsPrice, dmarketPrice)`.
+- **`Skin`** is the central domain model. `lowestMarketPrice` first uses `lowestPrice` (pre-computed by the backend), falling back to `min(skinportPrice, csgoMarketPrice, waxpeerPrice)`.
 - **`CS2BackendApiService`** is the main remote source. DTOs are mapped to `Skin` via `BackendSkinDto.toDomain()` and `TopMoverDto.toDomain()`. Mappers live in the same file as the DTOs.
 - **`SkinRepository`** always falls back to `MockData` if the network call fails. It is a thin pass-through — backend responses already contain final prices (no client-side batch refresh, no `livePriceCache`).
 - **Pagination** in `SearchViewModel` uses `currentPage` + `SearchUiState.Success.isLoadingMore` to prevent duplicate page fetches.

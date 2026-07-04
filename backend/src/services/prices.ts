@@ -18,8 +18,7 @@ export class PriceService {
       marketHashName,
       skinportPrice:   row?.skinportPrice   ?? null,
       csgoMarketPrice: row?.csgoMarketPrice ?? null,
-      csdealsPrice:    row?.csdealsPrice    ?? null,
-      dmarketPrice:    row?.dmarketPrice    ?? null,
+      waxpeerPrice:    row?.waxpeerPrice    ?? null,
       lowestPrice:     row?.lowestPrice     ?? null,
       priceChange24h,
       volume24h:       row?.volume24h       ?? null,
@@ -60,7 +59,7 @@ export class PriceService {
     const skins = await prisma.skin.findMany({
       include: { price: true },
       where: { price: { lowestPrice: { gt: 0 } } },
-      orderBy: { price: { priceChange24h: 'desc' } },
+      orderBy: { price: { priceChange24h: { sort: 'desc', nulls: 'last' } } },
       take: limit * 3,
     })
 
@@ -88,8 +87,7 @@ export class PriceService {
           iconUrl: skin.iconUrl,
           skinportPrice:   skin.price?.skinportPrice   ?? null,
           csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
-          csdealsPrice:    skin.price?.csdealsPrice    ?? null,
-          dmarketPrice:    skin.price?.dmarketPrice    ?? null,
+          waxpeerPrice:    skin.price?.waxpeerPrice    ?? null,
           lowestPrice: current,
           priceChange24h,
           volume24h: skin.price?.volume24h ?? null,

@@ -1,4 +1,5 @@
 import { populatePrices } from './populatePrices'
+import { cleanupPriceHistory } from './cleanupPriceHistory'
 import { AlertService } from '../services/alerts'
 import type { FastifyBaseLogger } from 'fastify'
 
@@ -11,6 +12,7 @@ export function startPriceRefreshJob(log: FastifyBaseLogger) {
     log.info('[AlertCheck] Checking active alerts after price refresh…')
     await alertService.checkAll()
     log.info('[AlertCheck] Done')
+    await cleanupPriceHistory(log)
   }
 
   const interval = setInterval(() => {

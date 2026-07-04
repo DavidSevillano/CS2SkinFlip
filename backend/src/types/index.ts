@@ -53,8 +53,7 @@ export interface AggregatedPrices {
   marketHashName: string
   skinportPrice: number | null
   csgoMarketPrice: number | null
-  csdealsPrice: number | null
-  dmarketPrice: number | null
+  waxpeerPrice: number | null
   lowestPrice: number | null
   priceChange24h: number | null
   volume24h: number | null
