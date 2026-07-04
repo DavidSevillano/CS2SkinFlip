@@ -13,9 +13,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Backend prices are kept fresh by a 2-hourly bulk job that aggregates 4
- * marketplaces (Skinport, CS:GO Market, CS.Deals, DMarket). All endpoints
- * return final prices directly — no live calls, no client-side enrichment.
+ * Backend prices are kept fresh by a 2-hourly bulk job that aggregates 3
+ * marketplaces (Skinport, CS:GO Market, Waxpeer). All endpoints return final
+ * prices directly — no live calls, no client-side enrichment.
  */
 @Singleton
 class SkinRepository @Inject constructor(

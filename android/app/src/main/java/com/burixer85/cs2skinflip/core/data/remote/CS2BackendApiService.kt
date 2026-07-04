@@ -75,10 +75,7 @@ interface CS2BackendApiService {
     suspend fun updateFcmToken(@Body body: FcmTokenRequest)
 
     /**
-     * Batch price refresh — returns live prices for up to 50 skins in one call.
-     * Skinport comes from the server's in-memory map (instant), DMarket from the
-     * live exchange API with a 5-minute Redis cache. CS:GO Market is from the DB.
-     *
+     * Batch price refresh — returns DB-cached prices for up to 50 skins in one call.
      * Use this instead of calling [getSkin] 20 times after a list loads.
      */
     @GET("prices/batch")
@@ -96,8 +93,7 @@ data class TopMoverDto(
     val iconUrl: String,
     val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
-    val csdealsPrice: Double?,
-    val dmarketPrice: Double?,
+    val waxpeerPrice: Double?,
     val lowestPrice: Double?,
     val priceChange24h: Double?,
     val volume24h: Int?,
@@ -129,8 +125,7 @@ data class BackendSkinDto(
 data class BackendSkinPriceDto(
     val skinportPrice: Double?,       // USD — Skinport
     val csgoMarketPrice: Double?,     // USD — CS:GO Market
-    val csdealsPrice: Double?,        // USD — CS.Deals
-    val dmarketPrice: Double?,        // USD — DMarket aggregator
+    val waxpeerPrice: Double?,        // USD — Waxpeer
     val lowestPrice: Double?,
     val volume24h: Int?,
     val priceChange24h: Double?,
@@ -140,8 +135,7 @@ data class BackendSkinPriceDto(
 data class BatchSkinPriceDto(
     val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
-    val csdealsPrice: Double?,
-    val dmarketPrice: Double?,
+    val waxpeerPrice: Double?,
     val lowestPrice: Double?,
 )
 
@@ -207,6 +201,7 @@ fun TopMoverDto.toDomain(): Skin {
     return Skin(
         id = skinId,
         name = cleanName,
+        marketHashName = marketHashName,
         weapon = weaponName,
         skinName = patternName,
         rarity = parseRarityFromName(marketHashName),
@@ -216,8 +211,7 @@ fun TopMoverDto.toDomain(): Skin {
         imageUrl = iconUrl,
         skinportPrice = skinportPrice,
         csgoMarketPrice = csgoMarketPrice,
-        csdealsPrice = csdealsPrice,
-        dmarketPrice = dmarketPrice,
+        waxpeerPrice = waxpeerPrice,
         lowestPrice = lowestPrice,
         priceChange24h = priceChange24h,
         volume24h = volume24h ?: 0,
@@ -238,6 +232,7 @@ fun BackendSkinDto.toDomain(
     return Skin(
         id = id,
         name = cleanName,
+        marketHashName = marketHashName,
         weapon = weaponName,
         skinName = patternName,
         rarity = parseRarity(rarity),
@@ -247,8 +242,7 @@ fun BackendSkinDto.toDomain(
         imageUrl = iconUrl,
         skinportPrice = price?.skinportPrice,
         csgoMarketPrice = price?.csgoMarketPrice,
-        csdealsPrice = price?.csdealsPrice,
-        dmarketPrice = price?.dmarketPrice,
+        waxpeerPrice = price?.waxpeerPrice,
         lowestPrice = price?.lowestPrice,
         // priceChange24h from the API takes priority; caller can override if needed
         priceChange24h = price?.priceChange24h ?: priceChange24h,

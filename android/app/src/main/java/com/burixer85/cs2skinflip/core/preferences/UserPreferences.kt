@@ -37,7 +37,7 @@ object Currency {
 
 enum class DefaultMarketplace(val label: String) {
     SKINPORT("Skinport"),
-    DMARKET("DMarket"),
+    WAXPEER("Waxpeer"),
     CSGO_MARKET("CS:GO Market"),
     LOWEST("Always cheapest");
 
