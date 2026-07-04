@@ -231,7 +231,7 @@ private fun SkinDetailContent(
             Spacer(Modifier.height(12.dp))
 
             val context = LocalContext.current
-            val marketHashName = skin.name  // already includes wear in name from backend
+            val marketHashName = skin.marketHashName
 
             fun skinportUrl(name: String): String =
                 Uri.parse("https://skinport.com/market/730")
@@ -243,17 +243,14 @@ private fun SkinDetailContent(
             fun csgoMarketUrl(name: String): String =
                 "https://market.csgo.com/en/730/${Uri.encode(name)}"
 
-            fun csdealsUrl(name: String): String =
-                Uri.parse("https://cs.deals/market/csgo")
-                    .buildUpon()
-                    .appendQueryParameter("search", name)
-                    .build().toString()
-
-            fun dmarketUrl(name: String): String =
-                Uri.parse("https://dmarket.com/ingame-items/item-list/csgo-skins")
-                    .buildUpon()
-                    .appendQueryParameter("title", name)
-                    .build().toString()
+            fun waxpeerUrl(name: String): String {
+                val slug = name
+                    .lowercase()
+                    .replace(Regex("[★✦™]"), "")
+                    .replace(Regex("[^a-z0-9]+"), "-")
+                    .trim('-')
+                return "https://waxpeer.com/$slug/item"
+            }
 
             fun openUrl(url: String) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -269,8 +266,7 @@ private fun SkinDetailContent(
             val entries = listOf(
                 MarketEntry(Marketplace.SKINPORT,    skin.skinportPrice,   AccentOrange,         skinportUrl(marketHashName)),
                 MarketEntry(Marketplace.CSGO_MARKET, skin.csgoMarketPrice, AccentGreen,          csgoMarketUrl(marketHashName)),
-                MarketEntry(Marketplace.CSDEALS,     skin.csdealsPrice,    Color(0xFF4A90E2),    csdealsUrl(marketHashName)),
-                MarketEntry(Marketplace.DMARKET,     skin.dmarketPrice,    Color(0xFF9C59FF),    dmarketUrl(marketHashName)),
+                MarketEntry(Marketplace.WAXPEER,     skin.waxpeerPrice,    Color(0xFF4A90E2),    waxpeerUrl(marketHashName)),
             )
             val lowestPrice = entries.mapNotNull { it.price }.minOrNull()
 

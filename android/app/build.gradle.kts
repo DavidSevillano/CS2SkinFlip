@@ -1,9 +1,16 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.google.services)
+}
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -21,10 +28,10 @@ android {
             useSupportLibrary = true
         }
 
-        val steamApiKey = project.findProperty("STEAM_API_KEY")?.toString() ?: ""
+        val steamApiKey = localProperties.getProperty("STEAM_API_KEY") ?: ""
         buildConfigField("String", "STEAM_API_KEY", "\"$steamApiKey\"")
 
-        val backendUrl = project.findProperty("BACKEND_URL")?.toString() ?: "http://10.0.2.2:3000"
+        val backendUrl = localProperties.getProperty("BACKEND_URL") ?: "http://10.0.2.2:3000"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
     }
 
