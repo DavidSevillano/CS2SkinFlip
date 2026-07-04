@@ -4,11 +4,14 @@ import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
 import com.burixer85.cs2skinflip.core.data.remote.LoginRequest
 import com.burixer85.cs2skinflip.core.data.remote.RegisterRequest
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.suspendCancellableCoroutine
 import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 @Singleton
 class AuthRepository @Inject constructor(
@@ -21,6 +24,7 @@ class AuthRepository @Inject constructor(
     /** Steam OAuth deep-link callback — saves the JWT */
     suspend fun handleCallback(token: String) {
         tokenDataStore.saveToken(token)
+        syncFcmToken()
     }
 
     /** Email/password register — returns null on success, error message on failure */
@@ -28,6 +32,7 @@ class AuthRepository @Inject constructor(
         return runCatching {
             val response = backendApi.register(RegisterRequest(email, password, username))
             tokenDataStore.saveToken(response.token)
+            syncFcmToken()
         }.fold(
             onSuccess = { null },
             onFailure = { e -> humanError(e, default = "Registration failed") },
@@ -39,6 +44,7 @@ class AuthRepository @Inject constructor(
         return runCatching {
             val response = backendApi.login(LoginRequest(email, password))
             tokenDataStore.saveToken(response.token)
+            syncFcmToken()
         }.fold(
             onSuccess = { null },
             onFailure = { e -> humanError(e, default = "Login failed") },
@@ -53,6 +59,21 @@ class AuthRepository @Inject constructor(
     suspend fun updateFcmToken(token: String) {
         runCatching { backendApi.updateFcmToken(FcmTokenRequest(token)) }
         // Silently ignore failures — token update is best-effort
+    }
+
+    /**
+     * Sends the device's current FCM token right after login/register/Steam callback.
+     * Needed because [onNewToken][com.google.firebase.messaging.FirebaseMessagingService.onNewToken]
+     * only fires once per install (or on token rotation) — usually before any user is signed in —
+     * so without this, `fcmToken` would never get associated with the account.
+     */
+    private suspend fun syncFcmToken() {
+        val token = suspendCancellableCoroutine<String?> { cont ->
+            FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { cont.resume(it) }
+                .addOnFailureListener { cont.resume(null) }
+        }
+        token?.let { updateFcmToken(it) }
     }
 
     private fun humanError(e: Throwable, default: String): String {
