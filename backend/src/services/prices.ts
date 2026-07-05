@@ -55,11 +55,16 @@ export class PriceService {
     const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
     if (cached) return cached
 
-    // Pre-sorted by DB priceChange24h (indexed). Wide pool to absorb any nulls.
+    // Pre-sorted by DB priceChange24h (indexed), falling back to price when
+    // change data is null (e.g. before 24h of price history has accumulated) —
+    // otherwise ties all sort to Postgres's arbitrary insertion order.
     const skins = await prisma.skin.findMany({
       include: { price: true },
       where: { price: { lowestPrice: { gt: 0 } } },
-      orderBy: { price: { priceChange24h: { sort: 'desc', nulls: 'last' } } },
+      orderBy: [
+        { price: { priceChange24h: { sort: 'desc', nulls: 'last' } } },
+        { price: { lowestPrice: 'desc' } },
+      ],
       take: limit * 3,
     })
 
@@ -94,7 +99,11 @@ export class PriceService {
           updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
         }
       })
-      .sort((a, b) => (b.priceChange24h ?? -Infinity) - (a.priceChange24h ?? -Infinity))
+      .sort((a, b) => {
+        const diff = (b.priceChange24h ?? -Infinity) - (a.priceChange24h ?? -Infinity)
+        if (diff !== 0) return diff
+        return (b.lowestPrice ?? 0) - (a.lowestPrice ?? 0)
+      })
       .slice(0, limit)
 
     if (topMovers.length > 0) {
