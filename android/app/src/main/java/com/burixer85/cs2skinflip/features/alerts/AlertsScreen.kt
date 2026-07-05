@@ -1,7 +1,12 @@
 package com.burixer85.cs2skinflip.features.alerts
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,6 +80,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.BuildConfig
@@ -109,6 +115,25 @@ fun AlertsScreen(
     var showCreateSheet by remember { mutableStateOf(false) }
 
     var showUpgradeDialog by remember { mutableStateOf(false) }
+    var showNotificationPermissionDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        // Whether granted or denied, proceed — this is informational, not a hard gate.
+        viewModel.resetCreateState()
+        showCreateSheet = true
+    }
+
+    fun openCreateAlertSheet() {
+        if (hasNotificationPermission(context)) {
+            viewModel.resetCreateState()
+            showCreateSheet = true
+        } else {
+            showNotificationPermissionDialog = true
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(Background)) {
         Column(Modifier.fillMaxSize()) {
@@ -171,7 +196,7 @@ fun AlertsScreen(
                     onSkinClick = onSkinClick,
                     onAddFirst = {
                         if (state.atFreeLimit) showUpgradeDialog = true
-                        else { viewModel.resetCreateState(); showCreateSheet = true }
+                        else openCreateAlertSheet()
                     },
                 )
             }
@@ -182,12 +207,8 @@ fun AlertsScreen(
             val state = uiState as AlertsUiState.Success
             FloatingActionButton(
                 onClick = {
-                    if (state.atFreeLimit) {
-                        showUpgradeDialog = true
-                    } else {
-                        viewModel.resetCreateState()
-                        showCreateSheet = true
-                    }
+                    if (state.atFreeLimit) showUpgradeDialog = true
+                    else openCreateAlertSheet()
                 },
                 containerColor = if (state.atFreeLimit) PremiumGold else AccentOrange,
                 contentColor = if (state.atFreeLimit) Color.Black else Color.White,
@@ -207,6 +228,21 @@ fun AlertsScreen(
     // ── Upgrade dialog ────────────────────────────────────────────────────────
     if (showUpgradeDialog) {
         UpgradeDialog(onDismiss = { showUpgradeDialog = false })
+    }
+
+    // ── Notification permission rationale ───────────────────────────────────────
+    if (showNotificationPermissionDialog) {
+        NotificationPermissionDialog(
+            onEnable = {
+                showNotificationPermissionDialog = false
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            },
+            onDismiss = {
+                showNotificationPermissionDialog = false
+                viewModel.resetCreateState()
+                showCreateSheet = true
+            },
+        )
     }
 
     // ── Bottom sheet for creating an alert ────────────────────────────────────
@@ -468,6 +504,50 @@ private fun FreeTierBanner(used: Int, limit: Int, onUpgrade: () -> Unit) {
             color = if (atLimit) PremiumGold else AccentOrange,
         )
     }
+}
+
+/** POST_NOTIFICATIONS is only a runtime permission on Android 13+ (API 33). */
+private fun hasNotificationPermission(context: android.content.Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.POST_NOTIFICATIONS,
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+@Composable
+private fun NotificationPermissionDialog(onEnable: () -> Unit, onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.NotificationsActive, null, tint = AccentOrange, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Turn on notifications", fontWeight = FontWeight.Bold, color = TextPrimary)
+            }
+        },
+        text = {
+            Text(
+                "Notifications are off. Without them, you won't be notified when this skin hits your target price.",
+                color = TextSecondary, fontSize = 14.sp,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onEnable,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text("Enable", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("Continue without", color = TextSecondary)
+            }
+        },
+    )
 }
 
 @Composable
