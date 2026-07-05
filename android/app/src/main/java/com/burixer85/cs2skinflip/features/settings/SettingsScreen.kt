@@ -92,7 +92,6 @@ import com.burixer85.cs2skinflip.core.ui.theme.SurfaceVariant
 import com.burixer85.cs2skinflip.core.ui.theme.TextPrimary
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 import com.burixer85.cs2skinflip.core.ui.theme.TextTertiary
-import kotlinx.coroutines.delay
 
 private const val PRIVACY_URL = "https://cs2skinflip.app/privacy"
 private const val TERMS_URL = "https://cs2skinflip.app/terms"
@@ -111,7 +110,7 @@ fun SettingsScreen(
     var showUpgradeDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showAuthSheet by remember { mutableStateOf(false) }
-    var showChangePasswordSheet by remember { mutableStateOf(false) }
+    var showForgotPasswordSheet by remember { mutableStateOf(false) }
 
     fun openUrl(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -169,10 +168,14 @@ fun SettingsScreen(
                 SettingsItem(
                     icon = Icons.Default.Lock,
                     iconTint = AccentBlue,
-                    label = "Change password",
-                    subtitle = null,
-                    onClick = { showChangePasswordSheet = true },
+                    label = "Reset password",
+                    subtitle = "We'll email you a link",
+                    onClick = { showForgotPasswordSheet = true },
                 )
+                if (user!!.emailVerified == false) {
+                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                    VerifyEmailRow()
+                }
             }
             HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
             SettingsItem(
@@ -281,8 +284,45 @@ fun SettingsScreen(
         AuthSheet(onDismiss = { showAuthSheet = false })
     }
 
-    if (showChangePasswordSheet) {
-        ChangePasswordSheet(onDismiss = { showChangePasswordSheet = false })
+    if (showForgotPasswordSheet) {
+        com.burixer85.cs2skinflip.core.ui.components.ForgotPasswordSheet(onDismiss = { showForgotPasswordSheet = false })
+    }
+}
+
+// ─── Email verification row ──────────────────────────────────────────────────
+
+@Composable
+private fun VerifyEmailRow(authViewModel: AuthViewModel = hiltViewModel()) {
+    val state by authViewModel.resendVerificationState.collectAsState()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(PremiumGold.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Default.PrivacyTip, null, tint = PremiumGold, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Confirm your email", fontSize = 15.sp, color = TextPrimary)
+            Text(
+                if (state.sent) "Confirmation email sent — check your inbox" else "Your account isn't verified yet",
+                fontSize = 12.sp, color = if (state.sent) AccentGreen else TextSecondary,
+            )
+        }
+        if (!state.sent) {
+            TextButton(onClick = { authViewModel.resendVerification() }, enabled = !state.submitting) {
+                Text(if (state.submitting) "Sending…" else "Resend", color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
     }
 }
 
@@ -302,6 +342,7 @@ private fun AuthSheet(
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
+    var showForgotPassword by remember { mutableStateOf(false) }
 
     LaunchedEffect(isLoggedIn) {
         if (isLoggedIn) onDismiss()
@@ -376,6 +417,15 @@ private fun AuthSheet(
                 modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
             )
 
+            if (!isRegister) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Forgot password?",
+                    color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { showForgotPassword = true },
+                )
+            }
+
             authState.errorMessage?.let { msg ->
                 Spacer(Modifier.height(10.dp))
                 Text(msg, color = AccentRed, fontSize = 13.sp)
@@ -432,6 +482,10 @@ private fun AuthSheet(
             Spacer(Modifier.height(16.dp))
         }
     }
+
+    if (showForgotPassword) {
+        com.burixer85.cs2skinflip.core.ui.components.ForgotPasswordSheet(onDismiss = { showForgotPassword = false })
+    }
 }
 
 @Composable
@@ -449,116 +503,6 @@ private fun AuthSheetTab(label: String, selected: Boolean, modifier: Modifier = 
             color = if (selected) AccentOrange else TextSecondary,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
         )
-    }
-}
-
-// ─── Change password sheet ────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ChangePasswordSheet(
-    onDismiss: () -> Unit,
-    authViewModel: AuthViewModel = hiltViewModel(),
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val state by authViewModel.changePasswordState.collectAsState()
-    var currentPassword by remember { mutableStateOf("") }
-    var newPassword by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
-    var localError by remember { mutableStateOf<String?>(null) }
-
-    DisposableEffect(Unit) {
-        onDispose { authViewModel.resetChangePasswordState() }
-    }
-
-    LaunchedEffect(state.success) {
-        if (state.success) {
-            delay(1200)
-            onDismiss()
-        }
-    }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-        ) {
-            Text(
-                "Change password",
-                fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary,
-            )
-            Spacer(Modifier.height(16.dp))
-
-            if (state.success) {
-                Text("Password changed successfully.", color = AccentGreen, fontSize = 14.sp)
-                Spacer(Modifier.height(16.dp))
-                return@Column
-            }
-
-            OutlinedTextField(
-                value = currentPassword,
-                onValueChange = { currentPassword = it; localError = null },
-                placeholder = { Text("Current password", color = TextSecondary) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = newPassword,
-                onValueChange = { newPassword = it; localError = null },
-                placeholder = { Text("New password (min. 8 characters)", color = TextSecondary) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
-            )
-            Spacer(Modifier.height(10.dp))
-            OutlinedTextField(
-                value = confirmPassword,
-                onValueChange = { confirmPassword = it; localError = null },
-                placeholder = { Text("Confirm new password", color = TextSecondary) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
-            )
-
-            (localError ?: state.errorMessage)?.let { msg ->
-                Spacer(Modifier.height(10.dp))
-                Text(msg, color = AccentRed, fontSize = 13.sp)
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            Button(
-                onClick = {
-                    when {
-                        newPassword.length < 8 -> localError = "New password must be at least 8 characters"
-                        newPassword != confirmPassword -> localError = "Passwords don't match"
-                        else -> authViewModel.changePassword(currentPassword, newPassword)
-                    }
-                },
-                enabled = !state.submitting && currentPassword.isNotBlank() && newPassword.isNotBlank() && confirmPassword.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentOrange,
-                    disabledContainerColor = SurfaceElevated,
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                if (state.submitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White)
-                } else {
-                    Text("Update password", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp)
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-        }
     }
 }
 

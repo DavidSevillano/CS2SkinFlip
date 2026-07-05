@@ -74,8 +74,11 @@ interface CS2BackendApiService {
     @PUT("auth/me/fcm-token")
     suspend fun updateFcmToken(@Body body: FcmTokenRequest)
 
-    @PUT("auth/me/password")
-    suspend fun changePassword(@Body body: ChangePasswordRequest)
+    @POST("auth/forgot-password")
+    suspend fun forgotPassword(@Body body: ForgotPasswordRequest)
+
+    @POST("auth/resend-verification")
+    suspend fun resendVerification(): ResendVerificationResponse
 
     /**
      * Batch price refresh — returns DB-cached prices for up to 50 skins in one call.
@@ -306,9 +309,13 @@ data class FcmTokenRequest(
     val token: String,
 )
 
-data class ChangePasswordRequest(
-    val currentPassword: String,
-    val newPassword: String,
+data class ForgotPasswordRequest(
+    val email: String,
+)
+
+data class ResendVerificationResponse(
+    val ok: Boolean,
+    val alreadyVerified: Boolean,
 )
 
 data class AuthResponseDto(
@@ -331,4 +338,5 @@ data class MeResponseDto(
     val avatarUrl: String?,
     val isPremium: Boolean,
     val premiumUntil: String?,
+    val emailVerified: Boolean = false,
 )

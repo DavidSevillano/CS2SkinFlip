@@ -15,13 +15,19 @@ data class AuthFormState(
     val errorMessage: String? = null,
 )
 
-data class ChangePasswordState(
+data class ForgotPasswordState(
     val submitting: Boolean = false,
     val errorMessage: String? = null,
-    val success: Boolean = false,
+    val sent: Boolean = false,
 )
 
-/** Shared login/register logic used anywhere a sign-in prompt is shown (Alerts, Settings). */
+data class ResendVerificationState(
+    val submitting: Boolean = false,
+    val errorMessage: String? = null,
+    val sent: Boolean = false,
+)
+
+/** Shared login/register/password-recovery logic used anywhere a sign-in prompt is shown (Alerts, Settings). */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -53,22 +59,37 @@ class AuthViewModel @Inject constructor(
         _authState.value = AuthFormState()
     }
 
-    private val _changePasswordState = MutableStateFlow(ChangePasswordState())
-    val changePasswordState: StateFlow<ChangePasswordState> = _changePasswordState
+    private val _forgotPasswordState = MutableStateFlow(ForgotPasswordState())
+    val forgotPasswordState: StateFlow<ForgotPasswordState> = _forgotPasswordState
 
-    fun changePassword(currentPassword: String, newPassword: String) {
+    fun forgotPassword(email: String) {
         viewModelScope.launch {
-            _changePasswordState.value = ChangePasswordState(submitting = true)
-            val error = authRepository.changePassword(currentPassword, newPassword)
-            _changePasswordState.value = if (error == null) {
-                ChangePasswordState(success = true)
+            _forgotPasswordState.value = ForgotPasswordState(submitting = true)
+            val error = authRepository.forgotPassword(email)
+            _forgotPasswordState.value = if (error == null) {
+                ForgotPasswordState(sent = true)
             } else {
-                ChangePasswordState(errorMessage = error)
+                ForgotPasswordState(errorMessage = error)
             }
         }
     }
 
-    fun resetChangePasswordState() {
-        _changePasswordState.value = ChangePasswordState()
+    fun resetForgotPasswordState() {
+        _forgotPasswordState.value = ForgotPasswordState()
+    }
+
+    private val _resendVerificationState = MutableStateFlow(ResendVerificationState())
+    val resendVerificationState: StateFlow<ResendVerificationState> = _resendVerificationState
+
+    fun resendVerification() {
+        viewModelScope.launch {
+            _resendVerificationState.value = ResendVerificationState(submitting = true)
+            val error = authRepository.resendVerification()
+            _resendVerificationState.value = if (error == null) {
+                ResendVerificationState(sent = true)
+            } else {
+                ResendVerificationState(errorMessage = error)
+            }
+        }
     }
 }

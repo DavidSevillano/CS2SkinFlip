@@ -611,6 +611,7 @@ private fun NotLoggedInView(viewModel: AlertsViewModel) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
+    var showForgotPassword by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -683,6 +684,15 @@ private fun NotLoggedInView(viewModel: AlertsViewModel) {
             modifier = Modifier.fillMaxWidth(), colors = textFieldColors(),
         )
 
+        if (!isRegister) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Forgot password?",
+                color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { showForgotPassword = true },
+            )
+        }
+
         authState.errorMessage?.let { msg ->
             Spacer(Modifier.height(10.dp))
             Text(msg, color = AccentRed, fontSize = 13.sp)
@@ -741,6 +751,10 @@ private fun NotLoggedInView(viewModel: AlertsViewModel) {
         }
 
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showForgotPassword) {
+        com.burixer85.cs2skinflip.core.ui.components.ForgotPasswordSheet(onDismiss = { showForgotPassword = false })
     }
 }
 
