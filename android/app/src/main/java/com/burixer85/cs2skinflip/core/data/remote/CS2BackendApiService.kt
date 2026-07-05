@@ -47,12 +47,6 @@ interface CS2BackendApiService {
         @Query("days") days: Int = 30
     ): List<PriceHistoryDto>
 
-    @POST("auth/register")
-    suspend fun register(@Body body: RegisterRequest): AuthResponseDto
-
-    @POST("auth/login")
-    suspend fun login(@Body body: LoginRequest): AuthResponseDto
-
     @GET("auth/me")
     suspend fun getMe(): MeResponseDto
 
@@ -73,12 +67,6 @@ interface CS2BackendApiService {
 
     @PUT("auth/me/fcm-token")
     suspend fun updateFcmToken(@Body body: FcmTokenRequest)
-
-    @POST("auth/forgot-password")
-    suspend fun forgotPassword(@Body body: ForgotPasswordRequest)
-
-    @POST("auth/resend-verification")
-    suspend fun resendVerification(): ResendVerificationResponse
 
     /**
      * Batch price refresh — returns DB-cached prices for up to 50 skins in one call.
@@ -294,49 +282,15 @@ fun parseRarityFromName(marketHashName: String): SkinRarity = when {
 
 // ─── Auth DTOs ───────────────────────────────────────────────────────────────
 
-data class RegisterRequest(
-    val email: String,
-    val password: String,
-    val username: String? = null,
-)
-
-data class LoginRequest(
-    val email: String,
-    val password: String,
-)
-
 data class FcmTokenRequest(
     val token: String,
-)
-
-data class ForgotPasswordRequest(
-    val email: String,
-)
-
-data class ResendVerificationResponse(
-    val ok: Boolean,
-    val alreadyVerified: Boolean,
-)
-
-data class AuthResponseDto(
-    val token: String,
-    val user: AuthUserDto,
-)
-
-data class AuthUserDto(
-    val id: String,
-    val email: String?,
-    val username: String,
-    val isPremium: Boolean,
 )
 
 data class MeResponseDto(
     val id: String,
     val steamId: String?,
-    val email: String?,
     val username: String,
     val avatarUrl: String?,
     val isPremium: Boolean,
     val premiumUntil: String?,
-    val emailVerified: Boolean = false,
 )

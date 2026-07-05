@@ -14,10 +14,6 @@ const envSchema = z.object({
   MOBILE_DEEP_LINK: z.string().default('cs2skinflip://auth/callback'),
   DEBUG_SECRET: z.string().optional(),
   FCM_SERVICE_ACCOUNT_PATH: z.string().optional(),
-  RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default('CS2 SkinFlip <onboarding@resend.dev>'),
-  // Backend's own public base URL — used to build links in emails (reset password, verify email)
-  PUBLIC_URL: z.string().default('http://localhost:3000'),
 })
 
 export type Env = z.infer<typeof envSchema>

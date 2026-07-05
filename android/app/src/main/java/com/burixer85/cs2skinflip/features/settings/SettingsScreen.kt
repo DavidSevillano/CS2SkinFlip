@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -31,7 +30,6 @@ import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Star
@@ -40,21 +38,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import coil.compose.AsyncImage
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,18 +61,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.burixer85.cs2skinflip.BuildConfig
-import com.burixer85.cs2skinflip.core.auth.AuthViewModel
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import com.burixer85.cs2skinflip.core.ui.components.PremiumBanner
 import com.burixer85.cs2skinflip.core.ui.theme.AccentBlue
-import com.burixer85.cs2skinflip.core.ui.theme.AccentGreen
 import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.AccentRed
 import com.burixer85.cs2skinflip.core.ui.theme.Background
@@ -87,11 +75,9 @@ import com.burixer85.cs2skinflip.core.ui.theme.DividerColor
 import com.burixer85.cs2skinflip.core.ui.theme.PremiumGold
 import com.burixer85.cs2skinflip.core.ui.theme.PremiumGoldDark
 import com.burixer85.cs2skinflip.core.ui.theme.Surface
-import com.burixer85.cs2skinflip.core.ui.theme.SurfaceElevated
 import com.burixer85.cs2skinflip.core.ui.theme.SurfaceVariant
 import com.burixer85.cs2skinflip.core.ui.theme.TextPrimary
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
-import com.burixer85.cs2skinflip.core.ui.theme.TextTertiary
 
 private const val PRIVACY_URL = "https://cs2skinflip.app/privacy"
 private const val TERMS_URL = "https://cs2skinflip.app/terms"
@@ -109,8 +95,12 @@ fun SettingsScreen(
     var showMarketplaceSheet by remember { mutableStateOf(false) }
     var showUpgradeDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
-    var showAuthSheet by remember { mutableStateOf(false) }
-    var showForgotPasswordSheet by remember { mutableStateOf(false) }
+
+    fun signInWithSteam() {
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL}/auth/steam")))
+        }
+    }
 
     fun openUrl(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -140,7 +130,7 @@ fun SettingsScreen(
             // Profile info row
             AccountInfoRow(
                 username = user!!.username,
-                email = user!!.email ?: user!!.steamId?.let { "Steam ID: ${it.takeLast(10)}" } ?: "",
+                email = user!!.steamId?.let { "Steam ID: ${it.takeLast(10)}" } ?: "",
                 avatarUrl = user!!.avatarUrl,
                 isPremium = user!!.isPremium,
             )
@@ -163,20 +153,6 @@ fun SettingsScreen(
                 onClick = { if (user!!.isPremium == false) showUpgradeDialog = true },
                 showChevron = user!!.isPremium == false,
             )
-            if (user!!.email != null) {
-                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                SettingsItem(
-                    icon = Icons.Default.Lock,
-                    iconTint = AccentBlue,
-                    label = "Reset password",
-                    subtitle = "We'll email you a link",
-                    onClick = { showForgotPasswordSheet = true },
-                )
-                if (user!!.emailVerified == false) {
-                    HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-                    VerifyEmailRow()
-                }
-            }
             HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
             SettingsItem(
                 icon = Icons.AutoMirrored.Filled.Logout,
@@ -190,9 +166,9 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.AccountCircle,
                 iconTint = AccentOrange,
-                label = "Sign in",
+                label = "Sign in with Steam",
                 subtitle = "Required to manage price alerts",
-                onClick = { showAuthSheet = true },
+                onClick = { signInWithSteam() },
             )
         }
 
@@ -280,243 +256,7 @@ fun SettingsScreen(
         )
     }
 
-    if (showAuthSheet) {
-        AuthSheet(onDismiss = { showAuthSheet = false })
-    }
-
-    if (showForgotPasswordSheet) {
-        com.burixer85.cs2skinflip.core.ui.components.ForgotPasswordSheet(onDismiss = { showForgotPasswordSheet = false })
-    }
 }
-
-// ─── Email verification row ──────────────────────────────────────────────────
-
-@Composable
-private fun VerifyEmailRow(authViewModel: AuthViewModel = hiltViewModel()) {
-    val state by authViewModel.resendVerificationState.collectAsState()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Surface)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(PremiumGold.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(Icons.Default.PrivacyTip, null, tint = PremiumGold, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text("Confirm your email", fontSize = 15.sp, color = TextPrimary)
-            Text(
-                if (state.sent) "Confirmation email sent — check your inbox" else "Your account isn't verified yet",
-                fontSize = 12.sp, color = if (state.sent) AccentGreen else TextSecondary,
-            )
-        }
-        if (!state.sent) {
-            TextButton(onClick = { authViewModel.resendVerification() }, enabled = !state.submitting) {
-                Text(if (state.submitting) "Sending…" else "Resend", color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-// ─── Sign in / register sheet ────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AuthSheet(
-    onDismiss: () -> Unit,
-    authViewModel: AuthViewModel = hiltViewModel(),
-) {
-    val context = LocalContext.current
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
-    val authState by authViewModel.authState.collectAsState()
-    var isRegister by remember { mutableStateOf(false) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var showForgotPassword by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) onDismiss()
-    }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-        ) {
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.AccountCircle, null, tint = AccentOrange, modifier = Modifier.size(48.dp))
-            }
-            Text(
-                if (isRegister) "Create your account" else "Welcome back",
-                fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextPrimary,
-                modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Sign in to manage price alerts",
-                color = TextSecondary, textAlign = TextAlign.Center, fontSize = 13.sp,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // Tab toggle: Login / Register
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(SurfaceVariant)
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                AuthSheetTab(label = "Sign in", selected = !isRegister, modifier = Modifier.weight(1f)) { isRegister = false }
-                AuthSheetTab(label = "Sign up", selected = isRegister, modifier = Modifier.weight(1f)) { isRegister = true }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            if (isRegister) {
-                OutlinedTextField(
-                    value = username, onValueChange = { username = it },
-                    placeholder = { Text("Username (optional)", color = TextSecondary) },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
-                )
-                Spacer(Modifier.height(10.dp))
-            }
-
-            OutlinedTextField(
-                value = email, onValueChange = { email = it },
-                placeholder = { Text("Email", color = TextSecondary) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
-            )
-            Spacer(Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = password, onValueChange = { password = it },
-                placeholder = { Text(if (isRegister) "Password (min. 8 characters)" else "Password", color = TextSecondary) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(), colors = authTextFieldColors(),
-            )
-
-            if (!isRegister) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Forgot password?",
-                    color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { showForgotPassword = true },
-                )
-            }
-
-            authState.errorMessage?.let { msg ->
-                Spacer(Modifier.height(10.dp))
-                Text(msg, color = AccentRed, fontSize = 13.sp)
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            Button(
-                onClick = {
-                    if (isRegister) authViewModel.register(email.trim(), password, username.trim().ifBlank { null })
-                    else authViewModel.login(email.trim(), password)
-                },
-                enabled = !authState.submitting && email.isNotBlank() && password.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentOrange,
-                    disabledContainerColor = SurfaceElevated,
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                if (authState.submitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White)
-                } else {
-                    Text(
-                        if (isRegister) "Create account" else "Sign in",
-                        fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp,
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                HorizontalDivider(modifier = Modifier.weight(1f), color = DividerColor)
-                Text("  or  ", color = TextTertiary, fontSize = 12.sp)
-                HorizontalDivider(modifier = Modifier.weight(1f), color = DividerColor)
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL}/auth/steam"))
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B2838)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                Text("Sign in with Steam", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            }
-
-            Spacer(Modifier.height(16.dp))
-        }
-    }
-
-    if (showForgotPassword) {
-        com.burixer85.cs2skinflip.core.ui.components.ForgotPasswordSheet(onDismiss = { showForgotPassword = false })
-    }
-}
-
-@Composable
-private fun AuthSheetTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) AccentOrange.copy(0.18f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label, fontSize = 14.sp,
-            color = if (selected) AccentOrange else TextSecondary,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun authTextFieldColors() = TextFieldDefaults.colors(
-    focusedContainerColor = SurfaceVariant,
-    unfocusedContainerColor = SurfaceVariant,
-    focusedIndicatorColor = AccentOrange,
-    unfocusedIndicatorColor = DividerColor,
-    focusedTextColor = TextPrimary,
-    unfocusedTextColor = TextPrimary,
-    cursorColor = AccentOrange,
-)
 
 // ─── Account info row (inside Account section) ───────────────────────────────
 

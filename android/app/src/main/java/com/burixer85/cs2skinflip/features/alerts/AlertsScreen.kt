@@ -187,7 +187,7 @@ fun AlertsScreen(
             when (val state = uiState) {
                 is AlertsUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
                 is AlertsUiState.Error -> ErrorState(state.message, modifier = Modifier.fillMaxSize())
-                is AlertsUiState.NotLoggedIn -> NotLoggedInView(viewModel)
+                is AlertsUiState.NotLoggedIn -> NotLoggedInView()
                 is AlertsUiState.Success -> AlertsList(
                     alerts = state.alerts,
                     onToggle = viewModel::toggleAlert,
@@ -604,23 +604,15 @@ private fun UpgradeDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun NotLoggedInView(viewModel: AlertsViewModel) {
+private fun NotLoggedInView() {
     val context = LocalContext.current
-    val authState by viewModel.authState.collectAsState()
-    var isRegister by remember { mutableStateOf(false) }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var showForgotPassword by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
 
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        Spacer(Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -630,113 +622,18 @@ private fun NotLoggedInView(viewModel: AlertsViewModel) {
             Icon(Icons.Default.NotificationsActive, null, tint = AccentOrange, modifier = Modifier.size(56.dp))
         }
         Text(
-            if (isRegister) "Create your account" else "Welcome back",
+            "Sign in to manage price alerts",
             fontWeight = FontWeight.Bold, fontSize = 22.sp, color = TextPrimary,
             modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Sign in to manage price alerts",
+            "Every CS2 skin trader already has a Steam account — use it to sign in, no passwords to remember.",
             color = TextSecondary, textAlign = TextAlign.Center, fontSize = 13.sp,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(24.dp))
 
-        // Tab toggle: Login / Register
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(SurfaceVariant)
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            AuthTab(label = "Sign in", selected = !isRegister, modifier = Modifier.weight(1f)) { isRegister = false }
-            AuthTab(label = "Sign up", selected = isRegister, modifier = Modifier.weight(1f)) { isRegister = true }
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        if (isRegister) {
-            OutlinedTextField(
-                value = username, onValueChange = { username = it },
-                placeholder = { Text("Username (optional)", color = TextTertiary) },
-                singleLine = true, modifier = Modifier.fillMaxWidth(), colors = textFieldColors(),
-            )
-            Spacer(Modifier.height(10.dp))
-        }
-
-        OutlinedTextField(
-            value = email, onValueChange = { email = it },
-            placeholder = { Text("Email", color = TextTertiary) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth(), colors = textFieldColors(),
-        )
-        Spacer(Modifier.height(10.dp))
-
-        OutlinedTextField(
-            value = password, onValueChange = { password = it },
-            placeholder = { Text(if (isRegister) "Password (min. 8 characters)" else "Password", color = TextTertiary) },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(), colors = textFieldColors(),
-        )
-
-        if (!isRegister) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Forgot password?",
-                color = AccentOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { showForgotPassword = true },
-            )
-        }
-
-        authState.errorMessage?.let { msg ->
-            Spacer(Modifier.height(10.dp))
-            Text(msg, color = AccentRed, fontSize = 13.sp)
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Button(
-            onClick = {
-                scope.launch {
-                    if (isRegister) viewModel.register(email.trim(), password, username.trim().ifBlank { null })
-                    else viewModel.login(email.trim(), password)
-                }
-            },
-            enabled = !authState.submitting && email.isNotBlank() && password.isNotBlank(),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AccentOrange,
-                disabledContainerColor = SurfaceElevated,
-            ),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            if (authState.submitting) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = Color.White)
-            } else {
-                Text(
-                    if (isRegister) "Create account" else "Sign in",
-                    fontWeight = FontWeight.Bold, color = Color.White, fontSize = 15.sp,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-
-        // Divider with "or"
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            HorizontalDivider(modifier = Modifier.weight(1f), color = DividerColor)
-            Text("  or  ", color = TextTertiary, fontSize = 12.sp)
-            HorizontalDivider(modifier = Modifier.weight(1f), color = DividerColor)
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Steam alternative
         Button(
             onClick = {
                 context.startActivity(
@@ -749,30 +646,6 @@ private fun NotLoggedInView(viewModel: AlertsViewModel) {
         ) {
             Text("Sign in with Steam", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
-
-        Spacer(Modifier.height(24.dp))
-    }
-
-    if (showForgotPassword) {
-        com.burixer85.cs2skinflip.core.ui.components.ForgotPasswordSheet(onDismiss = { showForgotPassword = false })
-    }
-}
-
-@Composable
-private fun AuthTab(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) AccentOrange.copy(0.18f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label, fontSize = 14.sp,
-            color = if (selected) AccentOrange else TextSecondary,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        )
     }
 }
 

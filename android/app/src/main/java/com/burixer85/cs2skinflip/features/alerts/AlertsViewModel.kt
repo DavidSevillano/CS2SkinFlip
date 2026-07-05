@@ -51,11 +51,6 @@ data class EditAlertState(
     val errorMessage: String? = null,
 )
 
-data class AuthFormState(
-    val submitting: Boolean = false,
-    val errorMessage: String? = null,
-)
-
 @HiltViewModel
 class AlertsViewModel @Inject constructor(
     private val alertRepository: AlertRepository,
@@ -72,9 +67,6 @@ class AlertsViewModel @Inject constructor(
 
     private val _editState = MutableStateFlow(EditAlertState())
     val editState: StateFlow<EditAlertState> = _editState
-
-    private val _authState = MutableStateFlow(AuthFormState())
-    val authState: StateFlow<AuthFormState> = _authState
 
     private var searchJob: Job? = null
 
@@ -163,25 +155,6 @@ class AlertsViewModel @Inject constructor(
                 false
             },
         )
-    }
-
-    // ─── Auth ─────────────────────────────────────────────────────────────────
-
-    fun register(email: String, password: String, username: String?) {
-        viewModelScope.launch {
-            _authState.value = AuthFormState(submitting = true)
-            val error = authRepository.register(email, password, username)
-            _authState.value = AuthFormState(submitting = false, errorMessage = error)
-            // On success, the isLoggedIn flow will fire and loadAlerts() runs automatically
-        }
-    }
-
-    fun login(email: String, password: String) {
-        viewModelScope.launch {
-            _authState.value = AuthFormState(submitting = true)
-            val error = authRepository.login(email, password)
-            _authState.value = AuthFormState(submitting = false, errorMessage = error)
-        }
     }
 
     // ─── Create alert flow ────────────────────────────────────────────────────
