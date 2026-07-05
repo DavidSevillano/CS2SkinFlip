@@ -12,3 +12,10 @@ export const CACHE_TTL = {
   INVENTORY: 60 * 10,          // 10 min
   PLAYER_SUMMARY: 60 * 60,     // 1 hour
 } as const
+
+/** Sliding-window-ish rate limit: allows `limit` calls per `windowSeconds` per key. */
+export async function checkRateLimit(key: string, limit: number, windowSeconds: number): Promise<boolean> {
+  const count = await redis.incr(`ratelimit:${key}`)
+  if (count === 1) await redis.expire(`ratelimit:${key}`, windowSeconds)
+  return count <= limit
+}

@@ -13,6 +13,9 @@ export interface JwtPayload {
   // Only set on single-use tokens (password reset / email verification links).
   // Session tokens never have this — authenticate() rejects any token that does.
   purpose?: 'password_reset' | 'verify_email'
+  // password_reset tokens only: fingerprint of passwordHash at issue time, so the
+  // token stops verifying the moment the password actually changes (single-use).
+  pwv?: string
 }
 
 export interface SteamPlayer {
