@@ -1,8 +1,8 @@
 package com.burixer85.cs2skinflip.core.auth
 
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
-import com.burixer85.cs2skinflip.core.data.remote.ChangePasswordRequest
 import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
+import com.burixer85.cs2skinflip.core.data.remote.ForgotPasswordRequest
 import com.burixer85.cs2skinflip.core.data.remote.LoginRequest
 import com.burixer85.cs2skinflip.core.data.remote.RegisterRequest
 import com.google.firebase.messaging.FirebaseMessaging
@@ -62,24 +62,16 @@ class AuthRepository @Inject constructor(
         // Silently ignore failures — token update is best-effort
     }
 
-    /** Change password for email/password accounts — returns null on success, error message on failure */
-    suspend fun changePassword(currentPassword: String, newPassword: String): String? {
-        return runCatching {
-            backendApi.changePassword(ChangePasswordRequest(currentPassword, newPassword))
-        }.fold(
-            onSuccess = { null },
-            onFailure = { e ->
-                if (e is HttpException) {
-                    when (e.code()) {
-                        401 -> "Current password is incorrect"
-                        400 -> "This account has no password to change"
-                        else -> "Could not change password"
-                    }
-                } else {
-                    e.message ?: "Could not change password"
-                }
-            },
-        )
+    /** Request a password reset email — always returns null (backend never reveals if the email exists) */
+    suspend fun forgotPassword(email: String): String? {
+        return runCatching { backendApi.forgotPassword(ForgotPasswordRequest(email)) }
+            .fold(onSuccess = { null }, onFailure = { e -> e.message ?: "Could not send reset email" })
+    }
+
+    /** Resend the account confirmation email — returns null on success, error message on failure */
+    suspend fun resendVerification(): String? {
+        return runCatching { backendApi.resendVerification() }
+            .fold(onSuccess = { null }, onFailure = { e -> e.message ?: "Could not resend confirmation email" })
     }
 
     /**
