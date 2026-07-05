@@ -10,6 +10,9 @@ export interface JwtPayload {
   userId: string
   // Optional — null for users who registered via email/password without linking Steam
   steamId: string | null
+  // Only set on single-use tokens (password reset / email verification links).
+  // Session tokens never have this — authenticate() rejects any token that does.
+  purpose?: 'password_reset' | 'verify_email'
 }
 
 export interface SteamPlayer {

@@ -13,6 +13,7 @@ model User {
   steamId      String?   @unique
   email        String?   @unique
   passwordHash String?
+  emailVerified Boolean  @default(false)
   username     String
   avatarUrl    String?
   isPremium    Boolean   @default(false)
