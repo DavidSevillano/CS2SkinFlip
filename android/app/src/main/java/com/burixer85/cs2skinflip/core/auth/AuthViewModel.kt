@@ -15,6 +15,12 @@ data class AuthFormState(
     val errorMessage: String? = null,
 )
 
+data class ChangePasswordState(
+    val submitting: Boolean = false,
+    val errorMessage: String? = null,
+    val success: Boolean = false,
+)
+
 /** Shared login/register logic used anywhere a sign-in prompt is shown (Alerts, Settings). */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -45,5 +51,24 @@ class AuthViewModel @Inject constructor(
 
     fun resetFormState() {
         _authState.value = AuthFormState()
+    }
+
+    private val _changePasswordState = MutableStateFlow(ChangePasswordState())
+    val changePasswordState: StateFlow<ChangePasswordState> = _changePasswordState
+
+    fun changePassword(currentPassword: String, newPassword: String) {
+        viewModelScope.launch {
+            _changePasswordState.value = ChangePasswordState(submitting = true)
+            val error = authRepository.changePassword(currentPassword, newPassword)
+            _changePasswordState.value = if (error == null) {
+                ChangePasswordState(success = true)
+            } else {
+                ChangePasswordState(errorMessage = error)
+            }
+        }
+    }
+
+    fun resetChangePasswordState() {
+        _changePasswordState.value = ChangePasswordState()
     }
 }

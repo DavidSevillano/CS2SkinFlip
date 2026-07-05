@@ -1,6 +1,7 @@
 package com.burixer85.cs2skinflip.core.auth
 
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
+import com.burixer85.cs2skinflip.core.data.remote.ChangePasswordRequest
 import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
 import com.burixer85.cs2skinflip.core.data.remote.LoginRequest
 import com.burixer85.cs2skinflip.core.data.remote.RegisterRequest
@@ -59,6 +60,26 @@ class AuthRepository @Inject constructor(
     suspend fun updateFcmToken(token: String) {
         runCatching { backendApi.updateFcmToken(FcmTokenRequest(token)) }
         // Silently ignore failures — token update is best-effort
+    }
+
+    /** Change password for email/password accounts — returns null on success, error message on failure */
+    suspend fun changePassword(currentPassword: String, newPassword: String): String? {
+        return runCatching {
+            backendApi.changePassword(ChangePasswordRequest(currentPassword, newPassword))
+        }.fold(
+            onSuccess = { null },
+            onFailure = { e ->
+                if (e is HttpException) {
+                    when (e.code()) {
+                        401 -> "Current password is incorrect"
+                        400 -> "This account has no password to change"
+                        else -> "Could not change password"
+                    }
+                } else {
+                    e.message ?: "Could not change password"
+                }
+            },
+        )
     }
 
     /**

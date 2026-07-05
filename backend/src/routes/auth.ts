@@ -221,4 +221,28 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     })
     return { ok: true }
   })
+
+  /** Change password for email/password accounts. Steam-only accounts have no passwordHash. */
+  app.put('/auth/me/password', { onRequest: [authenticate] }, async (request, reply) => {
+    const body = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(8).max(72),
+    }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: 'Invalid body', details: body.error.flatten() })
+
+    const { userId } = request.user
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user || !user.passwordHash) {
+      return reply.status(400).send({ error: 'This account has no password to change' })
+    }
+
+    const valid = await bcrypt.compare(body.data.currentPassword, user.passwordHash)
+    if (!valid) {
+      return reply.status(401).send({ error: 'Current password is incorrect' })
+    }
+
+    const passwordHash = await bcrypt.hash(body.data.newPassword, BCRYPT_ROUNDS)
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash } })
+    return { ok: true }
+  })
 }
