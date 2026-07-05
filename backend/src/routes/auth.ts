@@ -1,15 +1,23 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios from 'axios'
 import bcrypt from 'bcrypt'
+import crypto from 'crypto'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { env } from '../config/env'
 import { authenticate } from '../middleware/authenticate'
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email'
+import { checkRateLimit } from '../redis/client'
 
 const STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login'
 const STEAM_ID_REGEX = /^https:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/
 const BCRYPT_ROUNDS = 10
+
+/** Fingerprint of the current passwordHash — embedding it in a reset token makes the
+ *  token single-use: it stops matching as soon as the password actually changes. */
+function passwordFingerprint(passwordHash: string): string {
+  return crypto.createHash('sha256').update(passwordHash).digest('hex').slice(0, 16)
+}
 
 const registerSchema = z.object({
   email: z.string().email().toLowerCase(),
@@ -285,11 +293,15 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const body = z.object({ email: z.string().email().toLowerCase() }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: 'Invalid body', details: body.error.flatten() })
 
+    // 3 requests per 15 min per email — prevents spamming someone's inbox with reset links
+    const allowed = await checkRateLimit(`forgot-password:${body.data.email}`, 3, 15 * 60)
+    if (!allowed) return reply.status(429).send({ error: 'Too many requests. Try again later.' })
+
     const user = await prisma.user.findUnique({ where: { email: body.data.email } })
     // Always respond the same way whether or not the account exists — avoids leaking who has an account
     if (user?.passwordHash) {
       const resetToken = app.jwt.sign(
-        { userId: user.id, steamId: null, purpose: 'password_reset' },
+        { userId: user.id, steamId: null, purpose: 'password_reset', pwv: passwordFingerprint(user.passwordHash) },
         { expiresIn: '15m' },
       )
       await sendPasswordResetEmail(body.data.email, `${env.PUBLIC_URL}/auth/reset-password?token=${resetToken}`)
@@ -303,8 +315,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (!token) return reply.status(400).type('text/html').send(resetPasswordHtmlPage({ token: '', invalidToken: true }))
 
     try {
-      const payload = app.jwt.verify<{ userId: string; purpose?: string }>(token)
+      const payload = app.jwt.verify<{ userId: string; purpose?: string; pwv?: string }>(token)
       if (payload.purpose !== 'password_reset') throw new Error('wrong purpose')
+      const user = await prisma.user.findUnique({ where: { id: payload.userId } })
+      if (!user?.passwordHash || passwordFingerprint(user.passwordHash) !== payload.pwv) throw new Error('already used')
     } catch {
       return reply.status(400).type('text/html').send(resetPasswordHtmlPage({ token: '', invalidToken: true }))
     }
@@ -321,8 +335,11 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     let userId: string
     try {
-      const payload = app.jwt.verify<{ userId: string; purpose?: string }>(body.data.token)
+      const payload = app.jwt.verify<{ userId: string; purpose?: string; pwv?: string }>(body.data.token)
       if (payload.purpose !== 'password_reset') throw new Error('wrong purpose')
+      const user = await prisma.user.findUnique({ where: { id: payload.userId } })
+      // pwv mismatch means either the password already changed (token already used) or is stale
+      if (!user?.passwordHash || passwordFingerprint(user.passwordHash) !== payload.pwv) throw new Error('already used')
       userId = payload.userId
     } catch {
       return reply.status(400).send({ error: 'This link is invalid or has expired' })
@@ -355,6 +372,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const user = await prisma.user.findUnique({ where: { id: userId } })
     if (!user || !user.email) return reply.status(400).send({ error: 'This account has no email to verify' })
     if (user.emailVerified) return { ok: true, alreadyVerified: true }
+
+    // 3 requests per 15 min per account
+    const allowed = await checkRateLimit(`resend-verification:${userId}`, 3, 15 * 60)
+    if (!allowed) return reply.status(429).send({ error: 'Too many requests. Try again later.' })
 
     const verifyToken = app.jwt.sign(
       { userId: user.id, steamId: null, purpose: 'verify_email' },
