@@ -9,11 +9,8 @@ datasource db {
 
 model User {
   id           String    @id @default(cuid())
-  // Auth: at least one of (steamId) or (email + passwordHash)
-  steamId      String?   @unique
-  email        String?   @unique
-  passwordHash String?
-  emailVerified Boolean  @default(false)
+  // Steam is the only auth method
+  steamId      String    @unique
   username     String
   avatarUrl    String?
   isPremium    Boolean   @default(false)
@@ -27,7 +24,6 @@ model User {
   portfolio PortfolioItem[]
 
   @@index([steamId])
-  @@index([email])
 }
 
 model Skin {

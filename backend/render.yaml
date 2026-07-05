@@ -26,9 +26,3 @@ services:
         sync: false
       - key: FCM_SERVICE_ACCOUNT_PATH
         value: /etc/secrets/firebase-service-account.json
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
-      - key: PUBLIC_URL
-        value: https://cs2skinflip.onrender.com

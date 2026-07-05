@@ -66,7 +66,7 @@ buildServer() → listen → populateSkins() → populatePrices() → startPrice
 | File | Prefix | Notes |
 |---|---|---|
 | `skins.ts` | `/skins` | Public — search, detail, price history, top-movers |
-| `auth.ts` | `/auth` | Email/password register + login → JWT; `PUT /auth/me/fcm-token` to save FCM token |
+| `auth.ts` | `/auth` | Steam OAuth only (`GET /auth/steam` → `/auth/steam/callback`) → JWT; `PUT /auth/me/fcm-token` to save FCM token |
 | `watchlist.ts` | `/watchlist` | Auth required |
 | `alerts.ts` | `/alerts` | Auth required |
 | `portfolio.ts` | `/portfolio` | Auth required |
@@ -122,7 +122,7 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 
 `SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `waxpeerPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
 
-`User`: has `fcmToken String?` for FCM push notifications.
+`User`: Steam OAuth only — `steamId` is required and unique. Has `fcmToken String?` for FCM push notifications. (Email/password auth was removed in favor of Steam-only sign-in.)
 
 ### Filtering (`GET /skins`)
 
@@ -182,7 +182,7 @@ Single-module Android app using **Jetpack Compose + Hilt + MVVM**.
 core/
   di/           — Hilt AppModule (single source of truth for all DI)
   analytics/    — AnalyticsService (Firebase Analytics wrapper, @Singleton)
-  auth/         — AuthRepository (JWT token storage + email/password login/register + FCM token update)
+  auth/         — AuthRepository (JWT token storage, Steam callback handling, FCM token update)
   domain/model  — Pure Kotlin data classes: Skin, WatchlistItem, Alert, PortfolioItem
   data/
     remote/     — Retrofit interfaces + DTOs + mappers (CS2BackendApiService, SteamApiService)
@@ -226,10 +226,9 @@ Room DB name: `cs2skinflip.db`.
 ### Alerts feature
 
 `AlertsViewModel` manages three state flows:
-- `uiState` — the list of alerts (Loading / NotLoggedIn / Success / Error)
+- `uiState` — the list of alerts (Loading / NotLoggedIn / Success / Error). `NotLoggedIn` renders a "Sign in with Steam" prompt — there is no email/password form.
 - `createState` — the "create alert" bottom sheet (skin search, type, price)
 - `editState` — the "edit alert" bottom sheet (type + price for an existing alert)
-- `authState` — the login/register form shown when not logged in
 
 `EditAlertState.alert != null` signals the edit sheet is open. `submitEdit()` and `submitCreateAlert()` are `suspend` functions that return `true` on success so the caller can dismiss the sheet.
 
