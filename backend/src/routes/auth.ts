@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { env } from '../config/env'
 import { authenticate } from '../middleware/authenticate'
+import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email'
 
 const STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login'
 const STEAM_ID_REGEX = /^https:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/
@@ -20,6 +21,56 @@ const loginSchema = z.object({
   email: z.string().email().toLowerCase(),
   password: z.string().min(1),
 })
+
+function resetPasswordHtmlPage(opts: { token: string; invalidToken?: boolean }): string {
+  const { token, invalidToken } = opts
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset your password — CS2 SkinFlip</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #121212; color: #eee; display: flex; justify-content: center; padding: 48px 16px; }
+  .card { max-width: 360px; width: 100%; }
+  h1 { font-size: 20px; }
+  input { width: 100%; box-sizing: border-box; padding: 12px; margin: 8px 0; border-radius: 8px; border: 1px solid #444; background: #1e1e1e; color: #eee; }
+  button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #ff6b35; color: #fff; font-weight: bold; cursor: pointer; }
+  .msg { margin-top: 12px; font-size: 14px; }
+  .error { color: #ff5c5c; }
+  .success { color: #4caf50; }
+</style></head>
+<body><div class="card">
+  <h1>Reset your password</h1>
+  ${invalidToken
+    ? `<p class="msg error">This link is invalid or has expired. Request a new one from the app.</p>`
+    : `
+      <form id="f">
+        <input type="password" id="newPassword" placeholder="New password (min. 8 characters)" minlength="8" required />
+        <input type="password" id="confirmPassword" placeholder="Confirm new password" minlength="8" required />
+        <button type="submit">Update password</button>
+      </form>
+      <p class="msg error" id="err"></p>
+      <script>
+        document.getElementById('f').addEventListener('submit', async (e) => {
+          e.preventDefault()
+          const newPassword = document.getElementById('newPassword').value
+          const confirmPassword = document.getElementById('confirmPassword').value
+          const err = document.getElementById('err')
+          if (newPassword !== confirmPassword) { err.textContent = "Passwords don't match"; return }
+          const res = await fetch('/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: ${JSON.stringify(token)}, newPassword }),
+          })
+          if (res.ok) {
+            document.querySelector('.card').innerHTML = '<h1>Reset your password</h1><p class="msg success">Your password has been changed. You can now sign in with it in the app.</p>'
+          } else {
+            const data = await res.json().catch(() => ({}))
+            err.textContent = data.error || 'Could not reset password'
+          }
+        })
+      </script>
+    `}
+</div></body></html>`
+}
 
 function buildSteamLoginUrl(): string {
   const params = new URLSearchParams({
@@ -129,6 +180,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     })
 
+    const verifyToken = app.jwt.sign(
+      { userId: user.id, steamId: null, purpose: 'verify_email' },
+      { expiresIn: '24h' },
+    )
+    await sendVerificationEmail(email, `${env.PUBLIC_URL}/auth/verify-email?token=${verifyToken}`)
+
     const token = app.jwt.sign({ userId: user.id, steamId: user.steamId ?? null })
 
     return reply
@@ -206,6 +263,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       avatarUrl: user.avatarUrl,
       isPremium: user.isPremium,
       premiumUntil: user.premiumUntil?.toISOString() ?? null,
+      emailVerified: user.emailVerified,
     }
   })
 
@@ -222,27 +280,87 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true }
   })
 
-  /** Change password for email/password accounts. Steam-only accounts have no passwordHash. */
-  app.put('/auth/me/password', { onRequest: [authenticate] }, async (request, reply) => {
+  // ── Forgot password: request a reset email ─────────────────────────────────
+  app.post('/auth/forgot-password', async (request, reply) => {
+    const body = z.object({ email: z.string().email().toLowerCase() }).safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: 'Invalid body', details: body.error.flatten() })
+
+    const user = await prisma.user.findUnique({ where: { email: body.data.email } })
+    // Always respond the same way whether or not the account exists — avoids leaking who has an account
+    if (user?.passwordHash) {
+      const resetToken = app.jwt.sign(
+        { userId: user.id, steamId: null, purpose: 'password_reset' },
+        { expiresIn: '15m' },
+      )
+      await sendPasswordResetEmail(body.data.email, `${env.PUBLIC_URL}/auth/reset-password?token=${resetToken}`)
+    }
+    return { ok: true, message: 'If that email is registered, a reset link has been sent.' }
+  })
+
+  // ── Reset password: emailed link opens this page, form POSTs back below ────
+  app.get('/auth/reset-password', async (request, reply) => {
+    const { token } = request.query as { token?: string }
+    if (!token) return reply.status(400).type('text/html').send(resetPasswordHtmlPage({ token: '', invalidToken: true }))
+
+    try {
+      const payload = app.jwt.verify<{ userId: string; purpose?: string }>(token)
+      if (payload.purpose !== 'password_reset') throw new Error('wrong purpose')
+    } catch {
+      return reply.status(400).type('text/html').send(resetPasswordHtmlPage({ token: '', invalidToken: true }))
+    }
+
+    return reply.type('text/html').send(resetPasswordHtmlPage({ token }))
+  })
+
+  app.post('/auth/reset-password', async (request, reply) => {
     const body = z.object({
-      currentPassword: z.string().min(1),
+      token: z.string().min(1),
       newPassword: z.string().min(8).max(72),
     }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: 'Invalid body', details: body.error.flatten() })
 
-    const { userId } = request.user
-    const user = await prisma.user.findUnique({ where: { id: userId } })
-    if (!user || !user.passwordHash) {
-      return reply.status(400).send({ error: 'This account has no password to change' })
-    }
-
-    const valid = await bcrypt.compare(body.data.currentPassword, user.passwordHash)
-    if (!valid) {
-      return reply.status(401).send({ error: 'Current password is incorrect' })
+    let userId: string
+    try {
+      const payload = app.jwt.verify<{ userId: string; purpose?: string }>(body.data.token)
+      if (payload.purpose !== 'password_reset') throw new Error('wrong purpose')
+      userId = payload.userId
+    } catch {
+      return reply.status(400).send({ error: 'This link is invalid or has expired' })
     }
 
     const passwordHash = await bcrypt.hash(body.data.newPassword, BCRYPT_ROUNDS)
     await prisma.user.update({ where: { id: userId }, data: { passwordHash } })
     return { ok: true }
+  })
+
+  // ── Email verification ──────────────────────────────────────────────────────
+  app.get('/auth/verify-email', async (request, reply) => {
+    const { token } = request.query as { token?: string }
+    const fail = () => reply.redirect(`${env.MOBILE_DEEP_LINK}?verified=false`)
+    if (!token) return fail()
+
+    try {
+      const payload = app.jwt.verify<{ userId: string; purpose?: string }>(token)
+      if (payload.purpose !== 'verify_email') throw new Error('wrong purpose')
+      await prisma.user.update({ where: { id: payload.userId }, data: { emailVerified: true } })
+    } catch {
+      return fail()
+    }
+
+    return reply.redirect(`${env.MOBILE_DEEP_LINK}?verified=true`)
+  })
+
+  app.post('/auth/resend-verification', { onRequest: [authenticate] }, async (request, reply) => {
+    const { userId } = request.user
+    const user = await prisma.user.findUnique({ where: { id: userId } })
+    if (!user || !user.email) return reply.status(400).send({ error: 'This account has no email to verify' })
+    if (user.emailVerified) return { ok: true, alreadyVerified: true }
+
+    const verifyToken = app.jwt.sign(
+      { userId: user.id, steamId: null, purpose: 'verify_email' },
+      { expiresIn: '24h' },
+    )
+    await sendVerificationEmail(user.email, `${env.PUBLIC_URL}/auth/verify-email?token=${verifyToken}`)
+    return { ok: true, alreadyVerified: false }
   })
 }
