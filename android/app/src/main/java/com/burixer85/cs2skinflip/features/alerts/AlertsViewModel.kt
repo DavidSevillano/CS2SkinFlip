@@ -16,7 +16,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 import javax.inject.Inject
+
+private fun Throwable.isUnauthorized(): Boolean = this is HttpException && code() == 401
 
 sealed class AlertsUiState {
     object Loading : AlertsUiState()
@@ -90,7 +93,11 @@ class AlertsViewModel @Inject constructor(
                     )
                 }
                 .onFailure { e ->
-                    _uiState.value = AlertsUiState.Error(e.message ?: "Failed to load alerts")
+                    _uiState.value = if (e.isUnauthorized()) {
+                        AlertsUiState.NotLoggedIn
+                    } else {
+                        AlertsUiState.Error(e.message ?: "Failed to load alerts")
+                    }
                 }
         }
     }
@@ -151,7 +158,12 @@ class AlertsViewModel @Inject constructor(
                 true
             },
             onFailure = { e ->
-                _editState.update { it.copy(submitting = false, errorMessage = e.message ?: "Could not save changes") }
+                if (e.isUnauthorized()) {
+                    _uiState.value = AlertsUiState.NotLoggedIn
+                    _editState.value = EditAlertState()
+                } else {
+                    _editState.update { it.copy(submitting = false, errorMessage = e.message ?: "Could not save changes") }
+                }
                 false
             },
         )
@@ -232,8 +244,13 @@ class AlertsViewModel @Inject constructor(
                 true
             },
             onFailure = { e ->
-                _createState.update {
-                    it.copy(submitting = false, errorMessage = e.message ?: "Could not create alert")
+                if (e.isUnauthorized()) {
+                    _uiState.value = AlertsUiState.NotLoggedIn
+                    resetCreateState()
+                } else {
+                    _createState.update {
+                        it.copy(submitting = false, errorMessage = e.message ?: "Could not create alert")
+                    }
                 }
                 false
             },
