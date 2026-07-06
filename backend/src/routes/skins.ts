@@ -183,10 +183,15 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
 
   app.get('/skins/:skinId/price-history', async (request, reply) => {
     const { skinId } = request.params as { skinId: string }
-    const { days = '30' } = request.query as { days?: string }
+    const { range: rawRange } = request.query as { range?: string }
 
-    const daysNum = Math.min(parseInt(days, 10) || 30, 365)
-    const since = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000)
+    const rangeConfig: Record<string, { sinceMs: number; aggregateDaily: boolean }> = {
+      '24h': { sinceMs: 24 * 60 * 60 * 1000, aggregateDaily: false },
+      '7d':  { sinceMs: 7 * 24 * 60 * 60 * 1000, aggregateDaily: true },
+      '30d': { sinceMs: 30 * 24 * 60 * 60 * 1000, aggregateDaily: true },
+    }
+    const { sinceMs, aggregateDaily } = rangeConfig[rawRange ?? '24h'] ?? rangeConfig['24h']
+    const since = new Date(Date.now() - sinceMs)
 
     const history = await prisma.priceHistory.findMany({
       where: { skinId, timestamp: { gte: since } },
@@ -194,6 +199,24 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       select: { price: true, timestamp: true, source: true },
     })
 
-    return history.map((h) => ({ price: h.price, timestamp: h.timestamp.toISOString(), source: h.source }))
+    if (!aggregateDaily) {
+      return history.map((h) => ({ price: h.price, timestamp: h.timestamp.toISOString(), source: h.source }))
+    }
+
+    // Collapse to one point per calendar day, keeping the last (most recent)
+    // entry of each day. `history` is ordered ascending, so later writes to
+    // the same key naturally overwrite earlier ones, and Map iteration order
+    // (first-insertion order) stays ascending by day.
+    const byDay = new Map<string, (typeof history)[number]>()
+    for (const h of history) {
+      const dayKey = h.timestamp.toISOString().slice(0, 10)
+      byDay.set(dayKey, h)
+    }
+
+    return Array.from(byDay.values()).map((h) => ({
+      price: h.price,
+      timestamp: h.timestamp.toISOString(),
+      source: h.source,
+    }))
   })
 }
