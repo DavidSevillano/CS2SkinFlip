@@ -637,7 +637,7 @@ private fun NotLoggedInView() {
         Button(
             onClick = {
                 context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL}/auth/steam"))
+                    Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL.trimEnd('/')}/auth/steam"))
                 )
             },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B2838)),
