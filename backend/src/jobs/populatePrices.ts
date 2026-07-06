@@ -204,17 +204,8 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
     )
   }
 
-  // Save price history — max once per 24h per skin to avoid DB bloat
-  const recentIds = new Set(
-    (await prisma.priceHistory.findMany({
-      where: { timestamp: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
-      select: { skinId: true },
-      distinct: ['skinId'],
-    })).map((h) => h.skinId),
-  )
-
+  // Save a price history point for every skin on every run (every 2h).
   const historyRows = skins
-    .filter((s) => !recentIds.has(s.id))
     .flatMap((s) => {
       const skinport = skinportMap.get(s.marketHashName) ?? null
       const csgo     = csgoMarketMap.get(s.marketHashName) ?? null
