@@ -3,6 +3,7 @@ package com.burixer85.cs2skinflip.core.data.repository
 import com.burixer85.cs2skinflip.core.data.mock.MockData
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.toDomain
+import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
@@ -85,14 +86,16 @@ class SkinRepository @Inject constructor(
     suspend fun getSkinById(id: String): Skin? {
         return runCatching {
             val skin = backendApi.getSkin(id)
-            val history = runCatching {
-                backendApi.getPriceHistory(id).map { it.toDomain() }
-            }.getOrDefault(emptyList())
+            val history = getPriceHistory(id, range = "24h")
             skin.toDomain(priceHistory = history)
         }.getOrElse {
             MockData.getSkinById(id)
         }
     }
+
+    suspend fun getPriceHistory(skinId: String, range: String): List<PricePoint> = runCatching {
+        backendApi.getPriceHistory(skinId, range).map { it.toDomain() }
+    }.getOrDefault(emptyList())
 
     suspend fun getAllWeapons(): List<String> = runCatching {
         backendApi.getWeapons()

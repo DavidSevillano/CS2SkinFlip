@@ -20,6 +20,12 @@ sealed class SkinDetailUiState {
     data class Error(val message: String) : SkinDetailUiState()
 }
 
+enum class PriceRange(val apiValue: String, val label: String) {
+    DAY("24h", "24H"),
+    WEEK("7d", "7D"),
+    MONTH("30d", "30D"),
+}
+
 @HiltViewModel
 class SkinDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -32,6 +38,9 @@ class SkinDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<SkinDetailUiState>(SkinDetailUiState.Loading)
     val uiState: StateFlow<SkinDetailUiState> = _uiState
+
+    private val _selectedRange = MutableStateFlow(PriceRange.DAY)
+    val selectedRange: StateFlow<PriceRange> = _selectedRange
 
     init {
         loadSkin()
@@ -47,6 +56,16 @@ class SkinDetailViewModel @Inject constructor(
                 _uiState.value = SkinDetailUiState.Success(skin, inWatchlist)
                 analytics.logSkinViewed(skin.id, skin.name)
             }
+        }
+    }
+
+    fun onRangeSelected(range: PriceRange) {
+        if (range == _selectedRange.value) return
+        _selectedRange.value = range
+        viewModelScope.launch {
+            val history = skinRepository.getPriceHistory(skinId, range.apiValue)
+            val state = _uiState.value as? SkinDetailUiState.Success ?: return@launch
+            _uiState.value = state.copy(skin = state.skin.copy(priceHistory = history))
         }
     }
 
