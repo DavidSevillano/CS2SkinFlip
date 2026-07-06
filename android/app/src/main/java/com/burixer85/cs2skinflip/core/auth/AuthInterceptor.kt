@@ -20,6 +20,12 @@ class AuthInterceptor @Inject constructor(
         } else {
             chain.request()
         }
-        return chain.proceed(request)
+        val response = chain.proceed(request)
+        // Stale/invalid token (e.g. points to a deleted user) — clear it so the UI
+        // falls back to the "sign in with Steam" prompt instead of silently failing.
+        if (response.code == 401 && token != null) {
+            runBlocking { tokenDataStore.clearToken() }
+        }
+        return response
     }
 }
