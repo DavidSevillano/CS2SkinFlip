@@ -402,17 +402,22 @@ private fun AlertRow(alert: Alert, onToggle: () -> Unit, onDelete: () -> Unit, o
                     Text(
                         currency.format(alert.targetPrice),
                         fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    if (alert.currentPrice > 0) {
-                        Spacer(Modifier.width(8.dp))
-                        DiffBadge(current = alert.currentPrice, target = alert.targetPrice, type = alert.type)
-                    }
                 }
                 if (alert.currentPrice > 0) {
-                    Text(
-                        "Current ${currency.format(alert.currentPrice)}",
-                        fontSize = 11.sp, color = TextTertiary, modifier = Modifier.padding(top = 2.dp),
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        Text(
+                            "Current ${currency.format(alert.currentPrice)}",
+                            fontSize = 11.sp, color = TextTertiary,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        DiffBadge(current = alert.currentPrice, target = alert.targetPrice, type = alert.type)
+                    }
                 }
             }
 
@@ -457,6 +462,7 @@ private fun DiffBadge(current: Double, target: Double, type: AlertType) {
     Text(
         "$sign%.1f%%".format(diffPct),
         fontSize = 11.sp, color = color, fontWeight = FontWeight.SemiBold,
+        maxLines = 1, softWrap = false,
     )
 }
 
