@@ -2,6 +2,7 @@ package com.burixer85.cs2skinflip.features.skindetail
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,20 +42,34 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.core.domain.model.Marketplace
+import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
 import com.burixer85.cs2skinflip.core.ui.components.PriceChangeChip
@@ -72,6 +87,10 @@ import com.burixer85.cs2skinflip.core.ui.theme.SurfaceElevated
 import com.burixer85.cs2skinflip.core.ui.theme.SurfaceVariant
 import com.burixer85.cs2skinflip.core.ui.theme.TextPrimary
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.roundToInt
 
 // Wear-condition float boundaries (CS2 standard values)
 private data class WearSegment(val start: Float, val end: Float, val label: String, val color: Color)
@@ -125,11 +144,14 @@ fun SkinDetailScreen(
                 ErrorState(message = state.message, modifier = Modifier.fillMaxSize())
             }
             is SkinDetailUiState.Success -> {
+                val selectedRange by viewModel.selectedRange.collectAsState()
                 SkinDetailContent(
                     skin = state.skin,
                     isInWatchlist = state.isInWatchlist,
+                    selectedRange = selectedRange,
                     onBack = onBack,
-                    onToggleWatchlist = viewModel::toggleWatchlist
+                    onToggleWatchlist = viewModel::toggleWatchlist,
+                    onRangeSelected = viewModel::onRangeSelected
                 )
             }
         }
@@ -141,8 +163,10 @@ fun SkinDetailScreen(
 private fun SkinDetailContent(
     skin: Skin,
     isInWatchlist: Boolean,
+    selectedRange: PriceRange,
     onBack: () -> Unit,
-    onToggleWatchlist: () -> Unit
+    onToggleWatchlist: () -> Unit,
+    onRangeSelected: (PriceRange) -> Unit
 ) {
     val rarityColor = rarityColor(skin.rarity)
 
@@ -312,17 +336,24 @@ private fun SkinDetailContent(
 
         // Price history (always shown; empty-state message when no data yet)
         Column(Modifier.padding(16.dp)) {
-            Text(
-                text = "30-Day Price History",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Price History",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                PriceRangeSelector(selected = selectedRange, onSelect = onRangeSelected)
+            }
             Spacer(Modifier.height(12.dp))
             if (skin.priceHistory.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(64.dp)
+                        .height(120.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(SurfaceVariant),
                     contentAlignment = Alignment.Center
@@ -335,7 +366,7 @@ private fun SkinDetailContent(
                     )
                 }
             } else {
-                SimplePriceChart(pricePoints = skin.priceHistory.takeLast(30).map { it.price })
+                PriceLineChart(pricePoints = skin.priceHistory, range = selectedRange)
             }
         }
 
@@ -513,12 +544,44 @@ private fun FloatRangeIndicator(min: Float, max: Float, median: Float) {
 }
 
 @Composable
-private fun SimplePriceChart(pricePoints: List<Double>) {
+private fun PriceRangeSelector(
+    selected: PriceRange,
+    onSelect: (PriceRange) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(SurfaceVariant),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        PriceRange.values().forEach { range ->
+            val isSelected = range == selected
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (isSelected) AccentOrange else Color.Transparent)
+                    .clickable { onSelect(range) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = range.label,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSelected) Color.White else TextSecondary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PriceLineChart(pricePoints: List<PricePoint>, range: PriceRange) {
     if (pricePoints.size < 2) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .height(120.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(SurfaceVariant),
             contentAlignment = Alignment.Center
@@ -532,45 +595,111 @@ private fun SimplePriceChart(pricePoints: List<Double>) {
         }
         return
     }
-    val minPrice = pricePoints.minOrNull() ?: 0.0
-    val maxPrice = pricePoints.maxOrNull() ?: 0.0
-    val range = maxPrice - minPrice
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        // Y-axis labels: max price at top, min price at bottom
+    val minPrice = pricePoints.minOf { it.price }
+    val maxPrice = pricePoints.maxOf { it.price }
+    val priceRange = maxPrice - minPrice
+    val lineColor = AccentOrange
+    val textMeasurer = rememberTextMeasurer()
+    var selectedIndex by remember(pricePoints) { mutableStateOf<Int?>(null) }
+
+    Row(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .width(44.dp)
-                .height(64.dp),
+                .height(120.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Text(Currency.format(maxPrice), fontSize = 9.sp, color = TextSecondary, maxLines = 1)
             Text(Currency.format(minPrice), fontSize = 9.sp, color = TextSecondary, maxLines = 1)
         }
         Spacer(Modifier.width(4.dp))
-        // Bar chart
-        Row(
+        Canvas(
             modifier = Modifier
                 .weight(1f)
-                .height(64.dp)
+                .height(120.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(SurfaceVariant)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                .padding(8.dp)
+                .pointerInput(pricePoints) {
+                    while (true) {
+                        awaitPointerEventScope {
+                            val down = awaitFirstDown()
+                            selectedIndex = nearestPointIndex(down.position.x, size.width, pricePoints.size)
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                if (change != null && change.pressed) {
+                                    selectedIndex = nearestPointIndex(change.position.x, size.width, pricePoints.size)
+                                    change.consume()
+                                }
+                            } while (change != null && change.pressed)
+                        }
+                    }
+                }
         ) {
-            pricePoints.forEach { price ->
-                val fraction = if (range > 0) ((price - minPrice) / range).toFloat() else 0.5f
-                val barHeight = (4 + fraction * 56).dp
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(barHeight)
-                        .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
-                        .background(AccentOrange.copy(alpha = 0.6f + fraction * 0.4f))
+            val stepX = if (pricePoints.size > 1) size.width / (pricePoints.size - 1) else 0f
+            val points = pricePoints.mapIndexed { index, point ->
+                val fraction = if (priceRange > 0) ((point.price - minPrice) / priceRange).toFloat() else 0.5f
+                Offset(x = index * stepX, y = size.height - fraction * size.height)
+            }
+
+            val linePath = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                points.drop(1).forEach { lineTo(it.x, it.y) }
+            }
+            val areaPath = Path().apply {
+                addPath(linePath)
+                lineTo(points.last().x, size.height)
+                lineTo(points.first().x, size.height)
+                close()
+            }
+
+            drawPath(
+                path = areaPath,
+                brush = Brush.verticalGradient(
+                    listOf(lineColor.copy(alpha = 0.3f), lineColor.copy(alpha = 0f))
+                )
+            )
+            drawPath(
+                path = linePath,
+                color = lineColor,
+                style = Stroke(width = 2.dp.toPx())
+            )
+
+            val index = selectedIndex
+            if (index != null) {
+                val point = points[index]
+                val dataPoint = pricePoints[index]
+
+                drawLine(
+                    color = lineColor.copy(alpha = 0.4f),
+                    start = Offset(point.x, 0f),
+                    end = Offset(point.x, size.height),
+                    strokeWidth = 1.dp.toPx()
+                )
+                drawCircle(color = lineColor, radius = 4.dp.toPx(), center = point)
+
+                val tooltipText = "${Currency.format(dataPoint.price)}\n${formatTooltipTimestamp(dataPoint.timestamp)}"
+                val layoutResult = textMeasurer.measure(
+                    text = tooltipText,
+                    style = TextStyle(fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                )
+                val boxPadding = 6.dp.toPx()
+                val boxWidth = layoutResult.size.width + boxPadding * 2
+                val boxHeight = layoutResult.size.height + boxPadding * 2
+                val boxLeft = (point.x - boxWidth / 2).coerceIn(0f, (size.width - boxWidth).coerceAtLeast(0f))
+                val boxTop = (point.y - boxHeight - 12.dp.toPx()).coerceAtLeast(0f)
+
+                drawRoundRect(
+                    color = Color(0xFF1A1A1A),
+                    topLeft = Offset(boxLeft, boxTop),
+                    size = Size(boxWidth, boxHeight),
+                    cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx())
+                )
+                drawText(
+                    textLayoutResult = layoutResult,
+                    topLeft = Offset(boxLeft + boxPadding, boxTop + boxPadding)
                 )
             }
         }
@@ -579,7 +708,32 @@ private fun SimplePriceChart(pricePoints: List<Double>) {
         Modifier.fillMaxWidth().padding(top = 4.dp, start = 48.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("30d ago", fontSize = 10.sp, color = TextSecondary)
-        Text("Today", fontSize = 10.sp, color = TextSecondary)
+        val labelPoints = listOf(
+            pricePoints.first(),
+            pricePoints[pricePoints.size / 2],
+            pricePoints.last()
+        )
+        labelPoints.forEach { point ->
+            Text(formatAxisLabel(point.timestamp, range), fontSize = 10.sp, color = TextSecondary)
+        }
     }
+}
+
+private fun nearestPointIndex(touchX: Float, canvasWidthPx: Int, pointCount: Int): Int {
+    if (pointCount <= 1) return 0
+    val stepX = canvasWidthPx / (pointCount - 1).toFloat()
+    return (touchX / stepX).roundToInt().coerceIn(0, pointCount - 1)
+}
+
+private fun formatAxisLabel(timestampMillis: Long, range: PriceRange): String {
+    val pattern = when (range) {
+        PriceRange.DAY -> "h a"
+        PriceRange.WEEK -> "EEE"
+        PriceRange.MONTH -> "MMM d"
+    }
+    return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestampMillis))
+}
+
+private fun formatTooltipTimestamp(timestampMillis: Long): String {
+    return SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(Date(timestampMillis))
 }
