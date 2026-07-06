@@ -98,7 +98,7 @@ fun SettingsScreen(
 
     fun signInWithSteam() {
         runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL}/auth/steam")))
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL.trimEnd('/')}/auth/steam")))
         }
     }
 
