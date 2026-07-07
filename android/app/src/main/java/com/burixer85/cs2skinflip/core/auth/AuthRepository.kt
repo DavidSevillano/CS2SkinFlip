@@ -2,6 +2,7 @@ package com.burixer85.cs2skinflip.core.auth
 
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
+import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -14,6 +15,7 @@ import kotlin.coroutines.resume
 class AuthRepository @Inject constructor(
     private val tokenDataStore: TokenDataStore,
     private val backendApi: CS2BackendApiService,
+    private val premiumStatusRepository: PremiumStatusRepository,
 ) {
     val isLoggedIn: Flow<Boolean> = tokenDataStore.token.map { it != null }
     val token: Flow<String?> = tokenDataStore.token
@@ -26,6 +28,7 @@ class AuthRepository @Inject constructor(
 
     suspend fun logout() {
         tokenDataStore.clearToken()
+        premiumStatusRepository.reset()
     }
 
     /** Register or refresh the FCM token on the backend. No-op if not logged in. */

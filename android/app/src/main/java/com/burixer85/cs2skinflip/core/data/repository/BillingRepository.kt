@@ -14,6 +14,7 @@ import javax.inject.Singleton
 class BillingRepository @Inject constructor(
     private val billingManager: BillingManager,
     private val backendApi: CS2BackendApiService,
+    private val premiumStatusRepository: PremiumStatusRepository,
 ) {
     /** Raw purchase results from Play Billing — collect and pass each purchase to [verify]. */
     val purchaseUpdates: SharedFlow<List<Purchase>> = billingManager.purchaseUpdates
@@ -28,9 +29,11 @@ class BillingRepository @Inject constructor(
     suspend fun verify(purchase: Purchase): Boolean {
         if (PREMIUM_PRODUCT_ID !in purchase.products) return false
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return false
-        return runCatching {
+        val unlocked = runCatching {
             backendApi.verifyPurchase(VerifyPurchaseRequest(purchase.purchaseToken)).isPremium
         }.getOrDefault(false)
+        if (unlocked) premiumStatusRepository.refresh()
+        return unlocked
     }
 
     /** Safety net for purchases Play Billing has on record but the backend never confirmed — call on app start / login. */

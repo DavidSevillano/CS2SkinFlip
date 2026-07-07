@@ -33,6 +33,15 @@ android {
 
         val backendUrl = localProperties.getProperty("BACKEND_URL") ?: "http://10.0.2.2:3000"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
+
+        val admobAppId = localProperties.getProperty("ADMOB_APP_ID") ?: "ca-app-pub-3940256099942544~3347511713"
+        manifestPlaceholders["admobAppId"] = admobAppId
+
+        val admobBannerUnitId = localProperties.getProperty("ADMOB_BANNER_UNIT_ID") ?: ""
+        buildConfigField("String", "ADMOB_BANNER_UNIT_ID", "\"$admobBannerUnitId\"")
+
+        val admobInterstitialUnitId = localProperties.getProperty("ADMOB_INTERSTITIAL_UNIT_ID") ?: ""
+        buildConfigField("String", "ADMOB_INTERSTITIAL_UNIT_ID", "\"$admobInterstitialUnitId\"")
     }
 
     signingConfigs {
@@ -137,4 +146,12 @@ dependencies {
 
     // Billing
     implementation(libs.billing.ktx)
+
+    // Ads
+    implementation(libs.play.services.ads)
+    implementation(libs.ump.sdk)
+
+    // Testing
+    testImplementation(libs.junit)
+    testImplementation(libs.mockito.kotlin)
 }

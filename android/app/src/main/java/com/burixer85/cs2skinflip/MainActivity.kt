@@ -12,11 +12,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.burixer85.cs2skinflip.core.ads.AdsManager
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
+import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
 import com.burixer85.cs2skinflip.core.ui.theme.Background
 import com.burixer85.cs2skinflip.core.ui.theme.CS2SkinFlipTheme
 import com.burixer85.cs2skinflip.navigation.AppNavigation
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,6 +29,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var authRepository: AuthRepository
 
+    @Inject
+    lateinit var adsManager: AdsManager
+
+    @Inject
+    lateinit var premiumStatusRepository: PremiumStatusRepository
+
     /** Skin ID coming from a push notification tap — triggers navigation in AppNavigation */
     private var notificationSkinId by mutableStateOf<String?>(null)
 
@@ -34,6 +43,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleAuthIntent(intent)
         handleNotificationIntent(intent)
+
+        adsManager.initialize(this)
+        lifecycleScope.launch {
+            if (authRepository.isLoggedIn.first()) premiumStatusRepository.refresh()
+        }
+
         setContent {
             CS2SkinFlipTheme {
                 Surface(
@@ -61,6 +76,7 @@ class MainActivity : ComponentActivity() {
             val token = data.getQueryParameter("token") ?: return
             lifecycleScope.launch {
                 authRepository.handleCallback(token)
+                premiumStatusRepository.refresh()
             }
         }
     }

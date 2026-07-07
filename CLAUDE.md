@@ -163,8 +163,13 @@ All filters are combined as `AND` conditions. Wear is matched via `marketHashNam
 ```
 BACKEND_URL=http://10.0.2.2:3000
 STEAM_API_KEY=your_key_here
+ADMOB_APP_ID=your_admob_app_id
+ADMOB_BANNER_UNIT_ID=your_admob_banner_unit_id
+ADMOB_INTERSTITIAL_UNIT_ID=your_admob_interstitial_unit_id
 ```
 `10.0.2.2` is the Android emulator's alias for `localhost`. Use the device's actual LAN IP for physical devices.
+
+If `ADMOB_APP_ID` is absent, `build.gradle.kts` falls back to Google's public test AdMob Application ID (`ca-app-pub-3940256099942544~3347511713`); `AdsManager` falls back similarly for the banner/interstitial ad unit IDs in debug builds, so a fresh clone without these keys configured still works with Google's sample test ads.
 
 ### `app/google-services.json`
 Required for Firebase (Analytics + FCM). Download from the Firebase console for project `cs2skinflip-304c6`, package `com.burixer85.cs2skinflip`. The file is gitignored — never commit it.

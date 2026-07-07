@@ -18,6 +18,10 @@ composeNavigation = "2.8.4"
 firebaseBom = "33.1.0"
 googleServices = "4.4.2"
 billing = "7.1.1"
+playServicesAds = "23.3.0"
+umpSdk = "3.0.0"
+junit = "4.13.2"
+mockitoKotlin = "5.4.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -69,6 +73,14 @@ firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging
 
 # Billing
 billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
+
+# Ads
+play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
+ump-sdk = { group = "com.google.android.ump", name = "user-messaging-platform", version.ref = "umpSdk" }
+
+# Testing
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
