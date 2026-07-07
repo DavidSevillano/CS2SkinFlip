@@ -1,10 +1,12 @@
 package com.burixer85.cs2skinflip.features.alerts
 
+import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.AlertRepository
+import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
@@ -60,6 +62,7 @@ class AlertsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val skinRepository: SkinRepository,
     private val analytics: AnalyticsService,
+    private val billingRepository: BillingRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<AlertsUiState>(AlertsUiState.Loading)
@@ -76,9 +79,27 @@ class AlertsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             authRepository.isLoggedIn.collect { loggedIn ->
-                if (loggedIn) loadAlerts() else _uiState.value = AlertsUiState.NotLoggedIn
+                if (loggedIn) {
+                    loadAlerts()
+                    // Safety net: covers a purchase that succeeded but never reached the backend
+                    // (e.g. app killed right after payment).
+                    if (billingRepository.syncPendingPurchases()) loadAlerts()
+                } else {
+                    _uiState.value = AlertsUiState.NotLoggedIn
+                }
             }
         }
+        viewModelScope.launch {
+            billingRepository.purchaseUpdates.collect { purchases ->
+                var unlocked = false
+                purchases.forEach { if (billingRepository.verify(it)) unlocked = true }
+                if (unlocked) loadAlerts()
+            }
+        }
+    }
+
+    fun purchasePremium(activity: Activity) {
+        viewModelScope.launch { billingRepository.purchasePremium(activity) }
     }
 
     fun loadAlerts() {

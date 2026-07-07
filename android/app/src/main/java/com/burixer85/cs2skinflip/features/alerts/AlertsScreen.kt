@@ -84,6 +84,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.BuildConfig
+import com.burixer85.cs2skinflip.core.billing.findActivity
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
 import com.burixer85.cs2skinflip.core.domain.model.Skin
@@ -227,7 +228,13 @@ fun AlertsScreen(
 
     // ── Upgrade dialog ────────────────────────────────────────────────────────
     if (showUpgradeDialog) {
-        UpgradeDialog(onDismiss = { showUpgradeDialog = false })
+        UpgradeDialog(
+            onDismiss = { showUpgradeDialog = false },
+            onUpgradeClick = {
+                context.findActivity()?.let { viewModel.purchasePremium(it) }
+                showUpgradeDialog = false
+            },
+        )
     }
 
     // ── Notification permission rationale ───────────────────────────────────────
@@ -557,7 +564,7 @@ private fun NotificationPermissionDialog(onEnable: () -> Unit, onDismiss: () -> 
 }
 
 @Composable
-private fun UpgradeDialog(onDismiss: () -> Unit) {
+private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
@@ -571,30 +578,25 @@ private fun UpgradeDialog(onDismiss: () -> Unit) {
         text = {
             Column {
                 Text(
-                    "You're on the free plan with 1 alert. Upgrade to Premium to unlock:",
+                    "You're on the free plan with 1 alert. Unlock unlimited price alerts with a one-time payment:",
                     color = TextSecondary, fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(12.dp))
-                listOf(
-                    "Unlimited price alerts",
-                    "Real-time push notifications",
-                    "Float percentile data",
-                    "Advanced analytics",
-                ).forEach { benefit ->
-                    Row(
-                        modifier = Modifier.padding(vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(benefit, color = TextPrimary, fontSize = 13.sp)
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Unlimited price alerts", color = TextPrimary, fontSize = 13.sp)
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "$4.99 · one-time payment, no subscription",
+                    color = TextSecondary, fontSize = 12.sp,
+                )
             }
         },
         confirmButton = {
             Button(
-                onClick = { /* TODO: subscription flow */ onDismiss() },
+                onClick = onUpgradeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
                 shape = RoundedCornerShape(10.dp),
             ) {

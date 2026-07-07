@@ -68,6 +68,9 @@ interface CS2BackendApiService {
     @PUT("auth/me/fcm-token")
     suspend fun updateFcmToken(@Body body: FcmTokenRequest)
 
+    @POST("billing/verify-purchase")
+    suspend fun verifyPurchase(@Body body: VerifyPurchaseRequest): VerifyPurchaseResponseDto
+
     /**
      * Batch price refresh — returns DB-cached prices for up to 50 skins in one call.
      * Use this instead of calling [getSkin] 20 times after a list loads.
@@ -291,6 +294,15 @@ data class MeResponseDto(
     val steamId: String?,
     val username: String,
     val avatarUrl: String?,
+    val isPremium: Boolean,
+    val premiumUntil: String?,
+)
+
+data class VerifyPurchaseRequest(
+    val purchaseToken: String,
+)
+
+data class VerifyPurchaseResponseDto(
     val isPremium: Boolean,
     val premiumUntil: String?,
 )
