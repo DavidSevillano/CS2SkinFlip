@@ -93,6 +93,8 @@ import com.burixer85.cs2skinflip.core.ui.theme.TextTertiary
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import com.burixer85.cs2skinflip.core.ads.AdsViewModel
+import com.burixer85.cs2skinflip.core.ads.BannerAdView
 import androidx.compose.runtime.snapshotFlow
 
 private val MAX_PRICE = 25000f
@@ -102,7 +104,9 @@ private val MAX_PRICE = 25000f
 fun SearchScreen(
     onSkinClick: (String) -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
+    adsViewModel: AdsViewModel = hiltViewModel(),
 ) {
+    val isPremium by adsViewModel.isPremium.collectAsState()
     val query by viewModel.query.collectAsState()
     val filters by viewModel.filters.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
@@ -347,6 +351,7 @@ fun SearchScreen(
         }
 
         // ── Results ───────────────────────────────────────────────────────────
+        Box(Modifier.weight(1f)) {
         when (val state = uiState) {
             is SearchUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
             is SearchUiState.Error -> ErrorState(message = state.message, modifier = Modifier.fillMaxSize())
@@ -412,6 +417,10 @@ fun SearchScreen(
                     }
                 }
             }
+        }
+        }
+        if (!isPremium && !showFilterSheet) {
+            BannerAdView(adUnitId = adsViewModel.bannerAdUnitId)
         }
     }
 

@@ -78,6 +78,10 @@ import com.burixer85.cs2skinflip.core.ui.components.SkeletonBox
 import com.burixer85.cs2skinflip.core.ui.components.rarityColor
 import com.burixer85.cs2skinflip.core.preferences.Currency
 import com.burixer85.cs2skinflip.core.ui.theme.AccentBlue
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import com.burixer85.cs2skinflip.core.ads.AdsViewModel
+import com.burixer85.cs2skinflip.core.billing.findActivity
 import com.burixer85.cs2skinflip.core.ui.theme.AccentGreen
 import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.Background
@@ -107,9 +111,20 @@ private val wearSegments = listOf(
 fun SkinDetailScreen(
     skinId: String,
     onBack: () -> Unit,
-    viewModel: SkinDetailViewModel = hiltViewModel()
+    viewModel: SkinDetailViewModel = hiltViewModel(),
+    adsViewModel: AdsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val activity = LocalContext.current.findActivity()
+
+    LaunchedEffect(Unit) {
+        adsViewModel.onSkinDetailEntered()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.let { adsViewModel.maybeShowInterstitialOnExit(it) }
+        }
+    }
 
     Column(Modifier.fillMaxSize().background(Background)) {
         when (val state = uiState) {

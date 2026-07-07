@@ -40,15 +40,19 @@ import com.burixer85.cs2skinflip.core.ui.theme.Background
 import com.burixer85.cs2skinflip.core.ui.theme.DividerColor
 import com.burixer85.cs2skinflip.core.ui.theme.Surface
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
+import com.burixer85.cs2skinflip.core.ads.AdsViewModel
+import com.burixer85.cs2skinflip.core.ads.BannerAdView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onSkinClick: (String) -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    adsViewModel: AdsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val isRefreshing = uiState is HomeUiState.Loading
+    val isPremium by adsViewModel.isPremium.collectAsState()
 
     Column(
         modifier = Modifier
@@ -60,7 +64,7 @@ fun HomeScreen(
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = viewModel::loadTrending,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.weight(1f)
         ) {
             when (val state = uiState) {
                 is HomeUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
@@ -91,6 +95,9 @@ fun HomeScreen(
                     }
                 }
             }
+        }
+        if (!isPremium) {
+            BannerAdView(adUnitId = adsViewModel.bannerAdUnitId)
         }
     }
 }
