@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import coil.compose.AsyncImage
+import com.burixer85.cs2skinflip.core.billing.findActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,8 +80,8 @@ import com.burixer85.cs2skinflip.core.ui.theme.SurfaceVariant
 import com.burixer85.cs2skinflip.core.ui.theme.TextPrimary
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 
-private const val PRIVACY_URL = "https://cs2skinflip.app/privacy"
-private const val TERMS_URL = "https://cs2skinflip.app/terms"
+private const val PRIVACY_URL = "https://davidsevillano.github.io/cs2skinflip-legal/privacy.html"
+private const val TERMS_URL = "https://davidsevillano.github.io/cs2skinflip-legal/terms.html"
 
 @Composable
 fun SettingsScreen(
@@ -243,7 +244,13 @@ fun SettingsScreen(
     }
 
     if (showUpgradeDialog) {
-        UpgradeDialog(onDismiss = { showUpgradeDialog = false })
+        UpgradeDialog(
+            onDismiss = { showUpgradeDialog = false },
+            onUpgradeClick = {
+                context.findActivity()?.let { viewModel.purchasePremium(it) }
+                showUpgradeDialog = false
+            },
+        )
     }
 
     if (showSignOutDialog) {
@@ -341,8 +348,6 @@ private fun PlanCard(isPremium: Boolean) {
                     Triple("Watchlist", true, true),
                     Triple("1 free price alert", true, true),
                     Triple("Unlimited price alerts", isPremium, false),
-                    Triple("Float percentile data", isPremium, false),
-                    Triple("Advanced analytics", isPremium, false),
                 )
                 features.forEach { (text, available, alwaysFree) ->
                     val tag = if (available) "✓" else "✗"
@@ -459,7 +464,7 @@ private fun PickerRow(label: String, selected: Boolean, onClick: () -> Unit) {
 // ─── Dialogs ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun UpgradeDialog(onDismiss: () -> Unit) {
+private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
@@ -472,26 +477,21 @@ private fun UpgradeDialog(onDismiss: () -> Unit) {
         },
         text = {
             Column {
-                listOf(
-                    "Unlimited price alerts",
-                    "Real-time push notifications",
-                    "Float percentile data",
-                    "Advanced analytics",
-                ).forEach { benefit ->
-                    Row(
-                        modifier = Modifier.padding(vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(benefit, color = TextPrimary, fontSize = 13.sp)
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Unlimited price alerts", color = TextPrimary, fontSize = 13.sp)
                 }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "$4.99 · one-time payment, no subscription",
+                    color = TextSecondary, fontSize = 12.sp,
+                )
             }
         },
         confirmButton = {
             Button(
-                onClick = { /* TODO: subscription flow */ onDismiss() },
+                onClick = onUpgradeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
                 shape = RoundedCornerShape(10.dp),
             ) {

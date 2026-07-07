@@ -44,10 +44,21 @@ Copy `.env` and fill in:
 | `JWT_SECRET` | Min 32 chars |
 | `FRONTEND_URL` | Used for CORS allowlist |
 | `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_PATH` | Optional — path to a Google Play service account JSON, used to verify one-time premium purchases |
+| `GOOGLE_PLAY_PACKAGE_NAME` | Defaults to `com.burixer85.cs2skinflip` |
+| `PREMIUM_PRODUCT_ID` | Defaults to `premium_unlimited_alerts` — must match the Play Console in-app product ID |
 
 The price aggregator uses only public bulk endpoints — no marketplace API keys are required.
 
 The Firebase service account file (`firebase-service-account.json`) is gitignored. Download from Firebase console → Project Settings → Service Accounts.
+
+### Premium unlock (unlimited alerts)
+
+Free accounts get 1 alert (`FREE_ALERT_LIMIT` in `src/routes/alerts.ts`); a one-time Google Play purchase unlocks unlimited alerts by setting `User.isPremium = true`.
+
+- Android launches Play Billing for the non-consumable product `premium_unlimited_alerts`, tagging the purchase with the user's ID via `setObfuscatedAccountId` so a token can't be replayed against a different account.
+- `POST /billing/verify-purchase` (`src/routes/billing.ts`) takes the resulting `purchaseToken`, verifies + acknowledges it against the Google Play Developer API (`src/services/googlePlay.ts`, lazily initialised like `fcm.ts`), checks the obfuscated account ID matches the caller, then sets `isPremium`.
+- Android also re-queries Play Billing for unconfirmed purchases on login/app start (`BillingRepository.syncPendingPurchases()`) as a safety net for purchases that succeeded but never reached the backend (e.g. app killed mid-flow).
 
 ## Architecture
 

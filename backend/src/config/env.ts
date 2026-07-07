@@ -14,6 +14,9 @@ const envSchema = z.object({
   MOBILE_DEEP_LINK: z.string().default('cs2skinflip://auth/callback'),
   DEBUG_SECRET: z.string().optional(),
   FCM_SERVICE_ACCOUNT_PATH: z.string().optional(),
+  GOOGLE_PLAY_SERVICE_ACCOUNT_PATH: z.string().optional(),
+  GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.burixer85.cs2skinflip'),
+  PREMIUM_PRODUCT_ID: z.string().default('premium_unlimited_alerts'),
 })
 
 export type Env = z.infer<typeof envSchema>
