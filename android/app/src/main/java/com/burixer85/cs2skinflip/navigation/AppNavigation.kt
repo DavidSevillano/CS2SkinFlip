@@ -1,5 +1,6 @@
 package com.burixer85.cs2skinflip.navigation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -77,50 +78,45 @@ fun AppNavigation(
             onNavigatedToSkin()
         }
     }
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
-
-    val showBottomBar = currentRoute in bottomNavItems.map { it.route }
-
     Column(Modifier.fillMaxSize()) {
         OfflineBanner(isOnline = isOnline)
-        Scaffold(
-            bottomBar = {
-                if (showBottomBar) {
-                    CS2BottomBar(navController = navController)
-                }
-            }
-        ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = Screen.Home.route,
-                modifier = Modifier.padding(innerPadding)
-            ) {
-                composable(Screen.Home.route) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Home.route,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            composable(Screen.Home.route) {
+                TopLevelScreen(navController) {
                     HomeScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
                         }
                     )
                 }
+            }
 
-                composable(Screen.Search.route) {
+            composable(Screen.Search.route) {
+                TopLevelScreen(navController) {
                     SearchScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
                         }
                     )
                 }
+            }
 
-                composable(Screen.Alerts.route) {
+            composable(Screen.Alerts.route) {
+                TopLevelScreen(navController) {
                     AlertsScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
                         }
                     )
                 }
+            }
 
-                composable(Screen.Settings.route) {
+            composable(Screen.Settings.route) {
+                TopLevelScreen(navController) {
                     SettingsScreen(
                         onWatchlistClick = {
                             navController.navigate(Screen.Watchlist.route)
@@ -130,36 +126,47 @@ fun AppNavigation(
                         },
                     )
                 }
-
-                composable(Screen.Watchlist.route) {
-                    WatchlistScreen(
-                        onSkinClick = { skinId ->
-                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                        },
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-
-                composable(Screen.Portfolio.route) {
-                    PortfolioScreen(
-                        onSkinClick = { skinId ->
-                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                        },
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-
-                composable(
-                    route = Screen.SkinDetail.route,
-                    arguments = listOf(navArgument("skinId") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
-                    SkinDetailScreen(
-                        skinId = skinId,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
             }
+
+            composable(Screen.Watchlist.route) {
+                WatchlistScreen(
+                    onSkinClick = { skinId ->
+                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                    },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Portfolio.route) {
+                PortfolioScreen(
+                    onSkinClick = { skinId ->
+                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                    },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                route = Screen.SkinDetail.route,
+                arguments = listOf(navArgument("skinId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
+                SkinDetailScreen(
+                    skinId = skinId,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopLevelScreen(navController: NavHostController, content: @Composable () -> Unit) {
+    Scaffold(
+        bottomBar = { CS2BottomBar(navController = navController) }
+    ) { innerPadding ->
+        Box(Modifier.fillMaxSize().padding(innerPadding)) {
+            content()
         }
     }
 }
