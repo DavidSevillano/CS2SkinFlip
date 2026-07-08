@@ -31,6 +31,13 @@ class AuthRepository @Inject constructor(
         premiumStatusRepository.reset()
     }
 
+    /** Permanently deletes the caller's account and all associated data on the backend. */
+    suspend fun deleteAccount() {
+        backendApi.deleteAccount()
+        tokenDataStore.clearToken()
+        premiumStatusRepository.reset()
+    }
+
     /** Register or refresh the FCM token on the backend. No-op if not logged in. */
     suspend fun updateFcmToken(token: String) {
         runCatching { backendApi.updateFcmToken(FcmTokenRequest(token)) }

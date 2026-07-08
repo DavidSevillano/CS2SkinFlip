@@ -68,6 +68,9 @@ interface CS2BackendApiService {
     @PUT("auth/me/fcm-token")
     suspend fun updateFcmToken(@Body body: FcmTokenRequest)
 
+    @DELETE("auth/me")
+    suspend fun deleteAccount()
+
     @POST("billing/verify-purchase")
     suspend fun verifyPurchase(@Body body: VerifyPurchaseRequest): VerifyPurchaseResponseDto
 
