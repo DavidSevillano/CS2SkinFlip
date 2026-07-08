@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PrivacyTip
@@ -92,10 +93,12 @@ fun SettingsScreen(
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val user by viewModel.user.collectAsState()
     val marketplace by viewModel.marketplace.collectAsState()
+    val deleteAccountError by viewModel.deleteAccountError.collectAsState()
 
     var showMarketplaceSheet by remember { mutableStateOf(false) }
     var showUpgradeDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
+    var showDeleteAccountDialog by remember { mutableStateOf(false) }
 
     fun signInWithSteam() {
         runCatching {
@@ -161,6 +164,15 @@ fun SettingsScreen(
                 label = "Sign out",
                 subtitle = null,
                 onClick = { showSignOutDialog = true },
+                showChevron = false,
+            )
+            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+            SettingsItem(
+                icon = Icons.Default.Delete,
+                iconTint = AccentRed,
+                label = "Delete account",
+                subtitle = null,
+                onClick = { showDeleteAccountDialog = true },
                 showChevron = false,
             )
         } else {
@@ -263,6 +275,29 @@ fun SettingsScreen(
         )
     }
 
+    if (showDeleteAccountDialog) {
+        DeleteAccountDialog(
+            onConfirm = {
+                viewModel.deleteAccount()
+                showDeleteAccountDialog = false
+            },
+            onDismiss = { showDeleteAccountDialog = false },
+        )
+    }
+
+    if (deleteAccountError != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::clearDeleteAccountError,
+            containerColor = Surface,
+            title = { Text("Something went wrong", fontWeight = FontWeight.Bold, color = TextPrimary) },
+            text = { Text(deleteAccountError!!, color = TextSecondary, fontSize = 14.sp) },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearDeleteAccountError) {
+                    Text("OK", color = AccentOrange)
+                }
+            },
+        )
+    }
 }
 
 // ─── Account info row (inside Account section) ───────────────────────────────
@@ -525,6 +560,35 @@ private fun SignOutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 shape = RoundedCornerShape(10.dp),
             ) {
                 Text("Sign out", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+    )
+}
+
+@Composable
+private fun DeleteAccountDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        title = { Text("Delete account?", fontWeight = FontWeight.Bold, color = TextPrimary) },
+        text = {
+            Text(
+                "This permanently deletes your account, watchlist, alerts, and portfolio. This can't be undone.",
+                color = TextSecondary, fontSize = 14.sp,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text("Delete", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {

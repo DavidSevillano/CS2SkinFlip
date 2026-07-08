@@ -98,6 +98,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return reply.clearCookie('token', { path: '/' }).send({ success: true })
   })
 
+  /** Permanently deletes the caller's account and all associated data (cascades via schema). */
+  app.delete('/auth/me', { onRequest: [authenticate] }, async (request, reply) => {
+    const { userId } = request.user
+    await prisma.user.delete({ where: { id: userId } })
+    return reply.clearCookie('token', { path: '/' }).send({ success: true })
+  })
+
   app.get('/auth/me', { onRequest: [authenticate] }, async (request, reply) => {
     const { userId } = request.user
     const user = await prisma.user.findUnique({ where: { id: userId } })

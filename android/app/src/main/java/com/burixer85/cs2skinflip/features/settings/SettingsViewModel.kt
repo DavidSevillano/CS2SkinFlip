@@ -69,4 +69,19 @@ class SettingsViewModel @Inject constructor(
             _user.value = null
         }
     }
+
+    private val _deleteAccountError = MutableStateFlow<String?>(null)
+    val deleteAccountError: StateFlow<String?> = _deleteAccountError
+
+    fun deleteAccount() {
+        viewModelScope.launch {
+            runCatching { authRepository.deleteAccount() }
+                .onSuccess { _user.value = null }
+                .onFailure { _deleteAccountError.value = "Couldn't delete your account. Please try again." }
+        }
+    }
+
+    fun clearDeleteAccountError() {
+        _deleteAccountError.value = null
+    }
 }
