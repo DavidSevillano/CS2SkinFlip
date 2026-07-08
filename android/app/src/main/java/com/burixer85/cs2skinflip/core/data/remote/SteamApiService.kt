@@ -1,7 +1,9 @@
 package com.burixer85.cs2skinflip.core.data.remote
 
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 interface SteamApiService {
 
@@ -12,14 +14,18 @@ interface SteamApiService {
         @Query("steamids") steamId: String
     ): PlayerSummariesResponse
 
-    // Inventario CS2 (appid 730)
-    @GET("IEconService/GetInventoryItemsWithDescriptions/v1/")
-    suspend fun getInventory(
-        @Query("key") apiKey: String,
-        @Query("steamid") steamId: String,
-        @Query("appid") appId: Int = 730,
-        @Query("contextid") contextId: Int = 2,
-        @Query("get_descriptions") getDescriptions: Boolean = true
+    /**
+     * Public inventory endpoint (no API key, works from any IP) — fetched directly from
+     * the device rather than the backend so Steam's per-IP rate limiting on this
+     * undocumented endpoint can't be triggered by unrelated traffic sharing our
+     * server's outbound IP. count is capped at 1000 — Steam returns 400 above that.
+     */
+    @GET
+    @Headers("User-Agent: Mozilla/5.0")
+    suspend fun getPublicInventory(
+        @Url url: String,
+        @Query("l") language: String = "english",
+        @Query("count") count: Int = 1000,
     ): InventoryResponse
 }
 
@@ -34,6 +40,7 @@ data class PlayerDto(
 )
 
 data class InventoryResponse(
+    val success: Int?,
     val assets: List<AssetDto>?,
     val descriptions: List<DescriptionDto>?,
     val total_inventory_count: Int?

@@ -1,5 +1,6 @@
 package com.burixer85.cs2skinflip.core.data.remote
 
+import com.burixer85.cs2skinflip.core.domain.model.PortfolioItem
 import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
@@ -64,6 +65,18 @@ interface CS2BackendApiService {
 
     @GET("watchlist")
     suspend fun getWatchlist(): List<WatchlistItemDto>
+
+    @GET("portfolio")
+    suspend fun getPortfolio(): PortfolioResponseDto
+
+    @POST("portfolio/sync")
+    suspend fun syncPortfolio(@Body body: SyncPortfolioRequest): PortfolioSyncResponseDto
+
+    @POST("portfolio")
+    suspend fun upsertPortfolioItem(@Body body: UpsertPortfolioItemRequest): PortfolioItemDto
+
+    @DELETE("portfolio/{id}")
+    suspend fun deletePortfolioItem(@Path("id") id: String)
 
     @PUT("auth/me/fcm-token")
     suspend fun updateFcmToken(@Body body: FcmTokenRequest)
@@ -177,6 +190,58 @@ data class WatchlistItemDto(
     val alertEnabled: Boolean
 )
 
+data class PortfolioResponseDto(
+    val items: List<PortfolioItemDto>,
+    val summary: PortfolioSummaryDto,
+)
+
+data class PortfolioItemDto(
+    val id: String,
+    val skinId: String,
+    val assetId: String,
+    val acquirePrice: Double,
+    val acquiredAt: String,
+    val float: Double?,
+    val skin: PortfolioSkinDto?,
+    val currentPrice: Double?,
+    val profitLoss: Double?,
+    val profitLossPct: Double?,
+)
+
+data class PortfolioSkinDto(
+    val name: String,
+    val iconUrl: String,
+    val rarity: String,
+)
+
+data class PortfolioSummaryDto(
+    val totalValue: Double,
+    val totalInvested: Double,
+    val totalProfitLoss: Double,
+    val totalProfitLossPct: Double,
+    val itemCount: Int,
+)
+
+data class PortfolioSyncResponseDto(
+    val synced: Int,
+    val total: Int,
+)
+
+data class SyncPortfolioRequest(
+    val items: List<SyncItemRequest>,
+)
+
+data class SyncItemRequest(
+    val assetId: String,
+    val marketHashName: String,
+)
+
+data class UpsertPortfolioItemRequest(
+    val skinId: String,
+    val assetId: String,
+    val acquirePrice: Double,
+)
+
 data class CreateAlertRequest(
     val skinId: String,
     val type: String,
@@ -258,6 +323,19 @@ fun PriceHistoryDto.toDomain(): PricePoint {
     val ts = runCatching { isoFormat.parse(timestamp)?.time }.getOrNull() ?: System.currentTimeMillis()
     return PricePoint(timestamp = ts, price = price)
 }
+
+fun PortfolioItemDto.toDomain(): PortfolioItem =
+    PortfolioItem(
+        id = id,
+        skinId = skinId,
+        assetId = assetId,
+        acquirePrice = acquirePrice,
+        skinName = skin?.name ?: skinId,
+        skinImageUrl = skin?.iconUrl ?: "",
+        currentPrice = currentPrice ?: 0.0,
+        profitLoss = profitLoss ?: 0.0,
+        profitLossPct = profitLossPct ?: 0.0,
+    )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { env } from '../config/env'
 import { redis, CACHE_TTL } from '../redis/client'
-import type { SteamPlayer, InventoryAsset, InventoryDescription, InventoryItem } from '../types'
+import type { SteamPlayer } from '../types'
 
 const STEAM_API = 'https://api.steampowered.com'
 const STEAM_MARKET = 'https://steamcommunity.com/market'
@@ -34,46 +34,6 @@ export class SteamService {
       await redis.set(cacheKey, player, { ex: CACHE_TTL.PLAYER_SUMMARY })
     }
     return player ?? null
-  }
-
-  async getInventory(steamId: string): Promise<InventoryItem[]> {
-    const cacheKey = `steam:inventory:${steamId}`
-    const cached = await redis.get<InventoryItem[]>(cacheKey)
-    if (cached) return cached
-
-    const { data } = await axios.get(`${STEAM_API}/IEconService/GetInventoryItemsWithDescriptions/v1/`, {
-      params: {
-        key: this.apiKey,
-        steamid: steamId,
-        appid: 730,
-        contextid: 2,
-        get_descriptions: true,
-      },
-    })
-
-    const assets: InventoryAsset[] = data.assets ?? []
-    const descriptions: InventoryDescription[] = data.descriptions ?? []
-
-    const descMap = new Map(descriptions.map((d) => [`${d.classid}_${d.instanceid}`, d]))
-
-    const items: InventoryItem[] = assets
-      .map((asset) => {
-        const desc = descMap.get(`${asset.classid}_${asset.instanceid}`)
-        return {
-          assetId: asset.assetid,
-          marketHashName: desc?.market_hash_name ?? '',
-          name: desc?.name ?? '',
-          iconUrl: desc
-            ? `https://steamcommunity-a.akamaihd.net/economy/image/${desc.icon_url}`
-            : '',
-          amount: parseInt(asset.amount, 10),
-          tags: desc?.tags ?? [],
-        }
-      })
-      .filter((item) => item.marketHashName)
-
-    await redis.set(cacheKey, items, { ex: CACHE_TTL.INVENTORY })
-    return items
   }
 
   async getMarketPrice(
