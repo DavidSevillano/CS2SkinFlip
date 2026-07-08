@@ -1,7 +1,10 @@
 package com.burixer85.cs2skinflip.navigation
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
@@ -31,6 +34,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.burixer85.cs2skinflip.core.network.NetworkStatusViewModel
+import com.burixer85.cs2skinflip.core.ui.components.OfflineBanner
 import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.Surface
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
@@ -59,8 +64,10 @@ private val bottomNavItems = listOf(
 fun AppNavigation(
     initialSkinId: String? = null,
     onNavigatedToSkin: () -> Unit = {},
+    networkStatusViewModel: NetworkStatusViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
+    val isOnline by networkStatusViewModel.isOnline.collectAsState()
 
     // Handle notification tap: navigate to skin detail once navController is ready
     LaunchedEffect(initialSkinId) {
@@ -74,68 +81,71 @@ fun AppNavigation(
 
     val showBottomBar = currentRoute in bottomNavItems.map { it.route }
 
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) {
-                CS2BottomBar(navController = navController)
+    Column(Modifier.fillMaxSize()) {
+        OfflineBanner(isOnline = isOnline)
+        Scaffold(
+            bottomBar = {
+                if (showBottomBar) {
+                    CS2BottomBar(navController = navController)
+                }
             }
-        }
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
-            modifier = Modifier.padding(innerPadding)
-        ) {
-            composable(Screen.Home.route) {
-                HomeScreen(
-                    onSkinClick = { skinId ->
-                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    }
-                )
-            }
+        ) { innerPadding ->
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Home.route,
+                modifier = Modifier.padding(innerPadding)
+            ) {
+                composable(Screen.Home.route) {
+                    HomeScreen(
+                        onSkinClick = { skinId ->
+                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                        }
+                    )
+                }
 
-            composable(Screen.Search.route) {
-                SearchScreen(
-                    onSkinClick = { skinId ->
-                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    }
-                )
-            }
+                composable(Screen.Search.route) {
+                    SearchScreen(
+                        onSkinClick = { skinId ->
+                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                        }
+                    )
+                }
 
-            composable(Screen.Alerts.route) {
-                AlertsScreen(
-                    onSkinClick = { skinId ->
-                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    }
-                )
-            }
+                composable(Screen.Alerts.route) {
+                    AlertsScreen(
+                        onSkinClick = { skinId ->
+                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                        }
+                    )
+                }
 
-            composable(Screen.Settings.route) {
-                SettingsScreen(
-                    onWatchlistClick = {
-                        navController.navigate(Screen.Watchlist.route)
-                    }
-                )
-            }
+                composable(Screen.Settings.route) {
+                    SettingsScreen(
+                        onWatchlistClick = {
+                            navController.navigate(Screen.Watchlist.route)
+                        }
+                    )
+                }
 
-            composable(Screen.Watchlist.route) {
-                WatchlistScreen(
-                    onSkinClick = { skinId ->
-                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    },
-                    onBack = { navController.popBackStack() }
-                )
-            }
+                composable(Screen.Watchlist.route) {
+                    WatchlistScreen(
+                        onSkinClick = { skinId ->
+                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
+                }
 
-            composable(
-                route = Screen.SkinDetail.route,
-                arguments = listOf(navArgument("skinId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
-                SkinDetailScreen(
-                    skinId = skinId,
-                    onBack = { navController.popBackStack() }
-                )
+                composable(
+                    route = Screen.SkinDetail.route,
+                    arguments = listOf(navArgument("skinId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
+                    SkinDetailScreen(
+                        skinId = skinId,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
             }
         }
     }
