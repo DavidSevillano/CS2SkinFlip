@@ -24,9 +24,7 @@ class SkinRepository @Inject constructor(
 ) {
 
     fun getTrendingSkins(): Flow<List<Skin>> = flow {
-        val skins = runCatching { backendApi.getTopMovers().map { it.toDomain() } }
-            .getOrElse { MockData.trendingSkins }
-        emit(skins)
+        emit(backendApi.getTopMovers().map { it.toDomain() })
     }
 
     fun searchSkins(
@@ -83,23 +81,15 @@ class SkinRepository @Inject constructor(
         return Triple(skins, hasMore, total)
     }
 
-    suspend fun getSkinById(id: String): Skin? {
-        return runCatching {
-            val skin = backendApi.getSkin(id)
-            val history = getPriceHistory(id, range = "24h")
-            skin.toDomain(priceHistory = history)
-        }.getOrElse {
-            MockData.getSkinById(id)
-        }
+    suspend fun getSkinById(id: String): Skin {
+        val skin = backendApi.getSkin(id)
+        val history = getPriceHistory(id, range = "24h")
+        return skin.toDomain(priceHistory = history)
     }
 
     suspend fun getPriceHistory(skinId: String, range: String): List<PricePoint> = runCatching {
         backendApi.getPriceHistory(skinId, range).map { it.toDomain() }
     }.getOrDefault(emptyList())
 
-    suspend fun getAllWeapons(): List<String> = runCatching {
-        backendApi.getWeapons()
-    }.getOrElse {
-        MockData.skins.map { it.weapon }.distinct().sorted()
-    }
+    suspend fun getAllWeapons(): List<String> = backendApi.getWeapons()
 }
