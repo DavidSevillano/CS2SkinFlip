@@ -46,9 +46,10 @@ class BillingRepositoryTest {
         val activity = mock<Activity>()
         val repository = BillingRepository(billingManager, backendApi, mock())
 
-        repository.purchasePremium(activity)
+        val result = repository.purchasePremium(activity)
 
         verify(billingManager).launchPurchase(activity, "user-42")
+        assertTrue(result)
     }
 
     @Test
@@ -58,9 +59,10 @@ class BillingRepositoryTest {
         whenever(backendApi.getMe()).thenThrow(RuntimeException("network error"))
         val repository = BillingRepository(billingManager, backendApi, mock())
 
-        repository.purchasePremium(mock())
+        val result = repository.purchasePremium(mock())
 
         verify(billingManager, never()).launchPurchase(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        assertFalse(result)
     }
 
     @Test

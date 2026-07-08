@@ -94,6 +94,7 @@ fun SettingsScreen(
     val user by viewModel.user.collectAsState()
     val marketplace by viewModel.marketplace.collectAsState()
     val deleteAccountError by viewModel.deleteAccountError.collectAsState()
+    val purchaseError by viewModel.purchaseError.collectAsState()
 
     var showMarketplaceSheet by remember { mutableStateOf(false) }
     var showUpgradeDialog by remember { mutableStateOf(false) }
@@ -293,6 +294,20 @@ fun SettingsScreen(
             text = { Text(deleteAccountError!!, color = TextSecondary, fontSize = 14.sp) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearDeleteAccountError) {
+                    Text("OK", color = AccentOrange)
+                }
+            },
+        )
+    }
+
+    if (purchaseError != null) {
+        AlertDialog(
+            onDismissRequest = viewModel::clearPurchaseError,
+            containerColor = Surface,
+            title = { Text("Something went wrong", fontWeight = FontWeight.Bold, color = TextPrimary) },
+            text = { Text(purchaseError!!, color = TextSecondary, fontSize = 14.sp) },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearPurchaseError) {
                     Text("OK", color = AccentOrange)
                 }
             },

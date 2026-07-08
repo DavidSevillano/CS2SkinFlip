@@ -39,7 +39,7 @@ fun OfflineBanner(isOnline: Boolean, modifier: Modifier = Modifier) {
                 tint = TextPrimary,
             )
             Text(
-                text = "Sin conexión a internet",
+                text = "No internet connection",
                 color = TextPrimary,
                 modifier = Modifier.padding(start = 8.dp),
             )
