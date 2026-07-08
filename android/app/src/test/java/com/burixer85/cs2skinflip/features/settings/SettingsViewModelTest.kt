@@ -108,10 +108,26 @@ class SettingsViewModelTest {
     fun `purchasePremium delegates to the billing repository`() = runTest {
         val deps = viewModel()
         val activity = mock<Activity>()
+        whenever(deps.billingRepository.purchasePremium(activity)).thenReturn(true)
 
         deps.viewModel.purchasePremium(activity)
 
         verify(deps.billingRepository).purchasePremium(activity)
+        assertNull(deps.viewModel.purchaseError.value)
+    }
+
+    @Test
+    fun `purchasePremium surfaces an error when billing couldn't be launched`() = runTest {
+        val deps = viewModel()
+        val activity = mock<Activity>()
+        whenever(deps.billingRepository.purchasePremium(activity)).thenReturn(false)
+
+        deps.viewModel.purchasePremium(activity)
+
+        assertEquals(
+            "Couldn't start the purchase. Check your connection and try again.",
+            deps.viewModel.purchaseError.value,
+        )
     }
 
     @Test

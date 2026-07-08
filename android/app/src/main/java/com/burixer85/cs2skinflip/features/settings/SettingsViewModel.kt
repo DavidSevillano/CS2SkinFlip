@@ -59,8 +59,20 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferences.setMarketplace(m) }
     }
 
+    private val _purchaseError = MutableStateFlow<String?>(null)
+    val purchaseError: StateFlow<String?> = _purchaseError
+
     fun purchasePremium(activity: Activity) {
-        viewModelScope.launch { billingRepository.purchasePremium(activity) }
+        viewModelScope.launch {
+            val launched = billingRepository.purchasePremium(activity)
+            if (!launched) {
+                _purchaseError.value = "Couldn't start the purchase. Check your connection and try again."
+            }
+        }
+    }
+
+    fun clearPurchaseError() {
+        _purchaseError.value = null
     }
 
     fun signOut() {
