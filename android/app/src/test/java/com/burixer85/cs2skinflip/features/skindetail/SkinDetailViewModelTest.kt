@@ -20,6 +20,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import retrofit2.HttpException
 import retrofit2.Response
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SkinDetailViewModelTest {
@@ -66,9 +67,9 @@ class SkinDetailViewModelTest {
     }
 
     @Test
-    fun `loadSkin keeps a generic message for non-404 failures`() = runTest(dispatcher) {
+    fun `loadSkin shows a no-connection message for IOExceptions`() = runTest(dispatcher) {
         val skinRepository = mock<SkinRepository>()
-        whenever(skinRepository.getSkinById("ak-47-redline")).thenThrow(RuntimeException("no network"))
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenAnswer { throw IOException("Unable to resolve host") }
         val watchlistRepository = mock<WatchlistRepository>()
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
@@ -76,6 +77,26 @@ class SkinDetailViewModelTest {
         val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(SkinDetailUiState.Error("no network"), viewModel.uiState.value)
+        assertEquals(
+            SkinDetailUiState.Error("No internet connection. Check your connection and try again."),
+            viewModel.uiState.value,
+        )
+    }
+
+    @Test
+    fun `loadSkin shows a generic message for other failures`() = runTest(dispatcher) {
+        val skinRepository = mock<SkinRepository>()
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenThrow(RuntimeException("Internal Server Error"))
+        val watchlistRepository = mock<WatchlistRepository>()
+        val analytics = mock<AnalyticsService>()
+        val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
+
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            SkinDetailUiState.Error("Something went wrong. Please try again."),
+            viewModel.uiState.value,
+        )
     }
 }

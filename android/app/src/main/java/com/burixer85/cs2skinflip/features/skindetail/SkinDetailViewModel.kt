@@ -8,6 +8,7 @@ import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
+import com.burixer85.cs2skinflip.core.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,7 +61,7 @@ class SkinDetailViewModel @Inject constructor(
                     val message = if (e is HttpException && e.code() == 404) {
                         "Skin not found"
                     } else {
-                        e.message ?: "Failed to load skin"
+                        e.toUserMessage()
                     }
                     _uiState.value = SkinDetailUiState.Error(message)
                 }

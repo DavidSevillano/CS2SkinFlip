@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
+import com.burixer85.cs2skinflip.core.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,7 +34,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
             skinRepository.getTrendingSkins()
-                .catch { e -> _uiState.value = HomeUiState.Error(e.message ?: "Unknown error") }
+                .catch { e -> _uiState.value = HomeUiState.Error(e.toUserMessage()) }
                 .collect { skins -> _uiState.value = HomeUiState.Success(skins) }
         }
     }
