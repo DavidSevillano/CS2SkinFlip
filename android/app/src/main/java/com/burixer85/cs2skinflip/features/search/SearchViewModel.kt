@@ -6,6 +6,7 @@ import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
+import com.burixer85.cs2skinflip.core.util.toUserMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -186,7 +187,7 @@ class SearchViewModel @Inject constructor(
                     totalCount = total,
                 )
             }.onFailure { e ->
-                _uiState.value = SearchUiState.Error(e.message ?: "Search failed")
+                _uiState.value = SearchUiState.Error(e.toUserMessage())
             }
         }
     }

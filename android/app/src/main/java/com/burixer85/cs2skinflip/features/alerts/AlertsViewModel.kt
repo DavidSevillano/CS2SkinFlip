@@ -11,6 +11,7 @@ import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
 import com.burixer85.cs2skinflip.core.domain.model.Skin
+import com.burixer85.cs2skinflip.core.util.toUserMessage
 import com.burixer85.cs2skinflip.features.search.SearchFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -117,7 +118,7 @@ class AlertsViewModel @Inject constructor(
                     _uiState.value = if (e.isUnauthorized()) {
                         AlertsUiState.NotLoggedIn
                     } else {
-                        AlertsUiState.Error(e.message ?: "Failed to load alerts")
+                        AlertsUiState.Error(e.toUserMessage())
                     }
                 }
         }
@@ -183,7 +184,7 @@ class AlertsViewModel @Inject constructor(
                     _uiState.value = AlertsUiState.NotLoggedIn
                     _editState.value = EditAlertState()
                 } else {
-                    _editState.update { it.copy(submitting = false, errorMessage = e.message ?: "Could not save changes") }
+                    _editState.update { it.copy(submitting = false, errorMessage = e.toUserMessage()) }
                 }
                 false
             },
@@ -270,7 +271,7 @@ class AlertsViewModel @Inject constructor(
                     resetCreateState()
                 } else {
                     _createState.update {
-                        it.copy(submitting = false, errorMessage = e.message ?: "Could not create alert")
+                        it.copy(submitting = false, errorMessage = e.toUserMessage())
                     }
                 }
                 false
