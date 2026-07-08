@@ -9,6 +9,5 @@ export const redis = new Redis({
 export const CACHE_TTL = {
   SKIN_PRICES: 60 * 5,         // 5 min
   TOP_MOVERS: 60 * 15,         // 15 min
-  INVENTORY: 60 * 10,          // 10 min
   PLAYER_SUMMARY: 60 * 60,     // 1 hour
 } as const

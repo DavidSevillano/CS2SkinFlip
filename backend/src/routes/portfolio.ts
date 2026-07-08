@@ -1,10 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
-import { SteamService } from '../services/steam'
 import { authenticate } from '../middleware/authenticate'
-
-const steam = new SteamService()
 
 const addItemSchema = z.object({
   skinId: z.string(),
@@ -12,6 +9,15 @@ const addItemSchema = z.object({
   acquirePrice: z.number().positive(),
   acquiredAt: z.string().datetime().optional(),
   float: z.number().min(0).max(1).optional(),
+})
+
+const syncRequestSchema = z.object({
+  items: z.array(
+    z.object({
+      assetId: z.string(),
+      marketHashName: z.string(),
+    }),
+  ),
 })
 
 export const portfolioRoutes: FastifyPluginAsync = async (app) => {
@@ -63,24 +69,27 @@ export const portfolioRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
-  // Sync portfolio from live Steam inventory
+  // Sync portfolio from Steam inventory items the client already fetched
+  // (the client fetches from Steam directly — see PortfolioRepository.kt on Android —
+  // so this route never talks to Steam and can't be affected by Steam rate-limiting
+  // our server's shared outbound IP).
   app.post('/portfolio/sync', { onRequest: [authenticate] }, async (request, reply) => {
-    const { userId, steamId } = request.user
+    const { userId } = request.user
 
-    if (!steamId) {
-      return reply.status(400).send({ error: 'Steam account required to sync inventory' })
-    }
+    const body = syncRequestSchema.safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: 'Invalid body', details: body.error.flatten() })
 
-    const inventoryItems = await steam.getInventory(steamId)
+    const { items } = body.data
 
     // Upsert only items that are already in our skin catalogue
     const knownSkins = await prisma.skin.findMany({
-      where: { marketHashName: { in: inventoryItems.map((i) => i.marketHashName) } },
+      where: { marketHashName: { in: items.map((i) => i.marketHashName) } },
+      include: { price: true },
     })
     const skinByName = new Map(knownSkins.map((s) => [s.marketHashName, s]))
 
     let synced = 0
-    for (const item of inventoryItems) {
+    for (const item of items) {
       const skin = skinByName.get(item.marketHashName)
       if (!skin) continue
 
@@ -91,14 +100,17 @@ export const portfolioRoutes: FastifyPluginAsync = async (app) => {
           userId,
           skinId: skin.id,
           assetId: item.assetId,
-          acquirePrice: 0, // unknown — user can update manually
+          // Real purchase price is unknown — seed with the current market price so
+          // P&L starts at 0 and reflects movement from the sync point forward,
+          // rather than showing a meaningless -100% loss. User can correct it later.
+          acquirePrice: skin.price?.lowestPrice ?? 0,
           acquiredAt: new Date(),
         },
       })
       synced++
     }
 
-    return { synced, total: inventoryItems.length }
+    return { synced, total: items.length }
   })
 
   app.post('/portfolio', { onRequest: [authenticate] }, async (request, reply) => {

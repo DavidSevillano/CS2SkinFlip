@@ -87,6 +87,7 @@ private const val TERMS_URL = "https://davidsevillano.github.io/cs2skinflip-lega
 @Composable
 fun SettingsScreen(
     onWatchlistClick: () -> Unit,
+    onPortfolioClick: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -196,6 +197,14 @@ fun SettingsScreen(
             label = "Watchlist",
             subtitle = "Skins you're tracking",
             onClick = onWatchlistClick,
+        )
+        HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+        SettingsItem(
+            icon = Icons.Default.AttachMoney,
+            iconTint = AccentOrange,
+            label = "Portfolio",
+            subtitle = "Track what you own and your profit/loss",
+            onClick = onPortfolioClick,
         )
 
         Spacer(Modifier.height(8.dp))

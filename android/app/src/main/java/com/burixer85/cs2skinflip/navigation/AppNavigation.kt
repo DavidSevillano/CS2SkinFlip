@@ -41,6 +41,7 @@ import com.burixer85.cs2skinflip.core.ui.theme.Surface
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 import com.burixer85.cs2skinflip.features.alerts.AlertsScreen
 import com.burixer85.cs2skinflip.features.home.HomeScreen
+import com.burixer85.cs2skinflip.features.portfolio.PortfolioScreen
 import com.burixer85.cs2skinflip.features.search.SearchScreen
 import com.burixer85.cs2skinflip.features.settings.SettingsScreen
 import com.burixer85.cs2skinflip.features.skindetail.SkinDetailScreen
@@ -123,12 +124,24 @@ fun AppNavigation(
                     SettingsScreen(
                         onWatchlistClick = {
                             navController.navigate(Screen.Watchlist.route)
-                        }
+                        },
+                        onPortfolioClick = {
+                            navController.navigate(Screen.Portfolio.route)
+                        },
                     )
                 }
 
                 composable(Screen.Watchlist.route) {
                     WatchlistScreen(
+                        onSkinClick = { skinId ->
+                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                        },
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable(Screen.Portfolio.route) {
+                    PortfolioScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
                         },

@@ -18,35 +18,6 @@ export interface SteamPlayer {
   profileurl: string
 }
 
-export interface InventoryAsset {
-  assetid: string
-  classid: string
-  instanceid: string
-  amount: string
-}
-
-export interface InventoryDescription {
-  classid: string
-  instanceid: string
-  market_hash_name: string
-  name: string
-  icon_url: string
-  tags: Array<{
-    category: string
-    internal_name: string
-    localized_tag_name: string
-  }>
-}
-
-export interface InventoryItem {
-  assetId: string
-  marketHashName: string
-  name: string
-  iconUrl: string
-  amount: number
-  tags: InventoryDescription['tags']
-}
-
 export interface AggregatedPrices {
   skinId: string
   marketHashName: string
