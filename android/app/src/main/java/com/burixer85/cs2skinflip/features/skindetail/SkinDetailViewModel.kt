@@ -12,6 +12,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 import javax.inject.Inject
 
 sealed class SkinDetailUiState {
@@ -56,7 +57,12 @@ class SkinDetailViewModel @Inject constructor(
                     analytics.logSkinViewed(skin.id, skin.name)
                 }
                 .onFailure { e ->
-                    _uiState.value = SkinDetailUiState.Error(e.message ?: "Failed to load skin")
+                    val message = if (e is HttpException && e.code() == 404) {
+                        "Skin not found"
+                    } else {
+                        e.message ?: "Failed to load skin"
+                    }
+                    _uiState.value = SkinDetailUiState.Error(message)
                 }
         }
     }
