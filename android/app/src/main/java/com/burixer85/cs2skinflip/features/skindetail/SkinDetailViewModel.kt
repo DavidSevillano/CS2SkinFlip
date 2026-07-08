@@ -48,16 +48,20 @@ class SkinDetailViewModel @Inject constructor(
 
     private fun loadSkin() {
         viewModelScope.launch {
-            val skin = skinRepository.getSkinById(skinId)
-            if (skin == null) {
-                _uiState.value = SkinDetailUiState.Error("Skin not found")
-            } else {
-                val inWatchlist = watchlistRepository.isInWatchlist(skinId)
-                _uiState.value = SkinDetailUiState.Success(skin, inWatchlist)
-                analytics.logSkinViewed(skin.id, skin.name)
-            }
+            _uiState.value = SkinDetailUiState.Loading
+            runCatching { skinRepository.getSkinById(skinId) }
+                .onSuccess { skin ->
+                    val inWatchlist = watchlistRepository.isInWatchlist(skinId)
+                    _uiState.value = SkinDetailUiState.Success(skin, inWatchlist)
+                    analytics.logSkinViewed(skin.id, skin.name)
+                }
+                .onFailure { e ->
+                    _uiState.value = SkinDetailUiState.Error(e.message ?: "Failed to load skin")
+                }
         }
     }
+
+    fun retry() = loadSkin()
 
     fun onRangeSelected(range: PriceRange) {
         if (range == _selectedRange.value) return

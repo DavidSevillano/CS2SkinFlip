@@ -156,7 +156,7 @@ fun SkinDetailScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
                 )
-                ErrorState(message = state.message, modifier = Modifier.fillMaxSize())
+                ErrorState(message = state.message, onRetry = viewModel::retry, modifier = Modifier.fillMaxSize())
             }
             is SkinDetailUiState.Success -> {
                 val selectedRange by viewModel.selectedRange.collectAsState()
