@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -136,7 +137,8 @@ fun SkinDetailScreen(
                             Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
+                    windowInsets = WindowInsets(0.dp)
                 )
                 Column(Modifier.padding(16.dp)) {
                     SkeletonBox(Modifier.fillMaxWidth().height(200.dp))
@@ -154,7 +156,8 @@ fun SkinDetailScreen(
                             Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
+                    windowInsets = WindowInsets(0.dp)
                 )
                 ErrorState(message = state.message, onRetry = viewModel::retry, modifier = Modifier.fillMaxSize())
             }
@@ -209,7 +212,8 @@ private fun SkinDetailContent(
                     )
                 }
             },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface)
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
+            windowInsets = WindowInsets(0.dp)
         )
 
         // Skin image hero
