@@ -81,7 +81,9 @@ class SearchViewModel @Inject constructor(
     private var suggestJob: Job? = null
 
     init {
-        viewModelScope.launch { _availableWeapons.value = skinRepository.getAllWeapons() }
+        viewModelScope.launch {
+            _availableWeapons.value = runCatching { skinRepository.getAllWeapons() }.getOrDefault(emptyList())
+        }
         triggerSearch(resetPage = true)
     }
 
