@@ -13,18 +13,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +52,7 @@ import com.burixer85.cs2skinflip.core.ui.theme.Surface
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 import com.burixer85.cs2skinflip.core.ads.AdsViewModel
 import com.burixer85.cs2skinflip.core.ads.BannerAdView
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,9 +61,18 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     adsViewModel: AdsViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val isRefreshing = uiState is HomeUiState.Loading
+    val direction by viewModel.direction.collectAsState()
     val isPremium by adsViewModel.isPremium.collectAsState()
+
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val coroutineScope = rememberCoroutineScope()
+
+    // Swipe -> tell the ViewModel which direction is now showing (idempotent if unchanged).
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            viewModel.selectDirection(pageToDirection(page))
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -63,37 +81,57 @@ fun HomeScreen(
     ) {
         HomeHeader()
 
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = viewModel::loadTrending,
+        DirectionTabRow(
+            selected = direction,
+            onSelect = { newDirection ->
+                viewModel.selectDirection(newDirection)
+                coroutineScope.launch {
+                    pagerState.animateScrollToPage(directionToPage(newDirection))
+                }
+            }
+        )
+
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier.weight(1f)
-        ) {
-            when (val state = uiState) {
-                is HomeUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
-                is HomeUiState.Error -> ErrorState(
-                    message = state.message,
-                    onRetry = viewModel::loadTrending,
-                    modifier = Modifier.fillMaxSize()
-                )
-                is HomeUiState.Success -> {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        item {
-                            TrendingHeader()
-                        }
-                        itemsIndexed(state.trendingSkins) { index, skin ->
-                            SkinCardCompact(
-                                rank = index + 1,
-                                skin = skin,
-                                onClick = { onSkinClick(skin.id) }
-                            )
-                            if (index < state.trendingSkins.lastIndex) {
-                                HorizontalDivider(
-                                    color = DividerColor,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
+        ) { page ->
+            val pageDirection = pageToDirection(page)
+            val uiState by (if (pageDirection == TopMoversDirection.FALLING) viewModel.fallingState else viewModel.risingState)
+                .collectAsState()
+            val isRefreshing = uiState is HomeUiState.Loading
+
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { if (pageDirection == direction) viewModel.loadTrending() },
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when (val state = uiState) {
+                    is HomeUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
+                    is HomeUiState.Error -> ErrorState(
+                        message = state.message,
+                        onRetry = { if (pageDirection == direction) viewModel.loadTrending() },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    is HomeUiState.Success -> {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            item {
+                                TrendingHeader(direction = pageDirection)
                             }
+                            itemsIndexed(state.trendingSkins) { index, skin ->
+                                SkinCardCompact(
+                                    rank = index + 1,
+                                    skin = skin,
+                                    onClick = { onSkinClick(skin.id) }
+                                )
+                                if (index < state.trendingSkins.lastIndex) {
+                                    HorizontalDivider(
+                                        color = DividerColor,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+                                }
+                            }
+                            item { Spacer(Modifier.height(16.dp)) }
                         }
-                        item { Spacer(Modifier.height(16.dp)) }
                     }
                 }
             }
@@ -103,6 +141,12 @@ fun HomeScreen(
         }
     }
 }
+
+private fun pageToDirection(page: Int): TopMoversDirection =
+    if (page == 1) TopMoversDirection.FALLING else TopMoversDirection.RISING
+
+private fun directionToPage(direction: TopMoversDirection): Int =
+    if (direction == TopMoversDirection.FALLING) 1 else 0
 
 @Composable
 private fun HomeHeader() {
@@ -129,7 +173,7 @@ private fun HomeHeader() {
 }
 
 @Composable
-private fun TrendingHeader() {
+private fun TrendingHeader(direction: TopMoversDirection) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -146,7 +190,7 @@ private fun TrendingHeader() {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.TrendingUp,
+                    imageVector = if (direction == TopMoversDirection.FALLING) Icons.Default.TrendingDown else Icons.Default.TrendingUp,
                     contentDescription = null,
                     tint = AccentOrange,
                     modifier = Modifier.size(16.dp)
@@ -162,6 +206,27 @@ private fun TrendingHeader() {
             text = stringResource(R.string.home_vol_by_movement),
             fontSize = 11.sp,
             color = TextSecondary
+        )
+    }
+}
+
+@Composable
+private fun DirectionTabRow(selected: TopMoversDirection, onSelect: (TopMoversDirection) -> Unit) {
+    val selectedIndex = directionToPage(selected)
+    TabRow(
+        selectedTabIndex = selectedIndex,
+        containerColor = Surface,
+        contentColor = AccentOrange
+    ) {
+        Tab(
+            selected = selectedIndex == 0,
+            onClick = { onSelect(TopMoversDirection.RISING) },
+            text = { Text(stringResource(R.string.home_tab_rising)) }
+        )
+        Tab(
+            selected = selectedIndex == 1,
+            onClick = { onSelect(TopMoversDirection.FALLING) },
+            text = { Text(stringResource(R.string.home_tab_falling)) }
         )
     }
 }
