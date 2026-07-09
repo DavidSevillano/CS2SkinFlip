@@ -70,4 +70,12 @@ class AnalyticsService @Inject constructor(
             putString(FirebaseAnalytics.Param.SEARCH_TERM, query)
         })
     }
+
+    // ── Review events ─────────────────────────────────────────────────────────
+
+    fun logReviewFlowRequested(trigger: String) {
+        analytics.logEvent("review_flow_requested", Bundle().apply {
+            putString("trigger", trigger)
+        })
+    }
 }

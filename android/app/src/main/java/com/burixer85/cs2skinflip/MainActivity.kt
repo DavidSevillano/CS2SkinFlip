@@ -15,6 +15,9 @@ import androidx.lifecycle.lifecycleScope
 import com.burixer85.cs2skinflip.core.ads.AdsManager
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
+import com.burixer85.cs2skinflip.core.preferences.UserPreferences
+import com.burixer85.cs2skinflip.core.review.ReviewFlowManager
+import com.burixer85.cs2skinflip.core.review.ReviewTrigger
 import com.burixer85.cs2skinflip.core.ui.theme.Background
 import com.burixer85.cs2skinflip.core.ui.theme.CS2SkinFlipTheme
 import com.burixer85.cs2skinflip.navigation.AppNavigation
@@ -35,6 +38,12 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var premiumStatusRepository: PremiumStatusRepository
 
+    @Inject
+    lateinit var userPreferences: UserPreferences
+
+    @Inject
+    lateinit var reviewFlowManager: ReviewFlowManager
+
     /** Skin ID coming from a push notification tap — triggers navigation in AppNavigation */
     private var notificationSkinId by mutableStateOf<String?>(null)
 
@@ -42,7 +51,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleAuthIntent(intent)
-        handleNotificationIntent(intent)
+        val openedFromAlertNotification = handleNotificationIntent(intent)
 
         adsManager.initialize(this)
         lifecycleScope.launch {
@@ -60,6 +69,15 @@ class MainActivity : ComponentActivity() {
                         onNavigatedToSkin = { notificationSkinId = null },
                     )
                 }
+            }
+        }
+
+        lifecycleScope.launch {
+            val sessionCount = userPreferences.incrementSessionCount()
+            if (openedFromAlertNotification) {
+                reviewFlowManager.maybeRequestReview(this@MainActivity, ReviewTrigger.ALERT_NOTIFICATION_OPENED)
+            } else if (sessionCount in 3..5) {
+                reviewFlowManager.maybeRequestReview(this@MainActivity, ReviewTrigger.SESSION_MILESTONE)
             }
         }
     }
@@ -81,8 +99,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handleNotificationIntent(intent: Intent) {
-        val skinId = intent.getStringExtra("skinId") ?: return
+    /** Returns true if [intent] came from an alert push notification (carries a skinId extra). */
+    private fun handleNotificationIntent(intent: Intent): Boolean {
+        val skinId = intent.getStringExtra("skinId") ?: return false
         notificationSkinId = skinId
+        return true
     }
 }

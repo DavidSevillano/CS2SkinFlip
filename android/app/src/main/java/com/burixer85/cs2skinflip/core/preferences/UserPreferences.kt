@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -54,6 +55,8 @@ class UserPreferences @Inject constructor(
     private companion object {
         val MARKETPLACE_KEY    = stringPreferencesKey("pref_marketplace")
         val NOTIFICATIONS_KEY  = booleanPreferencesKey("pref_notifications")
+        val REVIEW_REQUESTED_KEY = booleanPreferencesKey("pref_review_requested")
+        val SESSION_COUNT_KEY  = intPreferencesKey("pref_session_count")
     }
 
     val marketplace: Flow<DefaultMarketplace> =
@@ -69,5 +72,27 @@ class UserPreferences @Inject constructor(
 
     suspend fun setNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { it[NOTIFICATIONS_KEY] = enabled }
+    }
+
+    /** Whether the in-app review flow has already been attempted for this install. */
+    val reviewRequested: Flow<Boolean> =
+        dataStore.data.map { it[REVIEW_REQUESTED_KEY] == true }
+
+    suspend fun setReviewRequested(value: Boolean) {
+        dataStore.edit { it[REVIEW_REQUESTED_KEY] = value }
+    }
+
+    /** Number of times the app process has been created. Used to gate the session-milestone review prompt. */
+    val sessionCount: Flow<Int> =
+        dataStore.data.map { it[SESSION_COUNT_KEY] ?: 0 }
+
+    /** Increments the session count and returns the new value. */
+    suspend fun incrementSessionCount(): Int {
+        var newValue = 0
+        dataStore.edit { prefs ->
+            newValue = (prefs[SESSION_COUNT_KEY] ?: 0) + 1
+            prefs[SESSION_COUNT_KEY] = newValue
+        }
+        return newValue
     }
 }

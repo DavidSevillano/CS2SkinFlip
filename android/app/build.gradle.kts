@@ -153,6 +153,9 @@ dependencies {
     implementation(libs.play.services.ads)
     implementation(libs.ump.sdk)
 
+    // Play In-App Review
+    implementation(libs.review.ktx)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockito.kotlin)
