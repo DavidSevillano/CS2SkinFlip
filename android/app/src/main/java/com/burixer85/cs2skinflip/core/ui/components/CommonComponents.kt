@@ -89,7 +89,7 @@ fun RarityBadge(rarity: SkinRarity, modifier: Modifier = Modifier) {
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Text(
-            text = rarity.displayName,
+            text = stringResource(rarity.displayNameRes),
             color = color,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium

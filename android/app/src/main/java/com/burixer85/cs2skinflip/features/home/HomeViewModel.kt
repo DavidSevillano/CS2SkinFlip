@@ -1,10 +1,11 @@
 package com.burixer85.cs2skinflip.features.home
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,7 @@ import javax.inject.Inject
 sealed class HomeUiState {
     object Loading : HomeUiState()
     data class Success(val trendingSkins: List<Skin>) : HomeUiState()
-    data class Error(val message: String) : HomeUiState()
+    data class Error(@StringRes val messageRes: Int) : HomeUiState()
 }
 
 @HiltViewModel
@@ -34,7 +35,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
             skinRepository.getTrendingSkins()
-                .catch { e -> _uiState.value = HomeUiState.Error(e.toUserMessage()) }
+                .catch { e -> _uiState.value = HomeUiState.Error(e.toUserMessageRes()) }
                 .collect { skins -> _uiState.value = HomeUiState.Success(skins) }
         }
     }

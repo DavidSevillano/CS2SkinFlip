@@ -190,7 +190,7 @@ fun AlertsScreen(
             // ── Body ──────────────────────────────────────────────────────────
             when (val state = uiState) {
                 is AlertsUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
-                is AlertsUiState.Error -> ErrorState(state.message, modifier = Modifier.fillMaxSize())
+                is AlertsUiState.Error -> ErrorState(stringResource(state.messageRes), modifier = Modifier.fillMaxSize())
                 is AlertsUiState.NotLoggedIn -> NotLoggedInView()
                 is AlertsUiState.Success -> AlertsList(
                     alerts = state.alerts,
@@ -223,7 +223,7 @@ fun AlertsScreen(
             ) {
                 Icon(
                     if (state.atFreeLimit) Icons.Default.Lock else Icons.Default.Add,
-                    contentDescription = if (state.atFreeLimit) "Upgrade" else "Add alert",
+                    contentDescription = if (state.atFreeLimit) stringResource(R.string.alerts_cd_upgrade) else stringResource(R.string.alerts_cd_add_alert),
                 )
             }
         }
@@ -740,7 +740,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                 ) {
                     SegmentedTypeButton(
                         selected = state.type == AlertType.BUY_BELOW,
-                        label = "Drops below",
+                        label = stringResource(R.string.alert_type_buy_below),
                         icon = Icons.Default.TrendingDown,
                         color = AccentGreen,
                         modifier = Modifier.weight(1f),
@@ -748,7 +748,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                     )
                     SegmentedTypeButton(
                         selected = state.type == AlertType.SELL_ABOVE,
-                        label = "Rises above",
+                        label = stringResource(R.string.alert_type_sell_above),
                         icon = Icons.Default.TrendingUp,
                         color = AccentOrange,
                         modifier = Modifier.weight(1f),
@@ -791,9 +791,9 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
             }
 
             // ── Error ─────────────────────────────────────────────────────────
-            state.errorMessage?.let { msg ->
+            state.errorMessageRes?.let { msgRes ->
                 Spacer(Modifier.height(12.dp))
-                Text(msg, color = AccentRed, fontSize = 13.sp)
+                Text(stringResource(msgRes), color = AccentRed, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -906,7 +906,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
             ) {
                 SegmentedTypeButton(
                     selected = state.type == AlertType.BUY_BELOW,
-                    label = "Drops below",
+                    label = stringResource(R.string.alert_type_buy_below),
                     icon = Icons.Default.TrendingDown,
                     color = AccentGreen,
                     modifier = Modifier.weight(1f),
@@ -914,7 +914,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
                 )
                 SegmentedTypeButton(
                     selected = state.type == AlertType.SELL_ABOVE,
-                    label = "Rises above",
+                    label = stringResource(R.string.alert_type_sell_above),
                     icon = Icons.Default.TrendingUp,
                     color = AccentOrange,
                     modifier = Modifier.weight(1f),
@@ -948,9 +948,9 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
                 )
             }
 
-            state.errorMessage?.let { msg ->
+            state.errorMessageRes?.let { msgRes ->
                 Spacer(Modifier.height(12.dp))
-                Text(msg, color = AccentRed, fontSize = 13.sp)
+                Text(stringResource(msgRes), color = AccentRed, fontSize = 13.sp)
             }
 
             Spacer(Modifier.height(20.dp))
@@ -1009,7 +1009,7 @@ private fun SkinPickerRow(skin: Skin, onClick: () -> Unit) {
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             Text(
-                skin.wear.displayName, fontSize = 11.sp, color = TextTertiary,
+                stringResource(skin.wear.displayNameRes), fontSize = 11.sp, color = TextTertiary,
             )
         }
         if (skin.lowestMarketPrice > 0) {
@@ -1045,7 +1045,7 @@ private fun SelectedSkinCard(skin: Skin) {
                 skin.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextPrimary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Text(skin.wear.displayName, fontSize = 11.sp, color = TextSecondary)
+            Text(stringResource(skin.wear.displayNameRes), fontSize = 11.sp, color = TextSecondary)
         }
     }
 }

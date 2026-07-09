@@ -315,7 +315,7 @@ fun SearchScreen(
                             )
                         }
                         Text(
-                            sort.label,
+                            stringResource(sort.labelRes),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (selected) AccentOrange else TextSecondary,
                         )
@@ -357,7 +357,7 @@ fun SearchScreen(
         Box(Modifier.weight(1f)) {
         when (val state = uiState) {
             is SearchUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
-            is SearchUiState.Error -> ErrorState(message = state.message, modifier = Modifier.fillMaxSize())
+            is SearchUiState.Error -> ErrorState(message = stringResource(state.messageRes), modifier = Modifier.fillMaxSize())
             is SearchUiState.Success -> {
                 if (state.results.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -497,7 +497,7 @@ private fun FilterBottomSheet(
             Spacer(Modifier.height(16.dp))
 
             // ── Wear ─────────────────────────────────────────────────────────
-            FilterSectionLabel("Wear")
+            FilterSectionLabel(stringResource(R.string.search_filter_wear))
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier
@@ -505,12 +505,12 @@ private fun FilterBottomSheet(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                WearChip(label = "All", selected = draft.wear == null) {
+                WearChip(label = stringResource(R.string.search_wear_all), selected = draft.wear == null) {
                     draft = draft.copy(wear = null)
                 }
                 SkinWear.entries.forEach { wear ->
                     WearChip(
-                        label = "${wear.abbrev}  ${wear.displayName}",
+                        label = "${wear.abbrev}  ${stringResource(wear.displayNameRes)}",
                         selected = draft.wear == wear,
                     ) { draft = draft.copy(wear = if (draft.wear == wear) null else wear) }
                 }
@@ -521,7 +521,7 @@ private fun FilterBottomSheet(
             Spacer(Modifier.height(16.dp))
 
             // ── Rarity ───────────────────────────────────────────────────────
-            FilterSectionLabel("Rarity")
+            FilterSectionLabel(stringResource(R.string.search_filter_rarity))
             Spacer(Modifier.height(8.dp))
             // Two rows of rarity chips
             val rarities = SkinRarity.entries
@@ -547,7 +547,7 @@ private fun FilterBottomSheet(
             Spacer(Modifier.height(16.dp))
 
             // ── Price range ───────────────────────────────────────────────────
-            FilterSectionLabel("Price range")
+            FilterSectionLabel(stringResource(R.string.search_filter_price_range))
             Spacer(Modifier.height(4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -582,7 +582,12 @@ private fun FilterBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                listOf("< $10" to 0f..10f, "$10–$50" to 10f..50f, "$50–$200" to 50f..200f, "> $200" to 200f..MAX_PRICE)
+                listOf(
+                    stringResource(R.string.search_price_preset_under_10) to 0f..10f,
+                    stringResource(R.string.search_price_preset_10_50) to 10f..50f,
+                    stringResource(R.string.search_price_preset_50_200) to 50f..200f,
+                    stringResource(R.string.search_price_preset_over_200) to 200f..MAX_PRICE,
+                )
                     .forEach { (label, range) ->
                         val active = priceRange == range
                         Text(
@@ -603,7 +608,7 @@ private fun FilterBottomSheet(
             Spacer(Modifier.height(16.dp))
 
             // ── Options ───────────────────────────────────────────────────────
-            FilterSectionLabel("Options")
+            FilterSectionLabel(stringResource(R.string.search_filter_options))
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -700,7 +705,7 @@ private fun RarityChip(rarity: SkinRarity, selected: Boolean, onClick: () -> Uni
                     .background(color)
             )
             Text(
-                rarity.displayName,
+                stringResource(rarity.displayNameRes),
                 style = MaterialTheme.typography.labelMedium,
                 color = if (selected) color else TextSecondary,
             )
@@ -741,14 +746,15 @@ private data class ActiveChip(
     val onRemove: (SearchFilters) -> SearchFilters,
 )
 
+@Composable
 private fun buildActiveChips(f: SearchFilters): List<ActiveChip> = buildList {
-    f.wear?.let { add(ActiveChip(it.displayName, AccentOrange) { f -> f.copy(wear = null) }) }
-    f.rarity?.let { add(ActiveChip(it.displayName, rarityColor(it)) { f -> f.copy(rarity = null) }) }
+    f.wear?.let { add(ActiveChip(stringResource(it.displayNameRes), AccentOrange) { f -> f.copy(wear = null) }) }
+    f.rarity?.let { add(ActiveChip(stringResource(it.displayNameRes), rarityColor(it)) { f -> f.copy(rarity = null) }) }
     if (f.statTrakOnly) add(ActiveChip("StatTrak™", AccentGreen) { f -> f.copy(statTrakOnly = false) })
     val hasPrice = f.minPrice != null || f.maxPrice != null
     if (hasPrice) {
         val lo = f.minPrice?.let { "$${it.toInt()}" } ?: "$0"
-        val hi = f.maxPrice?.let { "$${it.toInt()}" } ?: "any"
+        val hi = f.maxPrice?.let { "$${it.toInt()}" } ?: stringResource(R.string.search_price_any)
         add(ActiveChip("$lo – $hi", AccentOrange) { f -> f.copy(minPrice = null, maxPrice = null) })
     }
     f.weapon?.let { add(ActiveChip(it, AccentOrange) { f -> f.copy(weapon = null) }) }
@@ -820,7 +826,7 @@ private fun SkinSuggestionRow(
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
             Text(
-                skin.wear.displayName,
+                stringResource(skin.wear.displayNameRes),
                 style = MaterialTheme.typography.labelSmall,
                 color = TextTertiary,
             )
