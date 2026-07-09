@@ -1,5 +1,8 @@
 package com.burixer85.cs2skinflip.core.domain.model
 
+import androidx.annotation.StringRes
+import com.burixer85.cs2skinflip.R
+
 data class Alert(
     val id: String = "",
     val skinId: String,
@@ -17,7 +20,7 @@ data class Alert(
         get() = if (targetPrice > 0) (currentPrice - targetPrice) / targetPrice * 100 else 0.0
 }
 
-enum class AlertType(val displayName: String, val description: String) {
-    BUY_BELOW("Drops below",  "Notify when price drops below target"),
-    SELL_ABOVE("Rises above", "Notify when price rises above target")
+enum class AlertType(@StringRes val displayNameRes: Int, @StringRes val descriptionRes: Int) {
+    BUY_BELOW(R.string.alert_type_buy_below, R.string.alert_type_buy_below_desc),
+    SELL_ABOVE(R.string.alert_type_sell_above, R.string.alert_type_sell_above_desc)
 }

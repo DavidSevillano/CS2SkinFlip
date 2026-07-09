@@ -52,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -60,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioItem
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioSummary
 import com.burixer85.cs2skinflip.core.preferences.Currency
@@ -90,10 +93,10 @@ fun PortfolioScreen(
 
     Column(Modifier.fillMaxSize().background(Background)) {
         TopAppBar(
-            title = { Text("Portfolio") },
+            title = { Text(stringResource(R.string.tab_portfolio)) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
@@ -162,14 +165,14 @@ private fun SummaryCard(summary: PortfolioSummary) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Total value", fontSize = 12.sp, color = TextSecondary)
+                    Text(stringResource(R.string.portfolio_total_value), fontSize = 12.sp, color = TextSecondary)
                     Text(
                         Currency.format(summary.totalValue),
                         fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("P&L", fontSize = 12.sp, color = TextSecondary)
+                    Text(stringResource(R.string.portfolio_pl_label), fontSize = 12.sp, color = TextSecondary)
                     val sign = if (summary.totalProfitLoss >= 0) "+" else ""
                     Text(
                         "$sign${Currency.format(summary.totalProfitLoss)} ($sign${"%.1f".format(summary.totalProfitLossPct)}%)",
@@ -179,7 +182,8 @@ private fun SummaryCard(summary: PortfolioSummary) {
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                "Invested ${Currency.format(summary.totalInvested)} · ${summary.itemCount} items",
+                stringResource(R.string.portfolio_invested, Currency.format(summary.totalInvested)) +
+                    " · " + pluralStringResource(R.plurals.portfolio_items_count, summary.itemCount, summary.itemCount),
                 fontSize = 12.sp, color = TextTertiary,
             )
         }
@@ -200,7 +204,7 @@ private fun SyncRow(syncing: Boolean, syncError: String?, onSync: () -> Unit) {
                     Icon(Icons.Default.Refresh, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
                 }
                 Spacer(Modifier.width(6.dp))
-                Text("Sync from Steam", color = AccentOrange, fontSize = 13.sp)
+                Text(stringResource(R.string.portfolio_sync_steam), color = AccentOrange, fontSize = 13.sp)
             }
         }
         syncError?.let {
@@ -223,10 +227,10 @@ private fun EmptyPortfolioView(syncing: Boolean, syncError: String?, onSync: () 
                 Icon(Icons.Default.Bookmarks, null, tint = AccentOrange, modifier = Modifier.size(40.dp))
             }
             Spacer(Modifier.height(20.dp))
-            Text("No items yet", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(stringResource(R.string.portfolio_empty_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Sync your Steam inventory to start tracking your skins.",
+                stringResource(R.string.portfolio_empty_subtitle),
                 color = TextSecondary, textAlign = TextAlign.Center, fontSize = 14.sp,
             )
             Spacer(Modifier.height(24.dp))
@@ -242,7 +246,7 @@ private fun EmptyPortfolioView(syncing: Boolean, syncError: String?, onSync: () 
                 } else {
                     Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp), tint = Color.White)
                     Spacer(Modifier.width(6.dp))
-                    Text("Sync from Steam", fontWeight = FontWeight.SemiBold, color = Color.White)
+                    Text(stringResource(R.string.portfolio_sync_steam), fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
             syncError?.let {
@@ -286,7 +290,7 @@ private fun PortfolioItemRow(
             )
             Spacer(Modifier.height(3.dp))
             Text(
-                "Paid ${Currency.format(item.acquirePrice)}",
+                stringResource(R.string.portfolio_paid, Currency.format(item.acquirePrice)),
                 fontSize = 11.sp, color = TextTertiary,
             )
         }
@@ -311,10 +315,10 @@ private fun PortfolioItemRow(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             containerColor = Surface,
-            title = { Text("Remove from portfolio?", fontWeight = FontWeight.Bold, color = TextPrimary) },
+            title = { Text(stringResource(R.string.portfolio_remove_title), fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = {
                 Text(
-                    "This removes ${item.skinName} from your portfolio. This can't be undone.",
+                    stringResource(R.string.portfolio_remove_body, item.skinName),
                     color = TextSecondary, fontSize = 14.sp,
                 )
             },
@@ -324,12 +328,12 @@ private fun PortfolioItemRow(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
                     shape = RoundedCornerShape(10.dp),
                 ) {
-                    Text("Remove", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.action_remove), color = Color.White, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(stringResource(R.string.action_cancel), color = TextSecondary)
                 }
             },
         )
@@ -343,13 +347,13 @@ private fun NotLoggedInView() {
             Icon(Icons.Default.Bookmarks, null, tint = AccentOrange, modifier = Modifier.size(56.dp))
             Spacer(Modifier.height(16.dp))
             Text(
-                "Sign in to track your portfolio",
+                stringResource(R.string.portfolio_signin_title),
                 fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextPrimary,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Sign in with Steam from Settings to sync your inventory and track profit/loss.",
+                stringResource(R.string.portfolio_signin_body),
                 color = TextSecondary, textAlign = TextAlign.Center, fontSize = 13.sp,
             )
         }
@@ -366,7 +370,7 @@ private fun EditPriceDialog(viewModel: PortfolioViewModel, onDismiss: () -> Unit
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
-        title = { Text("Edit purchase price", fontWeight = FontWeight.Bold, color = TextPrimary) },
+        title = { Text(stringResource(R.string.portfolio_edit_price_title), fontWeight = FontWeight.Bold, color = TextPrimary) },
         text = {
             Column {
                 Text(item.skinName, fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -375,7 +379,7 @@ private fun EditPriceDialog(viewModel: PortfolioViewModel, onDismiss: () -> Unit
                     value = state.price,
                     onValueChange = viewModel::onEditPriceChange,
                     leadingIcon = { Text("$", color = TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                    placeholder = { Text("0.00", color = TextSecondary) },
+                    placeholder = { Text(stringResource(R.string.price_placeholder), color = TextSecondary) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -405,12 +409,12 @@ private fun EditPriceDialog(viewModel: PortfolioViewModel, onDismiss: () -> Unit
                 if (state.submitting) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
                 } else {
-                    Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.action_save), color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel), color = TextSecondary) }
         },
     )
 }

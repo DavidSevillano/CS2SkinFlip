@@ -40,12 +40,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
 import com.burixer85.cs2skinflip.core.ui.LocalCurrency
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
@@ -70,10 +73,10 @@ fun WatchlistScreen(
 
     Column(Modifier.fillMaxSize().background(Background)) {
         TopAppBar(
-            title = { Text("Watchlist") },
+            title = { Text(stringResource(R.string.watchlist_title)) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
@@ -90,7 +93,7 @@ fun WatchlistScreen(
                 if (state.items.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            "No items in watchlist.\nBrowse skins and tap the bookmark icon.",
+                            stringResource(R.string.watchlist_empty),
                             color = TextSecondary,
                             textAlign = TextAlign.Center,
                         )
@@ -103,11 +106,11 @@ fun WatchlistScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    "${state.items.size} items tracked",
+                                    pluralStringResource(R.plurals.watchlist_items_tracked, state.items.size, state.items.size),
                                     style = MaterialTheme.typography.labelMedium,
                                 )
                                 Spacer(Modifier.weight(1f))
-                                Text("Swipe to remove", fontSize = 11.sp, color = TextSecondary)
+                                Text(stringResource(R.string.watchlist_swipe_hint), fontSize = 11.sp, color = TextSecondary)
                             }
                         }
 
@@ -157,7 +160,7 @@ private fun WatchlistItemRow(
                 Modifier.fillMaxSize().background(color).padding(end = 16.dp),
                 contentAlignment = Alignment.CenterEnd,
             ) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.White)
+                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete), tint = Color.White)
             }
         },
         enableDismissFromStartToEnd = false,
@@ -207,14 +210,18 @@ private fun WatchlistItemRow(
                     val diff = (item.currentPrice - target) / target * 100
                     val color = if (diff <= 0) AccentGreen else TextSecondary
                     Text(
-                        "Target: ${currency.format(target)} (${if (diff <= 0) "" else "+"}${"%.1f".format(diff)}%)",
+                        stringResource(
+                            R.string.watchlist_target_diff,
+                            currency.format(target),
+                            "${if (diff <= 0) "" else "+"}${"%.1f".format(diff)}%",
+                        ),
                         fontSize = 11.sp,
                         color = color,
                     )
                 }
                 item.targetSellPrice?.let { target ->
                     Text(
-                        "Sell target: ${currency.format(target)}",
+                        stringResource(R.string.watchlist_sell_target, currency.format(target)),
                         fontSize = 11.sp,
                         color = AccentGreen,
                     )

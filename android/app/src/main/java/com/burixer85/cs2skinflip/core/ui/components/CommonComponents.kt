@@ -37,10 +37,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.ui.theme.AccentGreen
 import com.burixer85.cs2skinflip.core.ui.theme.AccentRed
@@ -134,7 +136,7 @@ fun ErrorState(
         if (onRetry != null) {
             Spacer(Modifier.height(16.dp))
             TextButton(onClick = onRetry) {
-                Text("Retry", color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.retry), color = MaterialTheme.colorScheme.primary)
             }
         }
     }
@@ -222,13 +224,13 @@ fun PremiumBanner(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = "Upgrade to Premium",
+                        text = stringResource(R.string.upgrade_to_premium),
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
                         color = PremiumGold
                     )
                     Text(
-                        text = "Unlimited alerts + advanced analytics",
+                        text = stringResource(R.string.premium_description),
                         fontSize = 12.sp,
                         color = PremiumGold.copy(alpha = 0.7f)
                     )
@@ -238,7 +240,7 @@ fun PremiumBanner(
                     colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("$4.99/mo", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.premium_price_monthly), color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

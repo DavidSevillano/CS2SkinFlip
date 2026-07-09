@@ -63,10 +63,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
@@ -139,14 +142,14 @@ fun SearchScreen(
                     onSearch = { searchActive = false },
                     expanded = searchActive,
                     onExpandedChange = { searchActive = it },
-                    placeholder = { Text("Search skins, weapons…", color = TextSecondary) },
+                    placeholder = { Text(stringResource(R.string.search_hint), color = TextSecondary) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary)
                     },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { viewModel.onQueryChange("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextSecondary)
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.cd_clear), tint = TextSecondary)
                             }
                         }
                     },
@@ -217,7 +220,7 @@ fun SearchScreen(
             // If no text entered, show popular weapon shortcuts
             if (query.isBlank()) {
                 Text(
-                    "Popular weapons",
+                    stringResource(R.string.search_popular_weapons),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextTertiary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -270,12 +273,12 @@ fun SearchScreen(
                 ) {
                     Icon(
                         Icons.Outlined.FilterList,
-                        contentDescription = "Filters",
+                        contentDescription = stringResource(R.string.search_filters),
                         modifier = Modifier.size(16.dp),
                         tint = if (filters.activeCount > 0) AccentOrange else TextSecondary,
                     )
                     Text(
-                        "Filters",
+                        stringResource(R.string.search_filters),
                         style = MaterialTheme.typography.labelMedium,
                         color = if (filters.activeCount > 0) AccentOrange else TextSecondary,
                     )
@@ -339,7 +342,7 @@ fun SearchScreen(
                 }
                 // Clear all
                 Text(
-                    "Clear all",
+                    stringResource(R.string.action_clear_all),
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentOrange,
                     modifier = Modifier
@@ -359,11 +362,11 @@ fun SearchScreen(
                 if (state.results.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("No skins found", color = TextSecondary)
+                            Text(stringResource(R.string.no_results), color = TextSecondary)
                             if (filters.activeCount > 0) {
                                 Spacer(Modifier.height(8.dp))
                                 TextButton(onClick = { viewModel.clearFilters() }) {
-                                    Text("Clear filters", color = AccentOrange)
+                                    Text(stringResource(R.string.search_clear_filters), color = AccentOrange)
                                 }
                             }
                         }
@@ -384,7 +387,7 @@ fun SearchScreen(
                     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                         item {
                             Text(
-                                "${state.totalCount} skins",
+                                pluralStringResource(R.plurals.search_results_count, state.totalCount, state.totalCount),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextTertiary,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -476,7 +479,7 @@ private fun FilterBottomSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    "Filters",
+                    stringResource(R.string.search_filters),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
@@ -485,7 +488,7 @@ private fun FilterBottomSheet(
                     draft = SearchFilters(sortBy = draft.sortBy)
                     priceRange = 0f..MAX_PRICE
                 }) {
-                    Text("Clear all", color = AccentOrange)
+                    Text(stringResource(R.string.action_clear_all), color = AccentOrange)
                 }
             }
 
@@ -553,12 +556,12 @@ private fun FilterBottomSheet(
                 val lo = priceRange.start
                 val hi = priceRange.endInclusive
                 Text(
-                    if (lo < 1f) "Any" else "$${lo.toInt()}",
+                    if (lo < 1f) stringResource(R.string.search_price_any) else "$${lo.toInt()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                 )
                 Text(
-                    if (hi >= MAX_PRICE) "Any" else "$${hi.toInt()}",
+                    if (hi >= MAX_PRICE) stringResource(R.string.search_price_any) else "$${hi.toInt()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                 )
@@ -608,8 +611,8 @@ private fun FilterBottomSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column {
-                    Text("StatTrak™ only", style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
-                    Text("Show only StatTrak™ skins", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text(stringResource(R.string.search_stattrak_title), style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                    Text(stringResource(R.string.search_stattrak_subtitle), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 }
                 Switch(
                     checked = draft.statTrakOnly,
@@ -641,7 +644,7 @@ private fun FilterBottomSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "Apply filters",
+                    stringResource(R.string.search_apply_filters),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -725,7 +728,7 @@ private fun ActiveFilterChip(label: String, color: Color, onRemove: () -> Unit) 
                 .clickable(onClick = onRemove),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Remove", modifier = Modifier.size(10.dp), tint = color)
+            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_remove), modifier = Modifier.size(10.dp), tint = color)
         }
     }
 }

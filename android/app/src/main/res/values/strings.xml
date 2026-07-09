@@ -1,17 +1,156 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App -->
     <string name="app_name">CS2 SkinFlip</string>
+
+    <!-- Tabs -->
     <string name="tab_home">Home</string>
     <string name="tab_search">Search</string>
     <string name="tab_portfolio">Portfolio</string>
     <string name="tab_settings">Settings</string>
-    <string name="upgrade_to_premium">Upgrade to Premium</string>
-    <string name="premium_description">Unlock unlimited alerts and advanced analytics</string>
-    <string name="add_to_watchlist">Add to Watchlist</string>
-    <string name="remove_from_watchlist">Remove from Watchlist</string>
+    <string name="tab_alerts">Alerts</string>
+
+    <!-- Common actions -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_ok">OK</string>
+    <string name="action_back">Back</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_clear_all">Clear all</string>
+    <string name="action_upgrade">Upgrade</string>
+
+    <!-- Common states -->
     <string name="retry">Retry</string>
     <string name="loading">Loading…</string>
     <string name="error_generic">Something went wrong</string>
     <string name="no_results">No skins found</string>
-    <string name="search_hint">Search skins…</string>
+    <string name="search_hint">Search skins, weapons…</string>
+    <string name="add_to_watchlist">Add to Watchlist</string>
+    <string name="remove_from_watchlist">Remove from Watchlist</string>
+    <string name="upgrade_to_premium">Upgrade to Premium</string>
+    <string name="premium_description">Unlock unlimited alerts and advanced analytics</string>
+
+    <!-- Shared premium dialog (Alerts + Settings) -->
+    <string name="go_premium_title">Go Premium</string>
+    <string name="premium_feature_unlimited_alerts">Unlimited price alerts</string>
+    <string name="premium_price_onetime">$4.99 · one-time payment, no subscription</string>
+    <string name="premium_price_monthly">$4.99/mo</string>
+    <string name="maybe_later">Maybe later</string>
+    <string name="price_placeholder">0.00</string>
+
+    <!-- Home -->
+    <string name="home_subtitle">Live market intelligence</string>
+    <string name="home_top_movers_title">  Top Movers  24h</string>
+    <string name="home_vol_by_movement">Vol by movement</string>
+
+    <!-- Search -->
+    <string name="cd_clear">Clear</string>
+    <string name="search_popular_weapons">Popular weapons</string>
+    <string name="search_filters">Filters</string>
+    <string name="search_clear_filters">Clear filters</string>
+    <string name="search_price_any">Any</string>
+    <string name="search_stattrak_title">StatTrak™ only</string>
+    <string name="search_stattrak_subtitle">Show only StatTrak™ skins</string>
+    <string name="search_apply_filters">Apply filters</string>
+
+    <!-- Skin detail -->
+    <string name="skindetail_error_title">Error</string>
+    <string name="skindetail_marketplace_prices">Marketplace Prices</string>
+    <string name="skindetail_float_range">Float Range</string>
+    <string name="skindetail_price_history">Price History</string>
+    <string name="skindetail_price_history_unavailable">Price history not yet available</string>
+    <string name="skindetail_lowest_badge">LOWEST</string>
+    <string name="cd_open_browser">Open in browser</string>
+    <string name="skindetail_not_listed">Not listed</string>
+    <string name="skindetail_not_enough_data">Not enough data points</string>
+
+    <!-- Watchlist -->
+    <string name="watchlist_title">Watchlist</string>
+    <string name="watchlist_empty">No items in watchlist.\nBrowse skins and tap the bookmark icon.</string>
+    <string name="watchlist_swipe_hint">Swipe to remove</string>
+    <string name="watchlist_target_diff">Target: %1$s (%2$s)</string>
+    <string name="watchlist_sell_target">Sell target: %1$s</string>
+
+    <!-- Portfolio -->
+    <string name="portfolio_total_value">Total value</string>
+    <string name="portfolio_pl_label">P&amp;L</string>
+    <string name="portfolio_invested">Invested %1$s</string>
+    <string name="portfolio_sync_steam">Sync from Steam</string>
+    <string name="portfolio_empty_title">No items yet</string>
+    <string name="portfolio_empty_subtitle">Sync your Steam inventory to start tracking your skins.</string>
+    <string name="portfolio_paid">Paid %1$s</string>
+    <string name="portfolio_remove_title">Remove from portfolio?</string>
+    <string name="portfolio_remove_body">This removes %1$s from your portfolio. This can\'t be undone.</string>
+    <string name="portfolio_signin_title">Sign in to track your portfolio</string>
+    <string name="portfolio_signin_body">Sign in with Steam from Settings to sync your inventory and track profit/loss.</string>
+    <string name="portfolio_edit_price_title">Edit purchase price</string>
+
+    <!-- Alerts -->
+    <string name="alerts_title">Price Alerts</string>
+    <string name="alerts_empty_title">No alerts yet</string>
+    <string name="alerts_empty_subtitle">Get notified when a skin hits your target buy or sell price.</string>
+    <string name="alerts_create_first">Create first alert</string>
+    <string name="alerts_current_price">Current %1$s</string>
+    <string name="alerts_free_limit_reached">Free limit reached</string>
+    <string name="alerts_free_plan">Free plan</string>
+    <string name="alerts_usage_summary">%1$d / %2$d alert used · Upgrade for unlimited</string>
+    <string name="alerts_notifications_off_title">Turn on notifications</string>
+    <string name="alerts_notifications_off_body">Notifications are off. Without them, you won\'t be notified when this skin hits your target price.</string>
+    <string name="alerts_enable">Enable</string>
+    <string name="alerts_continue_without">Continue without</string>
+    <string name="alerts_free_plan_body">You\'re on the free plan with 1 alert. Unlock unlimited price alerts with a one-time payment:</string>
+    <string name="alerts_signin_title">Sign in to manage price alerts</string>
+    <string name="alerts_signin_body">Every CS2 skin trader already has a Steam account — use it to sign in, no passwords to remember.</string>
+    <string name="alerts_signin_button">Sign in with Steam</string>
+    <string name="alerts_new_title">New price alert</string>
+    <string name="alerts_search_placeholder">Search a skin…</string>
+    <string name="alerts_type_label">Alert type</string>
+    <string name="alerts_target_price_label">Target price (USD)</string>
+    <string name="alerts_lowest_market_price">Lowest market price: %1$s</string>
+    <string name="alerts_create_button">Create alert</string>
+    <string name="alerts_edit_title">Edit alert</string>
+    <string name="alerts_current_market_price">Current market price: %1$s</string>
+    <string name="alerts_save_changes">Save changes</string>
+
+    <!-- AlertType enum copy (Alert.kt) -->
+    <string name="alert_type_buy_below">Drops below</string>
+    <string name="alert_type_buy_below_desc">Notify when price drops below target</string>
+    <string name="alert_type_sell_above">Rises above</string>
+    <string name="alert_type_sell_above_desc">Notify when price rises above target</string>
+
+    <!-- Settings -->
+    <string name="settings_version_info">Version 1.0.0 · MVP</string>
+    <string name="settings_disclaimer">Prices are for informational purposes only</string>
+    <string name="settings_premium_plan">Premium Plan</string>
+    <string name="settings_free_plan">Free Plan</string>
+    <string name="settings_premium_badge">PREMIUM</string>
+    <string name="settings_default_marketplace">Default Marketplace</string>
+    <string name="settings_sign_out_title">Sign out?</string>
+    <string name="settings_sign_out_body">You\'ll need to sign in again to manage your alerts.</string>
+    <string name="settings_sign_out_button">Sign out</string>
+    <string name="settings_delete_account_title">Delete account?</string>
+    <string name="settings_delete_account_body">This permanently deletes your account, watchlist, alerts, and portfolio. This can\'t be undone.</string>
+
+    <!-- Plurals -->
+    <plurals name="search_results_count">
+        <item quantity="one">%d skin</item>
+        <item quantity="other">%d skins</item>
+    </plurals>
+    <plurals name="watchlist_items_tracked">
+        <item quantity="one">%d item tracked</item>
+        <item quantity="other">%d items tracked</item>
+    </plurals>
+    <plurals name="portfolio_items_count">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <plurals name="alerts_active_count">
+        <item quantity="one">%d active</item>
+        <item quantity="other">%d active</item>
+    </plurals>
+    <plurals name="alerts_count">
+        <item quantity="one">%d alert</item>
+        <item quantity="other">%d alerts</item>
+    </plurals>
 </resources>

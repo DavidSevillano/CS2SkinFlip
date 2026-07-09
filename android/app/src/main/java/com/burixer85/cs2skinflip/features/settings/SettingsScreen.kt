@@ -62,11 +62,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.burixer85.cs2skinflip.BuildConfig
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import com.burixer85.cs2skinflip.core.ui.components.PremiumBanner
 import com.burixer85.cs2skinflip.core.ui.theme.AccentBlue
@@ -125,7 +127,7 @@ fun SettingsScreen(
                 .background(Surface)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            Text("Settings", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(stringResource(R.string.tab_settings), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         }
 
         Spacer(Modifier.height(12.dp))
@@ -244,9 +246,9 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("CS2 SkinFlip", fontWeight = FontWeight.Bold, color = AccentOrange, fontSize = 14.sp)
-                Text("Version 1.0.0 · MVP", fontSize = 12.sp, color = TextSecondary)
-                Text("Prices are for informational purposes only", fontSize = 11.sp, color = TextSecondary)
+                Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = AccentOrange, fontSize = 14.sp)
+                Text(stringResource(R.string.settings_version_info), fontSize = 12.sp, color = TextSecondary)
+                Text(stringResource(R.string.settings_disclaimer), fontSize = 11.sp, color = TextSecondary)
             }
         }
 
@@ -299,11 +301,11 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = viewModel::clearDeleteAccountError,
             containerColor = Surface,
-            title = { Text("Something went wrong", fontWeight = FontWeight.Bold, color = TextPrimary) },
+            title = { Text(stringResource(R.string.error_generic), fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = { Text(deleteAccountError!!, color = TextSecondary, fontSize = 14.sp) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearDeleteAccountError) {
-                    Text("OK", color = AccentOrange)
+                    Text(stringResource(R.string.action_ok), color = AccentOrange)
                 }
             },
         )
@@ -313,11 +315,11 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = viewModel::clearPurchaseError,
             containerColor = Surface,
-            title = { Text("Something went wrong", fontWeight = FontWeight.Bold, color = TextPrimary) },
+            title = { Text(stringResource(R.string.error_generic), fontWeight = FontWeight.Bold, color = TextPrimary) },
             text = { Text(purchaseError!!, color = TextSecondary, fontSize = 14.sp) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearPurchaseError) {
-                    Text("OK", color = AccentOrange)
+                    Text(stringResource(R.string.action_ok), color = AccentOrange)
                 }
             },
         )
@@ -363,7 +365,7 @@ private fun AccountInfoRow(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(10.dp))
                             Spacer(Modifier.width(2.dp))
-                            Text("PREMIUM", color = PremiumGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.settings_premium_badge), color = PremiumGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -397,7 +399,7 @@ private fun PlanCard(isPremium: Boolean) {
                     Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        if (isPremium) "Premium Plan" else "Free Plan",
+                        stringResource(if (isPremium) R.string.settings_premium_plan else R.string.settings_free_plan),
                         fontWeight = FontWeight.Bold, color = PremiumGold, fontSize = 16.sp,
                     )
                 }
@@ -487,7 +489,7 @@ private fun MarketplaceSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 4.dp, vertical = 8.dp)) {
             Text(
-                "Default Marketplace",
+                stringResource(R.string.settings_default_marketplace),
                 fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
@@ -531,7 +533,7 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Go Premium", fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.go_premium_title), fontWeight = FontWeight.Bold, color = TextPrimary)
             }
         },
         text = {
@@ -539,11 +541,11 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Unlimited price alerts", color = TextPrimary, fontSize = 13.sp)
+                    Text(stringResource(R.string.premium_feature_unlimited_alerts), color = TextPrimary, fontSize = 13.sp)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "$4.99 · one-time payment, no subscription",
+                    stringResource(R.string.premium_price_onetime),
                     color = TextSecondary, fontSize = 12.sp,
                 )
             }
@@ -554,12 +556,12 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text("Upgrade", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.action_upgrade), color = Color.Black, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Maybe later", color = TextSecondary)
+                Text(stringResource(R.string.maybe_later), color = TextSecondary)
             }
         },
     )
@@ -570,10 +572,10 @@ private fun SignOutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
-        title = { Text("Sign out?", fontWeight = FontWeight.Bold, color = TextPrimary) },
+        title = { Text(stringResource(R.string.settings_sign_out_title), fontWeight = FontWeight.Bold, color = TextPrimary) },
         text = {
             Text(
-                "You'll need to sign in again to manage your alerts.",
+                stringResource(R.string.settings_sign_out_body),
                 color = TextSecondary, fontSize = 14.sp,
             )
         },
@@ -583,12 +585,12 @@ private fun SignOutDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text("Sign out", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.settings_sign_out_button), color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
+                Text(stringResource(R.string.action_cancel), color = TextSecondary)
             }
         },
     )
@@ -599,10 +601,10 @@ private fun DeleteAccountDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Surface,
-        title = { Text("Delete account?", fontWeight = FontWeight.Bold, color = TextPrimary) },
+        title = { Text(stringResource(R.string.settings_delete_account_title), fontWeight = FontWeight.Bold, color = TextPrimary) },
         text = {
             Text(
-                "This permanently deletes your account, watchlist, alerts, and portfolio. This can't be undone.",
+                stringResource(R.string.settings_delete_account_body),
                 color = TextSecondary, fontSize = 14.sp,
             )
         },
@@ -612,12 +614,12 @@ private fun DeleteAccountDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text("Delete", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.action_delete), color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
+                Text(stringResource(R.string.action_cancel), color = TextSecondary)
             }
         },
     )
