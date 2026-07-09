@@ -18,6 +18,8 @@
     <string name="retry">Tentar novamente</string>
     <string name="loading">Carregando…</string>
     <string name="error_generic">Algo deu errado</string>
+    <string name="error_generic_retry">Algo deu errado. Tente novamente.</string>
+    <string name="error_no_internet">Sem conexão com a internet. Verifique sua conexão e tente novamente.</string>
     <string name="no_results">Nenhuma skin encontrada</string>
     <string name="search_hint">Buscar skins, armas…</string>
     <string name="add_to_watchlist">Adicionar à lista de acompanhamento</string>
@@ -46,8 +48,44 @@
     <string name="search_stattrak_title">Somente StatTrak™</string>
     <string name="search_stattrak_subtitle">Mostrar somente skins StatTrak™</string>
     <string name="search_apply_filters">Aplicar filtros</string>
+    <string name="search_filter_wear">Desgaste</string>
+    <string name="search_filter_rarity">Raridade</string>
+    <string name="search_filter_price_range">Faixa de preço</string>
+    <string name="search_filter_options">Opções</string>
+    <string name="search_wear_all">Todos</string>
+    <string name="search_price_preset_under_10">&lt; $10</string>
+    <string name="search_price_preset_10_50">$10–$50</string>
+    <string name="search_price_preset_50_200">$50–$200</string>
+    <string name="search_price_preset_over_200">&gt; $200</string>
+    <string name="sort_price_desc">Preço: Maior para menor</string>
+    <string name="sort_price_asc">Preço: Menor para maior</string>
+    <string name="sort_name">Nome A → Z</string>
+
+    <!-- Item rarity (SkinRarity) -->
+    <string name="rarity_consumer">Qualidade Padrão</string>
+    <string name="rarity_industrial">Qualidade Industrial</string>
+    <string name="rarity_mil_spec">Qualidade Militar</string>
+    <string name="rarity_restricted">Restrito</string>
+    <string name="rarity_classified">Classificado</string>
+    <string name="rarity_covert">Oculto</string>
+    <string name="rarity_contraband">Contrabando</string>
+    <string name="rarity_knife">★ Especial</string>
+
+    <!-- Item wear (SkinWear) -->
+    <string name="wear_factory_new">Nova de Fábrica</string>
+    <string name="wear_minimal_wear">Pouco Usada</string>
+    <string name="wear_field_tested">Testada em Campo</string>
+    <string name="wear_well_worn">Bem Desgastada</string>
+    <string name="wear_battle_scarred">Veterana de Guerra</string>
+
+    <!-- Default marketplace preference -->
+    <string name="marketplace_skinport">Skinport</string>
+    <string name="marketplace_waxpeer">Waxpeer</string>
+    <string name="marketplace_csgo_market">CS:GO Market</string>
+    <string name="marketplace_lowest">Sempre o mais barato</string>
 
     <string name="skindetail_error_title">Erro</string>
+    <string name="skindetail_not_found">Skin não encontrada</string>
     <string name="skindetail_marketplace_prices">Preços nos marketplaces</string>
     <string name="skindetail_float_range">Faixa de float</string>
     <string name="skindetail_price_history">Histórico de preços</string>
@@ -56,6 +94,14 @@
     <string name="cd_open_browser">Abrir no navegador</string>
     <string name="skindetail_not_listed">Não listado</string>
     <string name="skindetail_not_enough_data">Dados insuficientes</string>
+    <string name="skindetail_wear_fn">FN</string>
+    <string name="skindetail_wear_mw">MW</string>
+    <string name="skindetail_wear_ft">FT</string>
+    <string name="skindetail_wear_ww">WW</string>
+    <string name="skindetail_wear_bs">BS</string>
+    <string name="skindetail_float_min">Mín.</string>
+    <string name="skindetail_float_median">Mediana</string>
+    <string name="skindetail_float_max">Máx.</string>
 
     <string name="watchlist_title">Lista de acompanhamento</string>
     <string name="watchlist_empty">Nenhum item na sua lista de acompanhamento.\nExplore skins e toque no ícone de marcador.</string>
@@ -75,6 +121,9 @@
     <string name="portfolio_signin_title">Faça login para acompanhar sua carteira</string>
     <string name="portfolio_signin_body">Faça login com o Steam em Configurações para sincronizar seu inventário e acompanhar lucros e perdas.</string>
     <string name="portfolio_edit_price_title">Editar preço de compra</string>
+    <string name="portfolio_error_invalid_price">Insira um preço válido</string>
+    <string name="portfolio_error_inventory_private">Seu inventário da Steam está privado. Defina-o como público nas configurações de privacidade da Steam para sincronizar.</string>
+    <string name="portfolio_error_sync_failed">Não foi possível sincronizar. Tente novamente.</string>
 
     <string name="alerts_title">Alertas de preço</string>
     <string name="alerts_empty_title">Nenhum alerta ainda</string>
@@ -96,11 +145,15 @@
     <string name="alerts_search_placeholder">Buscar uma skin…</string>
     <string name="alerts_type_label">Tipo de alerta</string>
     <string name="alerts_target_price_label">Preço-alvo (USD)</string>
+    <string name="alerts_error_invalid_target_price">Insira um preço-alvo válido</string>
+    <string name="alerts_error_pick_skin_first">Primeiro escolha uma skin</string>
     <string name="alerts_lowest_market_price">Menor preço de mercado: %1$s</string>
     <string name="alerts_create_button">Criar alerta</string>
     <string name="alerts_edit_title">Editar alerta</string>
     <string name="alerts_current_market_price">Preço de mercado atual: %1$s</string>
     <string name="alerts_save_changes">Salvar alterações</string>
+    <string name="alerts_cd_upgrade">Fazer upgrade</string>
+    <string name="alerts_cd_add_alert">Adicionar alerta</string>
 
     <string name="alert_type_buy_below">Cai abaixo de</string>
     <string name="alert_type_buy_below_desc">Notificar quando o preço cair abaixo da meta</string>
@@ -118,6 +171,29 @@
     <string name="settings_sign_out_button">Sair</string>
     <string name="settings_delete_account_title">Excluir conta?</string>
     <string name="settings_delete_account_body">Isso exclui permanentemente sua conta, lista de acompanhamento, alertas e carteira. Essa ação não pode ser desfeita.</string>
+    <string name="settings_item_sign_out">Sair</string>
+    <string name="settings_item_default_marketplace">Marketplace padrão</string>
+    <string name="settings_section_account">Conta</string>
+    <string name="settings_section_my_skins">Minhas skins</string>
+    <string name="settings_section_general">Geral</string>
+    <string name="settings_section_market_data">Dados de mercado</string>
+    <string name="settings_section_about">Sobre</string>
+    <string name="settings_item_plan">Plano</string>
+    <string name="settings_plan_premium_until">Premium · até %1$s</string>
+    <string name="settings_plan_premium">Premium</string>
+    <string name="settings_plan_free_subtitle">Plano gratuito · Faça upgrade para alertas ilimitados</string>
+    <string name="settings_item_delete_account">Excluir conta</string>
+    <string name="settings_item_sign_in_steam">Entrar com Steam</string>
+    <string name="settings_item_sign_in_subtitle">Necessário para gerenciar alertas de preço</string>
+    <string name="settings_item_watchlist_subtitle">Skins que você está acompanhando</string>
+    <string name="settings_item_portfolio_subtitle">Acompanhe o que você possui e seu lucro/prejuízo</string>
+    <string name="settings_item_privacy_policy">Política de Privacidade</string>
+    <string name="settings_item_terms_of_service">Termos de Serviço</string>
+    <string name="settings_steam_id_label">ID Steam: %1$s</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_system_default">Padrão do sistema</string>
+    <string name="settings_feature_top_movers_search">Maiores variações e busca</string>
+    <string name="settings_feature_one_free_alert">1 alerta de preço grátis</string>
 
     <plurals name="search_results_count">
         <item quantity="one">%d skin</item>

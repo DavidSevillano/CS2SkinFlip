@@ -1,5 +1,6 @@
 package com.burixer85.cs2skinflip.features.portfolio
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -105,7 +106,7 @@ fun PortfolioScreen(
 
         when (val state = uiState) {
             is PortfolioUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
-            is PortfolioUiState.Error -> ErrorState(state.message, modifier = Modifier.fillMaxSize())
+            is PortfolioUiState.Error -> ErrorState(stringResource(state.messageRes), modifier = Modifier.fillMaxSize())
             is PortfolioUiState.NotLoggedIn -> NotLoggedInView()
             is PortfolioUiState.Success -> PortfolioBody(
                 state = state,
@@ -131,7 +132,7 @@ private fun PortfolioBody(
     onDelete: (PortfolioItem) -> Unit,
 ) {
     if (state.items.isEmpty()) {
-        EmptyPortfolioView(syncing = state.syncing, syncError = state.syncError, onSync = onSync)
+        EmptyPortfolioView(syncing = state.syncing, syncErrorRes = state.syncErrorRes, onSync = onSync)
         return
     }
 
@@ -139,7 +140,7 @@ private fun PortfolioBody(
         item {
             SummaryCard(state.summary)
             Spacer(Modifier.height(8.dp))
-            SyncRow(syncing = state.syncing, syncError = state.syncError, onSync = onSync)
+            SyncRow(syncing = state.syncing, syncErrorRes = state.syncErrorRes, onSync = onSync)
         }
         items(state.items, key = { it.id }) { item ->
             PortfolioItemRow(
@@ -191,7 +192,7 @@ private fun SummaryCard(summary: PortfolioSummary) {
 }
 
 @Composable
-private fun SyncRow(syncing: Boolean, syncError: String?, onSync: () -> Unit) {
+private fun SyncRow(syncing: Boolean, @StringRes syncErrorRes: Int?, onSync: () -> Unit) {
     Column {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -207,9 +208,9 @@ private fun SyncRow(syncing: Boolean, syncError: String?, onSync: () -> Unit) {
                 Text(stringResource(R.string.portfolio_sync_steam), color = AccentOrange, fontSize = 13.sp)
             }
         }
-        syncError?.let {
+        syncErrorRes?.let {
             Text(
-                it, color = AccentRed, fontSize = 12.sp,
+                stringResource(it), color = AccentRed, fontSize = 12.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
@@ -217,7 +218,7 @@ private fun SyncRow(syncing: Boolean, syncError: String?, onSync: () -> Unit) {
 }
 
 @Composable
-private fun EmptyPortfolioView(syncing: Boolean, syncError: String?, onSync: () -> Unit) {
+private fun EmptyPortfolioView(syncing: Boolean, @StringRes syncErrorRes: Int?, onSync: () -> Unit) {
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
@@ -249,9 +250,9 @@ private fun EmptyPortfolioView(syncing: Boolean, syncError: String?, onSync: () 
                     Text(stringResource(R.string.portfolio_sync_steam), fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
-            syncError?.let {
+            syncErrorRes?.let {
                 Spacer(Modifier.height(12.dp))
-                Text(it, color = AccentRed, fontSize = 12.sp, textAlign = TextAlign.Center)
+                Text(stringResource(it), color = AccentRed, fontSize = 12.sp, textAlign = TextAlign.Center)
             }
         }
     }
@@ -393,9 +394,9 @@ private fun EditPriceDialog(viewModel: PortfolioViewModel, onDismiss: () -> Unit
                         cursorColor = AccentOrange,
                     ),
                 )
-                state.errorMessage?.let { msg ->
+                state.errorMessageRes?.let { msgRes ->
                     Spacer(Modifier.height(8.dp))
-                    Text(msg, color = AccentRed, fontSize = 12.sp)
+                    Text(stringResource(msgRes), color = AccentRed, fontSize = 12.sp)
                 }
             }
         },

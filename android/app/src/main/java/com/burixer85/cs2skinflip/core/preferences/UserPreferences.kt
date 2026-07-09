@@ -1,11 +1,13 @@
 package com.burixer85.cs2skinflip.core.preferences
 
+import androidx.annotation.StringRes
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.burixer85.cs2skinflip.R
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -36,11 +38,11 @@ object Currency {
     }
 }
 
-enum class DefaultMarketplace(val label: String) {
-    SKINPORT("Skinport"),
-    WAXPEER("Waxpeer"),
-    CSGO_MARKET("CS:GO Market"),
-    LOWEST("Always cheapest");
+enum class DefaultMarketplace(@StringRes val labelRes: Int) {
+    SKINPORT(R.string.marketplace_skinport),
+    WAXPEER(R.string.marketplace_waxpeer),
+    CSGO_MARKET(R.string.marketplace_csgo_market),
+    LOWEST(R.string.marketplace_lowest);
 
     companion object {
         fun fromName(name: String?): DefaultMarketplace =

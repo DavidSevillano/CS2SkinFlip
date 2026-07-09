@@ -1,6 +1,7 @@
 package com.burixer85.cs2skinflip.features.skindetail
 
 import androidx.lifecycle.SavedStateHandle
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
@@ -63,7 +64,7 @@ class SkinDetailViewModelTest {
         val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
         dispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(SkinDetailUiState.Error("Skin not found"), viewModel.uiState.value)
+        assertEquals(SkinDetailUiState.Error(R.string.skindetail_not_found), viewModel.uiState.value)
     }
 
     @Test
@@ -78,7 +79,7 @@ class SkinDetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            SkinDetailUiState.Error("No internet connection. Check your connection and try again."),
+            SkinDetailUiState.Error(R.string.error_no_internet),
             viewModel.uiState.value,
         )
     }
@@ -95,7 +96,7 @@ class SkinDetailViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
-            SkinDetailUiState.Error("Something went wrong. Please try again."),
+            SkinDetailUiState.Error(R.string.error_generic_retry),
             viewModel.uiState.value,
         )
     }

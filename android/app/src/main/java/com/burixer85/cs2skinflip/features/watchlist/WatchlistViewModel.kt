@@ -1,10 +1,11 @@
 package com.burixer85.cs2skinflip.features.watchlist
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,7 +16,7 @@ import javax.inject.Inject
 sealed class WatchlistUiState {
     object Loading : WatchlistUiState()
     data class Success(val items: List<WatchlistItem>) : WatchlistUiState()
-    data class Error(val message: String) : WatchlistUiState()
+    data class Error(@StringRes val messageRes: Int) : WatchlistUiState()
 }
 
 @HiltViewModel
@@ -40,7 +41,7 @@ class WatchlistViewModel @Inject constructor(
     private fun observeWatchlist() {
         viewModelScope.launch {
             watchlistRepository.getAll()
-                .catch { e -> _uiState.value = WatchlistUiState.Error(e.toUserMessage()) }
+                .catch { e -> _uiState.value = WatchlistUiState.Error(e.toUserMessageRes()) }
                 .collect { items -> _uiState.value = WatchlistUiState.Success(items) }
         }
     }
