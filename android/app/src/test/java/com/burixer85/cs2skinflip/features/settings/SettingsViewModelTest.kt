@@ -80,14 +80,15 @@ class SettingsViewModelTest {
     fun `loads the user when logged in`() = runTest {
         val deps = viewModel(loggedIn = true)
 
-        assertEquals("user-1", deps.viewModel.user.value?.id)
+        val state = deps.viewModel.accountState.value
+        assertEquals("user-1", (state as? AccountUiState.SignedIn)?.user?.id)
     }
 
     @Test
     fun `clears the user when not logged in`() = runTest {
         val deps = viewModel(loggedIn = false)
 
-        assertNull(deps.viewModel.user.value)
+        assertEquals(AccountUiState.SignedOut, deps.viewModel.accountState.value)
     }
 
     @Test

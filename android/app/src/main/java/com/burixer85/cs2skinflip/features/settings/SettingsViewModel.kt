@@ -17,6 +17,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * [Loading] covers both "auth state not checked yet" and "logged in but profile still
+ * fetching" — collapsing those into [SignedOut] is what caused the Settings screen to
+ * flash the "Sign in with Steam" prompt before the real account loaded.
+ */
+sealed class AccountUiState {
+    object Loading : AccountUiState()
+    object SignedOut : AccountUiState()
+    data class SignedIn(val user: MeResponseDto) : AccountUiState()
+}
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val preferences: UserPreferences,
@@ -28,21 +39,23 @@ class SettingsViewModel @Inject constructor(
     val marketplace: StateFlow<DefaultMarketplace> =
         preferences.marketplace.stateIn(viewModelScope, SharingStarted.Eagerly, DefaultMarketplace.LOWEST)
 
-
-    val isLoggedIn: StateFlow<Boolean> =
-        authRepository.isLoggedIn.stateIn(viewModelScope, SharingStarted.Eagerly, false)
-
-    private val _user = MutableStateFlow<MeResponseDto?>(null)
-    val user: StateFlow<MeResponseDto?> = _user
+    private val _accountState = MutableStateFlow<AccountUiState>(AccountUiState.Loading)
+    val accountState: StateFlow<AccountUiState> = _accountState
 
     init {
         viewModelScope.launch {
             authRepository.isLoggedIn.collect { loggedIn ->
-                _user.value = if (loggedIn) runCatching { backendApi.getMe() }.getOrNull() else null
+                if (!loggedIn) {
+                    _accountState.value = AccountUiState.SignedOut
+                    return@collect
+                }
+                val me = runCatching { backendApi.getMe() }.getOrNull()
+                _accountState.value = me?.let { AccountUiState.SignedIn(it) } ?: AccountUiState.SignedOut
                 // Safety net: covers a purchase that succeeded but never reached the backend
                 // (e.g. app killed right after payment).
-                if (loggedIn && billingRepository.syncPendingPurchases()) {
-                    _user.value = runCatching { backendApi.getMe() }.getOrNull()
+                if (billingRepository.syncPendingPurchases()) {
+                    val refreshed = runCatching { backendApi.getMe() }.getOrNull()
+                    if (refreshed != null) _accountState.value = AccountUiState.SignedIn(refreshed)
                 }
             }
         }
@@ -50,7 +63,10 @@ class SettingsViewModel @Inject constructor(
             billingRepository.purchaseUpdates.collect { purchases ->
                 var unlocked = false
                 purchases.forEach { if (billingRepository.verify(it)) unlocked = true }
-                if (unlocked) _user.value = runCatching { backendApi.getMe() }.getOrNull()
+                if (unlocked) {
+                    val refreshed = runCatching { backendApi.getMe() }.getOrNull()
+                    if (refreshed != null) _accountState.value = AccountUiState.SignedIn(refreshed)
+                }
             }
         }
     }
@@ -78,7 +94,7 @@ class SettingsViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             authRepository.logout()
-            _user.value = null
+            _accountState.value = AccountUiState.SignedOut
         }
     }
 
@@ -88,7 +104,7 @@ class SettingsViewModel @Inject constructor(
     fun deleteAccount() {
         viewModelScope.launch {
             runCatching { authRepository.deleteAccount() }
-                .onSuccess { _user.value = null }
+                .onSuccess { _accountState.value = AccountUiState.SignedOut }
                 .onFailure { _deleteAccountError.value = "Couldn't delete your account. Please try again." }
         }
     }

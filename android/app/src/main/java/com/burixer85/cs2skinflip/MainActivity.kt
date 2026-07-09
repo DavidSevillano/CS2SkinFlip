@@ -1,5 +1,6 @@
 package com.burixer85.cs2skinflip
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.burixer85.cs2skinflip.core.ads.AdsManager
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
+import com.burixer85.cs2skinflip.core.preferences.LocaleHelper
 import com.burixer85.cs2skinflip.core.preferences.UserPreferences
 import com.burixer85.cs2skinflip.core.review.ReviewFlowManager
 import com.burixer85.cs2skinflip.core.review.ReviewTrigger
@@ -46,6 +48,10 @@ class MainActivity : ComponentActivity() {
 
     /** Skin ID coming from a push notification tap — triggers navigation in AppNavigation */
     private var notificationSkinId by mutableStateOf<String?>(null)
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
