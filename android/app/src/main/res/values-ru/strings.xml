@@ -18,6 +18,8 @@
     <string name="retry">Повторить</string>
     <string name="loading">Загрузка…</string>
     <string name="error_generic">Что-то пошло не так</string>
+    <string name="error_generic_retry">Что-то пошло не так. Попробуйте снова.</string>
+    <string name="error_no_internet">Нет подключения к интернету. Проверьте соединение и попробуйте снова.</string>
     <string name="no_results">Скины не найдены</string>
     <string name="search_hint">Поиск скинов, оружия…</string>
     <string name="add_to_watchlist">Добавить в отслеживаемые</string>
@@ -46,8 +48,44 @@
     <string name="search_stattrak_title">Только StatTrak™</string>
     <string name="search_stattrak_subtitle">Показывать только скины StatTrak™</string>
     <string name="search_apply_filters">Применить фильтры</string>
+    <string name="search_filter_wear">Износ</string>
+    <string name="search_filter_rarity">Редкость</string>
+    <string name="search_filter_price_range">Диапазон цен</string>
+    <string name="search_filter_options">Параметры</string>
+    <string name="search_wear_all">Все</string>
+    <string name="search_price_preset_under_10">&lt; $10</string>
+    <string name="search_price_preset_10_50">$10–$50</string>
+    <string name="search_price_preset_50_200">$50–$200</string>
+    <string name="search_price_preset_over_200">&gt; $200</string>
+    <string name="sort_price_desc">Цена: по убыванию</string>
+    <string name="sort_price_asc">Цена: по возрастанию</string>
+    <string name="sort_name">Название A → Z</string>
+
+    <!-- Item rarity (SkinRarity) -->
+    <string name="rarity_consumer">Ширпотреб</string>
+    <string name="rarity_industrial">Промышленное качество</string>
+    <string name="rarity_mil_spec">Армейское качество</string>
+    <string name="rarity_restricted">Запрещённое</string>
+    <string name="rarity_classified">Засекреченное</string>
+    <string name="rarity_covert">Тайное</string>
+    <string name="rarity_contraband">Контрабанда</string>
+    <string name="rarity_knife">★ Особое</string>
+
+    <!-- Item wear (SkinWear) -->
+    <string name="wear_factory_new">Прямо с завода</string>
+    <string name="wear_minimal_wear">Немного поношенное</string>
+    <string name="wear_field_tested">После полевых испытаний</string>
+    <string name="wear_well_worn">Поношенное</string>
+    <string name="wear_battle_scarred">Закалённое в боях</string>
+
+    <!-- Default marketplace preference -->
+    <string name="marketplace_skinport">Skinport</string>
+    <string name="marketplace_waxpeer">Waxpeer</string>
+    <string name="marketplace_csgo_market">CS:GO Market</string>
+    <string name="marketplace_lowest">Всегда самая низкая цена</string>
 
     <string name="skindetail_error_title">Ошибка</string>
+    <string name="skindetail_not_found">Скин не найден</string>
     <string name="skindetail_marketplace_prices">Цены на площадках</string>
     <string name="skindetail_float_range">Диапазон float</string>
     <string name="skindetail_price_history">История цен</string>
@@ -56,6 +94,14 @@
     <string name="cd_open_browser">Открыть в браузере</string>
     <string name="skindetail_not_listed">Не выставлен</string>
     <string name="skindetail_not_enough_data">Недостаточно данных</string>
+    <string name="skindetail_wear_fn">FN</string>
+    <string name="skindetail_wear_mw">MW</string>
+    <string name="skindetail_wear_ft">FT</string>
+    <string name="skindetail_wear_ww">WW</string>
+    <string name="skindetail_wear_bs">BS</string>
+    <string name="skindetail_float_min">Мин.</string>
+    <string name="skindetail_float_median">Медиана</string>
+    <string name="skindetail_float_max">Макс.</string>
 
     <string name="watchlist_title">Отслеживаемые</string>
     <string name="watchlist_empty">В списке отслеживания пока пусто.\nПросматривайте скины и нажимайте на иконку закладки.</string>
@@ -75,6 +121,9 @@
     <string name="portfolio_signin_title">Войдите, чтобы отслеживать портфель</string>
     <string name="portfolio_signin_body">Войдите через Steam в разделе «Настройки», чтобы синхронизировать инвентарь и отслеживать прибыль/убыток.</string>
     <string name="portfolio_edit_price_title">Изменить цену покупки</string>
+    <string name="portfolio_error_invalid_price">Введите корректную цену</string>
+    <string name="portfolio_error_inventory_private">Ваш инвентарь Steam скрыт. Сделайте его публичным в настройках приватности Steam, чтобы синхронизировать.</string>
+    <string name="portfolio_error_sync_failed">Не удалось синхронизировать. Попробуйте снова.</string>
 
     <string name="alerts_title">Оповещения о цене</string>
     <string name="alerts_empty_title">Пока нет оповещений</string>
@@ -96,11 +145,15 @@
     <string name="alerts_search_placeholder">Поиск скина…</string>
     <string name="alerts_type_label">Тип оповещения</string>
     <string name="alerts_target_price_label">Целевая цена (USD)</string>
+    <string name="alerts_error_invalid_target_price">Введите корректную целевую цену</string>
+    <string name="alerts_error_pick_skin_first">Сначала выберите скин</string>
     <string name="alerts_lowest_market_price">Минимальная рыночная цена: %1$s</string>
     <string name="alerts_create_button">Создать оповещение</string>
     <string name="alerts_edit_title">Изменить оповещение</string>
     <string name="alerts_current_market_price">Текущая рыночная цена: %1$s</string>
     <string name="alerts_save_changes">Сохранить изменения</string>
+    <string name="alerts_cd_upgrade">Улучшить</string>
+    <string name="alerts_cd_add_alert">Добавить оповещение</string>
 
     <string name="alert_type_buy_below">Опускается ниже</string>
     <string name="alert_type_buy_below_desc">Уведомлять, когда цена опускается ниже цели</string>
@@ -118,6 +171,29 @@
     <string name="settings_sign_out_button">Выйти</string>
     <string name="settings_delete_account_title">Удалить аккаунт?</string>
     <string name="settings_delete_account_body">Это навсегда удалит ваш аккаунт, список отслеживания, оповещения и портфель. Это действие нельзя отменить.</string>
+    <string name="settings_item_sign_out">Выйти</string>
+    <string name="settings_item_default_marketplace">Площадка по умолчанию</string>
+    <string name="settings_section_account">Аккаунт</string>
+    <string name="settings_section_my_skins">Мои скины</string>
+    <string name="settings_section_general">Общие</string>
+    <string name="settings_section_market_data">Рыночные данные</string>
+    <string name="settings_section_about">О приложении</string>
+    <string name="settings_item_plan">План</string>
+    <string name="settings_plan_premium_until">Premium · до %1$s</string>
+    <string name="settings_plan_premium">Premium</string>
+    <string name="settings_plan_free_subtitle">Бесплатный план · Улучшите для безлимитных оповещений</string>
+    <string name="settings_item_delete_account">Удалить аккаунт</string>
+    <string name="settings_item_sign_in_steam">Войти через Steam</string>
+    <string name="settings_item_sign_in_subtitle">Требуется для управления оповещениями о цене</string>
+    <string name="settings_item_watchlist_subtitle">Скины, которые вы отслеживаете</string>
+    <string name="settings_item_portfolio_subtitle">Отслеживайте то, чем владеете, и вашу прибыль/убыток</string>
+    <string name="settings_item_privacy_policy">Политика конфиденциальности</string>
+    <string name="settings_item_terms_of_service">Условия использования</string>
+    <string name="settings_steam_id_label">Steam ID: %1$s</string>
+    <string name="settings_language">Язык</string>
+    <string name="settings_language_system_default">Как в системе</string>
+    <string name="settings_feature_top_movers_search">Лидеры движения и поиск</string>
+    <string name="settings_feature_one_free_alert">1 бесплатное оповещение о цене</string>
 
     <plurals name="search_results_count">
         <item quantity="one">%d скин</item>

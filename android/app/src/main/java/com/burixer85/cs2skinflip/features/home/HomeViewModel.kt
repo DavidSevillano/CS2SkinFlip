@@ -1,10 +1,11 @@
 package com.burixer85.cs2skinflip.features.home
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +22,7 @@ enum class TopMoversDirection(val apiValue: String) {
 sealed class HomeUiState {
     object Loading : HomeUiState()
     data class Success(val trendingSkins: List<Skin>) : HomeUiState()
-    data class Error(val message: String) : HomeUiState()
+    data class Error(@StringRes val messageRes: Int) : HomeUiState()
 }
 
 @HiltViewModel
@@ -69,7 +70,7 @@ class HomeViewModel @Inject constructor(
         risingJob = viewModelScope.launch {
             _risingState.value = HomeUiState.Loading
             skinRepository.getTrendingSkins(TopMoversDirection.RISING.apiValue)
-                .catch { e -> _risingState.value = HomeUiState.Error(e.toUserMessage()) }
+                .catch { e -> _risingState.value = HomeUiState.Error(e.toUserMessageRes()) }
                 .collect { skins -> _risingState.value = HomeUiState.Success(skins) }
         }
     }
@@ -80,7 +81,7 @@ class HomeViewModel @Inject constructor(
         fallingJob = viewModelScope.launch {
             _fallingState.value = HomeUiState.Loading
             skinRepository.getTrendingSkins(TopMoversDirection.FALLING.apiValue)
-                .catch { e -> _fallingState.value = HomeUiState.Error(e.toUserMessage()) }
+                .catch { e -> _fallingState.value = HomeUiState.Error(e.toUserMessageRes()) }
                 .collect { skins -> _fallingState.value = HomeUiState.Success(skins) }
         }
     }

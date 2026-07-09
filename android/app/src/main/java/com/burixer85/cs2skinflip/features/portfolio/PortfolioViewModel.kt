@@ -1,13 +1,15 @@
 package com.burixer85.cs2skinflip.features.portfolio
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.remote.SteamInventoryPrivateException
 import com.burixer85.cs2skinflip.core.data.repository.PortfolioRepository
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioItem
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioSummary
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,16 +27,16 @@ sealed class PortfolioUiState {
         val items: List<PortfolioItem>,
         val summary: PortfolioSummary,
         val syncing: Boolean = false,
-        val syncError: String? = null,
+        @StringRes val syncErrorRes: Int? = null,
     ) : PortfolioUiState()
-    data class Error(val message: String) : PortfolioUiState()
+    data class Error(@StringRes val messageRes: Int) : PortfolioUiState()
 }
 
 data class EditPriceState(
     val item: PortfolioItem? = null,   // non-null means the dialog is open
     val price: String = "",
     val submitting: Boolean = false,
-    val errorMessage: String? = null,
+    @StringRes val errorMessageRes: Int? = null,
 )
 
 @HiltViewModel
@@ -66,7 +68,7 @@ class PortfolioViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     _uiState.value = if (e.isUnauthorized()) PortfolioUiState.NotLoggedIn
-                    else PortfolioUiState.Error(e.toUserMessage())
+                    else PortfolioUiState.Error(e.toUserMessageRes())
                 }
         }
     }
@@ -74,17 +76,16 @@ class PortfolioViewModel @Inject constructor(
     fun sync() {
         val current = _uiState.value as? PortfolioUiState.Success ?: return
         viewModelScope.launch {
-            _uiState.value = current.copy(syncing = true, syncError = null)
+            _uiState.value = current.copy(syncing = true, syncErrorRes = null)
             runCatching { portfolioRepository.sync() }
                 .onSuccess { load() }
                 .onFailure { e ->
-                    val message = when {
-                        e is SteamInventoryPrivateException ->
-                            "Your Steam inventory is private. Set it to public in your Steam privacy settings to sync."
-                        e.isBadRequest() -> "Couldn't sync. Try again."
-                        else -> e.toUserMessage()
+                    val messageRes = when {
+                        e is SteamInventoryPrivateException -> R.string.portfolio_error_inventory_private
+                        e.isBadRequest() -> R.string.portfolio_error_sync_failed
+                        else -> e.toUserMessageRes()
                     }
-                    _uiState.value = current.copy(syncing = false, syncError = message)
+                    _uiState.value = current.copy(syncing = false, syncErrorRes = messageRes)
                 }
         }
     }
@@ -115,10 +116,10 @@ class PortfolioViewModel @Inject constructor(
         val item = s.item ?: return false
         val price = s.price.toDoubleOrNull()
         if (price == null || price <= 0) {
-            _editState.update { it.copy(errorMessage = "Enter a valid price") }
+            _editState.update { it.copy(errorMessageRes = R.string.portfolio_error_invalid_price) }
             return false
         }
-        _editState.update { it.copy(submitting = true, errorMessage = null) }
+        _editState.update { it.copy(submitting = true, errorMessageRes = null) }
         return runCatching {
             portfolioRepository.updateAcquirePrice(item.skinId, item.assetId, price)
         }.fold(
@@ -132,7 +133,7 @@ class PortfolioViewModel @Inject constructor(
                     _uiState.value = PortfolioUiState.NotLoggedIn
                     _editState.value = EditPriceState()
                 } else {
-                    _editState.update { it.copy(submitting = false, errorMessage = e.toUserMessage()) }
+                    _editState.update { it.copy(submitting = false, errorMessageRes = e.toUserMessageRes()) }
                 }
                 false
             },

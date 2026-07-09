@@ -100,13 +100,13 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 // Wear-condition float boundaries (CS2 standard values)
-private data class WearSegment(val start: Float, val end: Float, val label: String, val color: Color)
+private data class WearSegment(val start: Float, val end: Float, val labelRes: Int, val color: Color)
 private val wearSegments = listOf(
-    WearSegment(0.00f, 0.07f, "FN", Color(0xFF4CAF50)),
-    WearSegment(0.07f, 0.15f, "MW", Color(0xFF8BC34A)),
-    WearSegment(0.15f, 0.38f, "FT", Color(0xFFFFC107)),
-    WearSegment(0.38f, 0.45f, "WW", Color(0xFFFF9800)),
-    WearSegment(0.45f, 1.00f, "BS", Color(0xFFF44336)),
+    WearSegment(0.00f, 0.07f, R.string.skindetail_wear_fn, Color(0xFF4CAF50)),
+    WearSegment(0.07f, 0.15f, R.string.skindetail_wear_mw, Color(0xFF8BC34A)),
+    WearSegment(0.15f, 0.38f, R.string.skindetail_wear_ft, Color(0xFFFFC107)),
+    WearSegment(0.38f, 0.45f, R.string.skindetail_wear_ww, Color(0xFFFF9800)),
+    WearSegment(0.45f, 1.00f, R.string.skindetail_wear_bs, Color(0xFFF44336)),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -161,7 +161,7 @@ fun SkinDetailScreen(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
                     windowInsets = WindowInsets(0.dp)
                 )
-                ErrorState(message = state.message, onRetry = viewModel::retry, modifier = Modifier.fillMaxSize())
+                ErrorState(message = stringResource(state.messageRes), onRetry = viewModel::retry, modifier = Modifier.fillMaxSize())
             }
             is SkinDetailUiState.Success -> {
                 val selectedRange by viewModel.selectedRange.collectAsState()
@@ -255,7 +255,7 @@ private fun SkinDetailContent(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 RarityBadge(rarity = skin.rarity)
                 Text(
-                    text = skin.wear.displayName,
+                    text = stringResource(skin.wear.displayNameRes),
                     fontSize = 12.sp,
                     color = TextSecondary
                 )
@@ -347,9 +347,9 @@ private fun SkinDetailContent(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                FloatStat("Min", "%.4f".format(skin.floatMin))
-                FloatStat("Median", "%.4f".format(skin.floatMedian))
-                FloatStat("Max", "%.4f".format(skin.floatMax))
+                FloatStat(stringResource(R.string.skindetail_float_min), "%.4f".format(skin.floatMin))
+                FloatStat(stringResource(R.string.skindetail_float_median), "%.4f".format(skin.floatMedian))
+                FloatStat(stringResource(R.string.skindetail_float_max), "%.4f".format(skin.floatMax))
             }
         }
 
@@ -551,7 +551,7 @@ private fun FloatRangeIndicator(min: Float, max: Float, median: Float) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = seg.label,
+                        text = stringResource(seg.labelRes),
                         fontSize = 9.sp,
                         color = if (seg == activeSeg) seg.color
                                 else TextSecondary.copy(alpha = 0.35f),
