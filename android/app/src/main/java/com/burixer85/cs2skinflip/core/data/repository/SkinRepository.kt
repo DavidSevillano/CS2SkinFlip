@@ -39,7 +39,7 @@ class SkinRepository @Inject constructor(
             backendApi.searchSkins(
                 query = query.ifBlank { null },
                 weapon = weapon,
-                rarity = rarity?.displayName,
+                rarity = rarity?.apiValue,
                 sort = if (hasFilters) "name" else "random"
             ).data.map { it.toDomain() }
         }.getOrElse {
@@ -66,8 +66,8 @@ class SkinRepository @Inject constructor(
         val response = backendApi.searchSkins(
             query = query.ifBlank { null },
             weapon = filters.weapon,
-            rarity = filters.rarity?.displayName,
-            wear = filters.wear?.displayName,
+            rarity = filters.rarity?.apiValue,
+            wear = filters.wear?.apiValue,
             statTrak = if (filters.statTrakOnly) true else null,
             minPrice = filters.minPrice,
             maxPrice = filters.maxPrice,

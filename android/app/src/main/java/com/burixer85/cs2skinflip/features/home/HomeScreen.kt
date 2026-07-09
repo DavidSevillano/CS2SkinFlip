@@ -71,7 +71,7 @@ fun HomeScreen(
             when (val state = uiState) {
                 is HomeUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
                 is HomeUiState.Error -> ErrorState(
-                    message = state.message,
+                    message = stringResource(state.messageRes),
                     onRetry = viewModel::loadTrending,
                     modifier = Modifier.fillMaxSize()
                 )

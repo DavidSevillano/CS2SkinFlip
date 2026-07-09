@@ -1,12 +1,14 @@
 package com.burixer85.cs2skinflip.features.search
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -17,10 +19,10 @@ import javax.inject.Inject
 
 private const val PAGE_SIZE = 20
 
-enum class SortBy(val label: String, val apiValue: String) {
-    PRICE_DESC("Price: High → Low", "price_desc"),
-    PRICE_ASC("Price: Low → High", "price_asc"),
-    NAME("Name A → Z", "name"),
+enum class SortBy(@StringRes val labelRes: Int, val apiValue: String) {
+    PRICE_DESC(R.string.sort_price_desc, "price_desc"),
+    PRICE_ASC(R.string.sort_price_asc, "price_asc"),
+    NAME(R.string.sort_name, "name"),
 }
 
 data class SearchFilters(
@@ -49,7 +51,7 @@ sealed class SearchUiState {
         val hasMore: Boolean = false,
         val totalCount: Int = 0,
     ) : SearchUiState()
-    data class Error(val message: String) : SearchUiState()
+    data class Error(@StringRes val messageRes: Int) : SearchUiState()
 }
 
 @HiltViewModel
@@ -187,7 +189,7 @@ class SearchViewModel @Inject constructor(
                     totalCount = total,
                 )
             }.onFailure { e ->
-                _uiState.value = SearchUiState.Error(e.toUserMessage())
+                _uiState.value = SearchUiState.Error(e.toUserMessageRes())
             }
         }
     }

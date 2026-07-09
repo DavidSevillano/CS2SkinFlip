@@ -1,14 +1,16 @@
 package com.burixer85.cs2skinflip.features.skindetail
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +21,7 @@ import javax.inject.Inject
 sealed class SkinDetailUiState {
     object Loading : SkinDetailUiState()
     data class Success(val skin: Skin, val isInWatchlist: Boolean) : SkinDetailUiState()
-    data class Error(val message: String) : SkinDetailUiState()
+    data class Error(@StringRes val messageRes: Int) : SkinDetailUiState()
 }
 
 enum class PriceRange(val apiValue: String, val label: String) {
@@ -58,12 +60,12 @@ class SkinDetailViewModel @Inject constructor(
                     analytics.logSkinViewed(skin.id, skin.name)
                 }
                 .onFailure { e ->
-                    val message = if (e is HttpException && e.code() == 404) {
-                        "Skin not found"
+                    val messageRes = if (e is HttpException && e.code() == 404) {
+                        R.string.skindetail_not_found
                     } else {
-                        e.toUserMessage()
+                        e.toUserMessageRes()
                     }
-                    _uiState.value = SkinDetailUiState.Error(message)
+                    _uiState.value = SkinDetailUiState.Error(messageRes)
                 }
         }
     }

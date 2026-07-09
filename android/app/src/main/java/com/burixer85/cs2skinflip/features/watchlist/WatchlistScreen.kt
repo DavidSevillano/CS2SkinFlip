@@ -86,7 +86,7 @@ fun WatchlistScreen(
         when (val state = uiState) {
             is WatchlistUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
             is WatchlistUiState.Error -> ErrorState(
-                message = state.message,
+                message = stringResource(state.messageRes),
                 modifier = Modifier.fillMaxSize(),
             )
             is WatchlistUiState.Success -> {

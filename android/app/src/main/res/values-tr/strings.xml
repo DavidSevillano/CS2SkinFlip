@@ -18,6 +18,8 @@
     <string name="retry">Tekrar dene</string>
     <string name="loading">Yükleniyor…</string>
     <string name="error_generic">Bir şeyler yanlış gitti</string>
+    <string name="error_generic_retry">Bir şeyler yanlış gitti. Tekrar dene.</string>
+    <string name="error_no_internet">İnternet bağlantısı yok. Bağlantını kontrol edip tekrar dene.</string>
     <string name="no_results">Skin bulunamadı</string>
     <string name="search_hint">Skin, silah ara…</string>
     <string name="add_to_watchlist">İzleme listesine ekle</string>
@@ -44,8 +46,44 @@
     <string name="search_stattrak_title">Yalnızca StatTrak™</string>
     <string name="search_stattrak_subtitle">Yalnızca StatTrak™ skinlerini göster</string>
     <string name="search_apply_filters">Filtreleri uygula</string>
+    <string name="search_filter_wear">Yıpranma</string>
+    <string name="search_filter_rarity">Nadirlik</string>
+    <string name="search_filter_price_range">Fiyat aralığı</string>
+    <string name="search_filter_options">Seçenekler</string>
+    <string name="search_wear_all">Tümü</string>
+    <string name="search_price_preset_under_10">&lt; $10</string>
+    <string name="search_price_preset_10_50">$10–$50</string>
+    <string name="search_price_preset_50_200">$50–$200</string>
+    <string name="search_price_preset_over_200">&gt; $200</string>
+    <string name="sort_price_desc">Fiyat: Yüksekten Düşüğe</string>
+    <string name="sort_price_asc">Fiyat: Düşükten Yükseğe</string>
+    <string name="sort_name">İsim A → Z</string>
+
+    <!-- Item rarity (SkinRarity) -->
+    <string name="rarity_consumer">Tüketici Sınıfı</string>
+    <string name="rarity_industrial">Endüstriyel Sınıf</string>
+    <string name="rarity_mil_spec">Askeri Sınıf</string>
+    <string name="rarity_restricted">Kısıtlı</string>
+    <string name="rarity_classified">Gizli</string>
+    <string name="rarity_covert">Gizlenmiş</string>
+    <string name="rarity_contraband">Kaçak</string>
+    <string name="rarity_knife">★ Özel</string>
+
+    <!-- Item wear (SkinWear) -->
+    <string name="wear_factory_new">Fabrika Çıkışı</string>
+    <string name="wear_minimal_wear">Az Kullanılmış</string>
+    <string name="wear_field_tested">Sahada Test Edilmiş</string>
+    <string name="wear_well_worn">Yıpranmış</string>
+    <string name="wear_battle_scarred">Savaş İzli</string>
+
+    <!-- Default marketplace preference -->
+    <string name="marketplace_skinport">Skinport</string>
+    <string name="marketplace_waxpeer">Waxpeer</string>
+    <string name="marketplace_csgo_market">CS:GO Market</string>
+    <string name="marketplace_lowest">Her zaman en ucuz</string>
 
     <string name="skindetail_error_title">Hata</string>
+    <string name="skindetail_not_found">Skin bulunamadı</string>
     <string name="skindetail_marketplace_prices">Pazar yeri fiyatları</string>
     <string name="skindetail_float_range">Float aralığı</string>
     <string name="skindetail_price_history">Fiyat geçmişi</string>
@@ -54,6 +92,14 @@
     <string name="cd_open_browser">Tarayıcıda aç</string>
     <string name="skindetail_not_listed">Listelenmedi</string>
     <string name="skindetail_not_enough_data">Yeterli veri yok</string>
+    <string name="skindetail_wear_fn">FN</string>
+    <string name="skindetail_wear_mw">MW</string>
+    <string name="skindetail_wear_ft">FT</string>
+    <string name="skindetail_wear_ww">WW</string>
+    <string name="skindetail_wear_bs">BS</string>
+    <string name="skindetail_float_min">Min.</string>
+    <string name="skindetail_float_median">Medyan</string>
+    <string name="skindetail_float_max">Maks.</string>
 
     <string name="watchlist_title">İzleme listesi</string>
     <string name="watchlist_empty">İzleme listende öğe yok.\nSkinlere göz at ve yer imi simgesine dokun.</string>
@@ -73,6 +119,9 @@
     <string name="portfolio_signin_title">Portföyünü takip etmek için oturum aç</string>
     <string name="portfolio_signin_body">Envanterini senkronize etmek ve kâr/zararını takip etmek için Ayarlar\'dan Steam ile oturum aç.</string>
     <string name="portfolio_edit_price_title">Satın alma fiyatını düzenle</string>
+    <string name="portfolio_error_invalid_price">Geçerli bir fiyat gir</string>
+    <string name="portfolio_error_inventory_private">Steam envanterin gizli. Senkronize etmek için Steam gizlilik ayarlarından herkese açık yap.</string>
+    <string name="portfolio_error_sync_failed">Senkronize edilemedi. Tekrar dene.</string>
 
     <string name="alerts_title">Fiyat uyarıları</string>
     <string name="alerts_empty_title">Henüz uyarı yok</string>
@@ -94,11 +143,15 @@
     <string name="alerts_search_placeholder">Skin ara…</string>
     <string name="alerts_type_label">Uyarı türü</string>
     <string name="alerts_target_price_label">Hedef fiyat (USD)</string>
+    <string name="alerts_error_invalid_target_price">Geçerli bir hedef fiyat gir</string>
+    <string name="alerts_error_pick_skin_first">Önce bir skin seç</string>
     <string name="alerts_lowest_market_price">En düşük piyasa fiyatı: %1$s</string>
     <string name="alerts_create_button">Uyarı oluştur</string>
     <string name="alerts_edit_title">Uyarıyı düzenle</string>
     <string name="alerts_current_market_price">Güncel piyasa fiyatı: %1$s</string>
     <string name="alerts_save_changes">Değişiklikleri kaydet</string>
+    <string name="alerts_cd_upgrade">Yükselt</string>
+    <string name="alerts_cd_add_alert">Uyarı ekle</string>
 
     <string name="alert_type_buy_below">Altına düşer</string>
     <string name="alert_type_buy_below_desc">Fiyat hedefin altına düştüğünde bildir</string>
@@ -116,6 +169,29 @@
     <string name="settings_sign_out_button">Oturumu kapat</string>
     <string name="settings_delete_account_title">Hesap silinsin mi?</string>
     <string name="settings_delete_account_body">Bu işlem hesabını, izleme listeni, uyarılarını ve portföyünü kalıcı olarak siler. Bu işlem geri alınamaz.</string>
+    <string name="settings_item_sign_out">Oturumu kapat</string>
+    <string name="settings_item_default_marketplace">Varsayılan pazar yeri</string>
+    <string name="settings_section_account">Hesap</string>
+    <string name="settings_section_my_skins">Skinlerim</string>
+    <string name="settings_section_general">Genel</string>
+    <string name="settings_section_market_data">Piyasa verileri</string>
+    <string name="settings_section_about">Hakkında</string>
+    <string name="settings_item_plan">Plan</string>
+    <string name="settings_plan_premium_until">Premium · %1$s tarihine kadar</string>
+    <string name="settings_plan_premium">Premium</string>
+    <string name="settings_plan_free_subtitle">Ücretsiz plan · Sınırsız uyarılar için yükselt</string>
+    <string name="settings_item_delete_account">Hesabı sil</string>
+    <string name="settings_item_sign_in_steam">Steam ile oturum aç</string>
+    <string name="settings_item_sign_in_subtitle">Fiyat uyarılarını yönetmek için gereklidir</string>
+    <string name="settings_item_watchlist_subtitle">İzlediğin skinler</string>
+    <string name="settings_item_portfolio_subtitle">Sahip olduklarını ve kâr/zararını takip et</string>
+    <string name="settings_item_privacy_policy">Gizlilik Politikası</string>
+    <string name="settings_item_terms_of_service">Hizmet Şartları</string>
+    <string name="settings_steam_id_label">Steam ID: %1$s</string>
+    <string name="settings_language">Dil</string>
+    <string name="settings_language_system_default">Sistem varsayılanı</string>
+    <string name="settings_feature_top_movers_search">En çok hareketlenenler ve arama</string>
+    <string name="settings_feature_one_free_alert">1 ücretsiz fiyat uyarısı</string>
 
     <plurals name="search_results_count">
         <item quantity="other">%d skin</item>

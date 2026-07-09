@@ -1,8 +1,10 @@
 package com.burixer85.cs2skinflip.features.alerts
 
 import android.app.Activity
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.AlertRepository
@@ -11,7 +13,7 @@ import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
 import com.burixer85.cs2skinflip.core.domain.model.Skin
-import com.burixer85.cs2skinflip.core.util.toUserMessage
+import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import com.burixer85.cs2skinflip.features.search.SearchFilters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -35,7 +37,7 @@ sealed class AlertsUiState {
         /** True when the user is on free tier and at the alert cap */
         val atFreeLimit: Boolean get() = !isPremium && freeLimit != null && alerts.size >= freeLimit
     }
-    data class Error(val message: String) : AlertsUiState()
+    data class Error(@StringRes val messageRes: Int) : AlertsUiState()
 }
 
 data class CreateAlertState(
@@ -46,7 +48,7 @@ data class CreateAlertState(
     val type: AlertType = AlertType.BUY_BELOW,
     val targetPrice: String = "",
     val submitting: Boolean = false,
-    val errorMessage: String? = null,
+    @StringRes val errorMessageRes: Int? = null,
 )
 
 data class EditAlertState(
@@ -54,7 +56,7 @@ data class EditAlertState(
     val type: AlertType = AlertType.BUY_BELOW,
     val targetPrice: String = "",
     val submitting: Boolean = false,
-    val errorMessage: String? = null,
+    @StringRes val errorMessageRes: Int? = null,
 )
 
 @HiltViewModel
@@ -118,7 +120,7 @@ class AlertsViewModel @Inject constructor(
                     _uiState.value = if (e.isUnauthorized()) {
                         AlertsUiState.NotLoggedIn
                     } else {
-                        AlertsUiState.Error(e.toUserMessage())
+                        AlertsUiState.Error(e.toUserMessageRes())
                     }
                 }
         }
@@ -166,10 +168,10 @@ class AlertsViewModel @Inject constructor(
         val alert = s.alert ?: return false
         val price = s.targetPrice.toDoubleOrNull()
         if (price == null || price <= 0) {
-            _editState.update { it.copy(errorMessage = "Enter a valid target price") }
+            _editState.update { it.copy(errorMessageRes = R.string.alerts_error_invalid_target_price) }
             return false
         }
-        _editState.update { it.copy(submitting = true, errorMessage = null) }
+        _editState.update { it.copy(submitting = true, errorMessageRes = null) }
         return runCatching {
             alertRepository.update(alert.id, type = s.type, targetPrice = price)
         }.fold(
@@ -184,7 +186,7 @@ class AlertsViewModel @Inject constructor(
                     _uiState.value = AlertsUiState.NotLoggedIn
                     _editState.value = EditAlertState()
                 } else {
-                    _editState.update { it.copy(submitting = false, errorMessage = e.toUserMessage()) }
+                    _editState.update { it.copy(submitting = false, errorMessageRes = e.toUserMessageRes()) }
                 }
                 false
             },
@@ -246,16 +248,16 @@ class AlertsViewModel @Inject constructor(
     suspend fun submitCreateAlert(): Boolean {
         val s = _createState.value
         val skin = s.selectedSkin ?: run {
-            _createState.update { it.copy(errorMessage = "Pick a skin first") }
+            _createState.update { it.copy(errorMessageRes = R.string.alerts_error_pick_skin_first) }
             return false
         }
         val typed = s.targetPrice.toDoubleOrNull()
         if (typed == null || typed <= 0) {
-            _createState.update { it.copy(errorMessage = "Enter a valid target price") }
+            _createState.update { it.copy(errorMessageRes = R.string.alerts_error_invalid_target_price) }
             return false
         }
         val priceUsd = typed  // always USD
-        _createState.update { it.copy(submitting = true, errorMessage = null) }
+        _createState.update { it.copy(submitting = true, errorMessageRes = null) }
         return runCatching {
             alertRepository.create(skin.id, s.type, priceUsd)
         }.fold(
@@ -271,7 +273,7 @@ class AlertsViewModel @Inject constructor(
                     resetCreateState()
                 } else {
                     _createState.update {
-                        it.copy(submitting = false, errorMessage = e.toUserMessage())
+                        it.copy(submitting = false, errorMessageRes = e.toUserMessageRes())
                     }
                 }
                 false
