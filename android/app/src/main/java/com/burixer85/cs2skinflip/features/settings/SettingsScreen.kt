@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Star
@@ -69,8 +70,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.burixer85.cs2skinflip.BuildConfig
 import com.burixer85.cs2skinflip.R
+import com.burixer85.cs2skinflip.core.preferences.AppLanguage
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
+import com.burixer85.cs2skinflip.core.preferences.LocaleHelper
 import com.burixer85.cs2skinflip.core.ui.components.PremiumBanner
+import com.burixer85.cs2skinflip.core.ui.components.SkeletonBox
 import com.burixer85.cs2skinflip.core.ui.theme.AccentBlue
 import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.AccentRed
@@ -93,8 +97,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
-    val user by viewModel.user.collectAsState()
+    val accountState by viewModel.accountState.collectAsState()
     val marketplace by viewModel.marketplace.collectAsState()
     val deleteAccountError by viewModel.deleteAccountError.collectAsState()
     val purchaseError by viewModel.purchaseError.collectAsState()
@@ -103,6 +106,8 @@ fun SettingsScreen(
     var showUpgradeDialog by remember { mutableStateOf(false) }
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
+    var showLanguageSheet by remember { mutableStateOf(false) }
+    var currentAppLanguage by remember { mutableStateOf(LocaleHelper.getLanguage(context)) }
 
     fun signInWithSteam() {
         runCatching {
@@ -133,58 +138,61 @@ fun SettingsScreen(
         Spacer(Modifier.height(12.dp))
 
         // ── Account ───────────────────────────────────────────────────────────
-        SectionHeader("Account")
-        if (isLoggedIn && user != null) {
-            // Profile info row
-            AccountInfoRow(
-                username = user!!.username,
-                email = user!!.steamId?.let { "Steam ID: ${it.takeLast(10)}" } ?: "",
-                avatarUrl = user!!.avatarUrl,
-                isPremium = user!!.isPremium,
-            )
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-            // Plan row — tappable if free
-            SettingsItem(
-                icon = Icons.Default.Star,
-                iconTint = PremiumGold,
-                label = "Plan",
-                subtitle = if (user!!.isPremium) {
-                    val until = user!!.premiumUntil?.let { raw ->
-                        runCatching {
-                            val iso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-                            val fmt = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
-                            "Premium · until ${fmt.format(iso.parse(raw)!!)}"
-                        }.getOrElse { "Premium" }
-                    } ?: "Premium"
-                    until
-                } else "Free plan · Upgrade for unlimited alerts",
-                onClick = { if (user!!.isPremium == false) showUpgradeDialog = true },
-                showChevron = user!!.isPremium == false,
-            )
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsItem(
-                icon = Icons.AutoMirrored.Filled.Logout,
-                iconTint = AccentRed,
-                label = "Sign out",
-                subtitle = null,
-                onClick = { showSignOutDialog = true },
-                showChevron = false,
-            )
-            HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsItem(
-                icon = Icons.Default.Delete,
-                iconTint = AccentRed,
-                label = "Delete account",
-                subtitle = null,
-                onClick = { showDeleteAccountDialog = true },
-                showChevron = false,
-            )
-        } else {
-            SettingsItem(
+        SectionHeader(stringResource(R.string.settings_section_account))
+        when (val account = accountState) {
+            is AccountUiState.Loading -> AccountLoadingRow()
+            is AccountUiState.SignedIn -> {
+                val user = account.user
+                // Profile info row
+                AccountInfoRow(
+                    username = user.username,
+                    email = user.steamId?.let { stringResource(R.string.settings_steam_id_label, it.takeLast(10)) } ?: "",
+                    avatarUrl = user.avatarUrl,
+                    isPremium = user.isPremium,
+                )
+                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                // Plan row — tappable if free
+                val premiumLabel = stringResource(R.string.settings_plan_premium)
+                SettingsItem(
+                    icon = Icons.Default.Star,
+                    iconTint = PremiumGold,
+                    label = stringResource(R.string.settings_item_plan),
+                    subtitle = if (user.isPremium) {
+                        user.premiumUntil?.let { raw ->
+                            runCatching {
+                                val iso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                                val fmt = java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.US)
+                                stringResource(R.string.settings_plan_premium_until, fmt.format(iso.parse(raw)!!))
+                            }.getOrElse { premiumLabel }
+                        } ?: premiumLabel
+                    } else stringResource(R.string.settings_plan_free_subtitle),
+                    onClick = { if (user.isPremium == false) showUpgradeDialog = true },
+                    showChevron = user.isPremium == false,
+                )
+                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsItem(
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    iconTint = AccentRed,
+                    label = stringResource(R.string.settings_item_sign_out),
+                    subtitle = null,
+                    onClick = { showSignOutDialog = true },
+                    showChevron = false,
+                )
+                HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsItem(
+                    icon = Icons.Default.Delete,
+                    iconTint = AccentRed,
+                    label = stringResource(R.string.settings_item_delete_account),
+                    subtitle = null,
+                    onClick = { showDeleteAccountDialog = true },
+                    showChevron = false,
+                )
+            }
+            is AccountUiState.SignedOut -> SettingsItem(
                 icon = Icons.Default.AccountCircle,
                 iconTint = AccentOrange,
-                label = "Sign in with Steam",
-                subtitle = "Required to manage price alerts",
+                label = stringResource(R.string.settings_item_sign_in_steam),
+                subtitle = stringResource(R.string.settings_item_sign_in_subtitle),
                 onClick = { signInWithSteam() },
             )
         }
@@ -192,43 +200,55 @@ fun SettingsScreen(
         Spacer(Modifier.height(8.dp))
 
         // ── My Skins ──────────────────────────────────────────────────────────
-        SectionHeader("My Skins")
+        SectionHeader(stringResource(R.string.settings_section_my_skins))
         SettingsItem(
             icon = Icons.Default.Bookmarks,
             iconTint = AccentOrange,
-            label = "Watchlist",
-            subtitle = "Skins you're tracking",
+            label = stringResource(R.string.watchlist_title),
+            subtitle = stringResource(R.string.settings_item_watchlist_subtitle),
             onClick = onWatchlistClick,
         )
         HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
         SettingsItem(
             icon = Icons.Default.AttachMoney,
             iconTint = AccentOrange,
-            label = "Portfolio",
-            subtitle = "Track what you own and your profit/loss",
+            label = stringResource(R.string.tab_portfolio),
+            subtitle = stringResource(R.string.settings_item_portfolio_subtitle),
             onClick = onPortfolioClick,
         )
 
         Spacer(Modifier.height(8.dp))
 
+        // ── General ───────────────────────────────────────────────────────────
+        SectionHeader(stringResource(R.string.settings_section_general))
+        SettingsItem(
+            icon = Icons.Default.Language,
+            iconTint = AccentBlue,
+            label = stringResource(R.string.settings_language),
+            subtitle = currentAppLanguage.displayName(),
+            onClick = { showLanguageSheet = true },
+        )
+
+        Spacer(Modifier.height(8.dp))
+
         // ── Market data ───────────────────────────────────────────────────────
-        SectionHeader("Market Data")
+        SectionHeader(stringResource(R.string.settings_section_market_data))
         SettingsItem(
             icon = Icons.Default.Analytics,
             iconTint = AccentBlue,
-            label = "Default Marketplace",
-            subtitle = marketplace.label,
+            label = stringResource(R.string.settings_item_default_marketplace),
+            subtitle = stringResource(marketplace.labelRes),
             onClick = { showMarketplaceSheet = true },
         )
 
         Spacer(Modifier.height(8.dp))
 
         // ── About ─────────────────────────────────────────────────────────────
-        SectionHeader("About")
+        SectionHeader(stringResource(R.string.settings_section_about))
         SettingsItem(
             icon = Icons.Default.PrivacyTip,
             iconTint = TextSecondary,
-            label = "Privacy Policy",
+            label = stringResource(R.string.settings_item_privacy_policy),
             subtitle = null,
             onClick = { openUrl(PRIVACY_URL) },
             trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
@@ -237,7 +257,7 @@ fun SettingsScreen(
         SettingsItem(
             icon = Icons.Default.Description,
             iconTint = TextSecondary,
-            label = "Terms of Service",
+            label = stringResource(R.string.settings_item_terms_of_service),
             subtitle = null,
             onClick = { openUrl(TERMS_URL) },
             trailingIcon = Icons.AutoMirrored.Filled.OpenInNew,
@@ -256,6 +276,19 @@ fun SettingsScreen(
     }
 
     // ── Sheets & dialogs ─────────────────────────────────────────────────────
+    if (showLanguageSheet) {
+        LanguageSheet(
+            current = currentAppLanguage,
+            onSelect = { language ->
+                LocaleHelper.setLanguage(context, language)
+                currentAppLanguage = language
+                showLanguageSheet = false
+                context.findActivity()?.recreate()
+            },
+            onDismiss = { showLanguageSheet = false },
+        )
+    }
+
     if (showMarketplaceSheet) {
         MarketplaceSheet(
             current = marketplace,
@@ -375,6 +408,49 @@ private fun AccountInfoRow(
     }
 }
 
+/**
+ * Placeholder shown while the auth check / profile fetch is still in flight.
+ * Mirrors the row count of the signed-in layout (profile row + 3 item rows) so the
+ * screen doesn't visibly grow/jump once the real content replaces the skeleton.
+ */
+@Composable
+private fun AccountLoadingRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkeletonBox(modifier = Modifier.size(42.dp), shape = CircleShape)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            SkeletonBox(modifier = Modifier.fillMaxWidth(0.4f).height(14.dp))
+            Spacer(Modifier.height(6.dp))
+            SkeletonBox(modifier = Modifier.fillMaxWidth(0.3f).height(12.dp))
+        }
+    }
+    repeat(3) {
+        HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
+        SettingsItemSkeletonRow()
+    }
+}
+
+@Composable
+private fun SettingsItemSkeletonRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Surface)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SkeletonBox(modifier = Modifier.size(36.dp), shape = RoundedCornerShape(8.dp))
+        Spacer(Modifier.width(14.dp))
+        SkeletonBox(modifier = Modifier.fillMaxWidth(0.5f).height(15.dp))
+    }
+}
+
 // ─── Plan card ───────────────────────────────────────────────────────────────
 
 @Composable
@@ -405,10 +481,10 @@ private fun PlanCard(isPremium: Boolean) {
                 }
                 Spacer(Modifier.height(12.dp))
                 val features = listOf(
-                    Triple("Top movers & search", true, true),
-                    Triple("Watchlist", true, true),
-                    Triple("1 free price alert", true, true),
-                    Triple("Unlimited price alerts", isPremium, false),
+                    Triple(stringResource(R.string.settings_feature_top_movers_search), true, true),
+                    Triple(stringResource(R.string.watchlist_title), true, true),
+                    Triple(stringResource(R.string.settings_feature_one_free_alert), true, true),
+                    Triple(stringResource(R.string.premium_feature_unlimited_alerts), isPremium, false),
                 )
                 features.forEach { (text, available, alwaysFree) ->
                     val tag = if (available) "✓" else "✗"
@@ -480,6 +556,33 @@ private fun SettingsItem(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun LanguageSheet(
+    current: AppLanguage,
+    onSelect: (AppLanguage) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
+        Column(Modifier.navigationBarsPadding().padding(horizontal = 4.dp, vertical = 8.dp)) {
+            Text(
+                stringResource(R.string.settings_language),
+                fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+            AppLanguage.entries.forEach { language ->
+                PickerRow(
+                    label = language.displayName(),
+                    selected = language == current,
+                    onClick = { onSelect(language) },
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun MarketplaceSheet(
     current: DefaultMarketplace,
     onSelect: (DefaultMarketplace) -> Unit,
@@ -495,7 +598,7 @@ private fun MarketplaceSheet(
             )
             DefaultMarketplace.entries.forEach { m ->
                 PickerRow(
-                    label = m.label,
+                    label = stringResource(m.labelRes),
                     selected = m == current,
                     onClick = { onSelect(m) },
                 )
