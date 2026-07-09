@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tab_home">Ana Sayfa</string>
+    <string name="tab_search">Ara</string>
+    <string name="tab_portfolio">Portföy</string>
+    <string name="tab_settings">Ayarlar</string>
+    <string name="tab_alerts">Uyarılar</string>
+
+    <string name="action_cancel">İptal</string>
+    <string name="action_ok">Tamam</string>
+    <string name="action_back">Geri</string>
+    <string name="action_save">Kaydet</string>
+    <string name="action_delete">Sil</string>
+    <string name="action_remove">Kaldır</string>
+    <string name="action_clear_all">Tümünü temizle</string>
+    <string name="action_upgrade">Yükselt</string>
+
+    <string name="retry">Tekrar dene</string>
+    <string name="loading">Yükleniyor…</string>
+    <string name="error_generic">Bir şeyler yanlış gitti</string>
+    <string name="no_results">Skin bulunamadı</string>
+    <string name="search_hint">Skin, silah ara…</string>
+    <string name="add_to_watchlist">İzleme listesine ekle</string>
+    <string name="remove_from_watchlist">İzleme listesinden kaldır</string>
+    <string name="upgrade_to_premium">Premium\'a yükselt</string>
+    <string name="premium_description">Sınırsız uyarı ve gelişmiş analizlerin kilidini aç</string>
+
+    <string name="go_premium_title">Premium ol</string>
+    <string name="premium_feature_unlimited_alerts">Sınırsız fiyat uyarısı</string>
+    <string name="premium_price_onetime">4,99 $ · tek seferlik ödeme, abonelik yok</string>
+    <string name="premium_price_monthly">4,99 $/ay</string>
+    <string name="maybe_later">Belki sonra</string>
+    <string name="price_placeholder">0.00</string>
+
+    <string name="home_subtitle">Canlı piyasa analizi</string>
+    <string name="home_top_movers_title">  En Çok Hareketlenenler  24s</string>
+    <string name="home_vol_by_movement">Harekete göre hacim</string>
+
+    <string name="cd_clear">Temizle</string>
+    <string name="search_popular_weapons">Popüler silahlar</string>
+    <string name="search_filters">Filtreler</string>
+    <string name="search_clear_filters">Filtreleri temizle</string>
+    <string name="search_price_any">Herhangi</string>
+    <string name="search_stattrak_title">Yalnızca StatTrak™</string>
+    <string name="search_stattrak_subtitle">Yalnızca StatTrak™ skinlerini göster</string>
+    <string name="search_apply_filters">Filtreleri uygula</string>
+
+    <string name="skindetail_error_title">Hata</string>
+    <string name="skindetail_marketplace_prices">Pazar yeri fiyatları</string>
+    <string name="skindetail_float_range">Float aralığı</string>
+    <string name="skindetail_price_history">Fiyat geçmişi</string>
+    <string name="skindetail_price_history_unavailable">Fiyat geçmişi henüz kullanılamıyor</string>
+    <string name="skindetail_lowest_badge">EN DÜŞÜK</string>
+    <string name="cd_open_browser">Tarayıcıda aç</string>
+    <string name="skindetail_not_listed">Listelenmedi</string>
+    <string name="skindetail_not_enough_data">Yeterli veri yok</string>
+
+    <string name="watchlist_title">İzleme listesi</string>
+    <string name="watchlist_empty">İzleme listende öğe yok.\nSkinlere göz at ve yer imi simgesine dokun.</string>
+    <string name="watchlist_swipe_hint">Kaldırmak için kaydır</string>
+    <string name="watchlist_target_diff">Hedef: %1$s (%2$s)</string>
+    <string name="watchlist_sell_target">Satış hedefi: %1$s</string>
+
+    <string name="portfolio_total_value">Toplam değer</string>
+    <string name="portfolio_pl_label">K/Z</string>
+    <string name="portfolio_invested">Yatırılan %1$s</string>
+    <string name="portfolio_sync_steam">Steam\'den senkronize et</string>
+    <string name="portfolio_empty_title">Henüz öğe yok</string>
+    <string name="portfolio_empty_subtitle">Skinlerini takip etmeye başlamak için Steam envanterini senkronize et.</string>
+    <string name="portfolio_paid">Ödenen %1$s</string>
+    <string name="portfolio_remove_title">Portföyden kaldırılsın mı?</string>
+    <string name="portfolio_remove_body">Bu işlem %1$s öğesini portföyünden kaldırır. Bu işlem geri alınamaz.</string>
+    <string name="portfolio_signin_title">Portföyünü takip etmek için oturum aç</string>
+    <string name="portfolio_signin_body">Envanterini senkronize etmek ve kâr/zararını takip etmek için Ayarlar\'dan Steam ile oturum aç.</string>
+    <string name="portfolio_edit_price_title">Satın alma fiyatını düzenle</string>
+
+    <string name="alerts_title">Fiyat uyarıları</string>
+    <string name="alerts_empty_title">Henüz uyarı yok</string>
+    <string name="alerts_empty_subtitle">Bir skin hedef alış veya satış fiyatına ulaştığında bildirim al.</string>
+    <string name="alerts_create_first">İlk uyarıyı oluştur</string>
+    <string name="alerts_current_price">Güncel %1$s</string>
+    <string name="alerts_free_limit_reached">Ücretsiz limite ulaşıldı</string>
+    <string name="alerts_free_plan">Ücretsiz plan</string>
+    <string name="alerts_usage_summary">%1$d / %2$d uyarı kullanıldı · Sınırsız için yükselt</string>
+    <string name="alerts_notifications_off_title">Bildirimleri aç</string>
+    <string name="alerts_notifications_off_body">Bildirimler kapalı. Bunlar olmadan bu skin hedef fiyatına ulaştığında haberin olmaz.</string>
+    <string name="alerts_enable">Etkinleştir</string>
+    <string name="alerts_continue_without">Etkinleştirmeden devam et</string>
+    <string name="alerts_free_plan_body">Ücretsiz plandasın ve 1 uyarı hakkın var. Tek seferlik ödemeyle sınırsız fiyat uyarısının kilidini aç:</string>
+    <string name="alerts_signin_title">Fiyat uyarılarını yönetmek için oturum aç</string>
+    <string name="alerts_signin_body">Her CS2 skin tüccarının zaten bir Steam hesabı var — giriş yapmak için onu kullan, hatırlanacak şifre yok.</string>
+    <string name="alerts_signin_button">Steam ile giriş yap</string>
+    <string name="alerts_new_title">Yeni fiyat uyarısı</string>
+    <string name="alerts_search_placeholder">Skin ara…</string>
+    <string name="alerts_type_label">Uyarı türü</string>
+    <string name="alerts_target_price_label">Hedef fiyat (USD)</string>
+    <string name="alerts_lowest_market_price">En düşük piyasa fiyatı: %1$s</string>
+    <string name="alerts_create_button">Uyarı oluştur</string>
+    <string name="alerts_edit_title">Uyarıyı düzenle</string>
+    <string name="alerts_current_market_price">Güncel piyasa fiyatı: %1$s</string>
+    <string name="alerts_save_changes">Değişiklikleri kaydet</string>
+
+    <string name="alert_type_buy_below">Altına düşer</string>
+    <string name="alert_type_buy_below_desc">Fiyat hedefin altına düştüğünde bildir</string>
+    <string name="alert_type_sell_above">Üzerine çıkar</string>
+    <string name="alert_type_sell_above_desc">Fiyat hedefin üzerine çıktığında bildir</string>
+
+    <string name="settings_version_info">Sürüm 1.0.0 · MVP</string>
+    <string name="settings_disclaimer">Fiyatlar yalnızca bilgilendirme amaçlıdır</string>
+    <string name="settings_premium_plan">Premium Plan</string>
+    <string name="settings_free_plan">Ücretsiz plan</string>
+    <string name="settings_premium_badge">PREMIUM</string>
+    <string name="settings_default_marketplace">Varsayılan pazar yeri</string>
+    <string name="settings_sign_out_title">Oturumu kapat mı?</string>
+    <string name="settings_sign_out_body">Uyarılarını yönetmek için tekrar oturum açman gerekecek.</string>
+    <string name="settings_sign_out_button">Oturumu kapat</string>
+    <string name="settings_delete_account_title">Hesap silinsin mi?</string>
+    <string name="settings_delete_account_body">Bu işlem hesabını, izleme listeni, uyarılarını ve portföyünü kalıcı olarak siler. Bu işlem geri alınamaz.</string>
+
+    <plurals name="search_results_count">
+        <item quantity="other">%d skin</item>
+    </plurals>
+    <plurals name="watchlist_items_tracked">
+        <item quantity="other">%d öğe izleniyor</item>
+    </plurals>
+    <plurals name="portfolio_items_count">
+        <item quantity="other">%d öğe</item>
+    </plurals>
+    <plurals name="alerts_active_count">
+        <item quantity="other">%d aktif</item>
+    </plurals>
+    <plurals name="alerts_count">
+        <item quantity="other">%d uyarı</item>
+    </plurals>
+</resources>

@@ -28,10 +28,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
 import com.burixer85.cs2skinflip.core.ui.components.SkinCardCompact
 import com.burixer85.cs2skinflip.core.ui.components.SkinListSkeleton
@@ -112,13 +114,13 @@ private fun HomeHeader() {
     ) {
         Column {
             Text(
-                text = "CS2 SkinFlip",
+                text = stringResource(R.string.app_name),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = AccentOrange
             )
             Text(
-                text = "Live market intelligence",
+                text = stringResource(R.string.home_subtitle),
                 fontSize = 13.sp,
                 color = TextSecondary
             )
@@ -151,13 +153,13 @@ private fun TrendingHeader() {
                 )
             }
             Text(
-                text = "  Top Movers  24h",
+                text = stringResource(R.string.home_top_movers_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
         }
         Text(
-            text = "Vol by movement",
+            text = stringResource(R.string.home_vol_by_movement),
             fontSize = 11.sp,
             color = TextSecondary
         )

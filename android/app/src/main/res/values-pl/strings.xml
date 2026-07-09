@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tab_home">Główna</string>
+    <string name="tab_search">Szukaj</string>
+    <string name="tab_portfolio">Portfel</string>
+    <string name="tab_settings">Ustawienia</string>
+    <string name="tab_alerts">Alerty</string>
+
+    <string name="action_cancel">Anuluj</string>
+    <string name="action_ok">OK</string>
+    <string name="action_back">Wstecz</string>
+    <string name="action_save">Zapisz</string>
+    <string name="action_delete">Usuń</string>
+    <string name="action_remove">Usuń</string>
+    <string name="action_clear_all">Wyczyść wszystko</string>
+    <string name="action_upgrade">Ulepsz</string>
+
+    <string name="retry">Spróbuj ponownie</string>
+    <string name="loading">Ładowanie…</string>
+    <string name="error_generic">Coś poszło nie tak</string>
+    <string name="no_results">Nie znaleziono skinów</string>
+    <string name="search_hint">Szukaj skinów, broni…</string>
+    <string name="add_to_watchlist">Dodaj do obserwowanych</string>
+    <string name="remove_from_watchlist">Usuń z obserwowanych</string>
+    <string name="upgrade_to_premium">Przejdź na Premium</string>
+    <string name="premium_description">Odblokuj nieograniczone alerty i zaawansowaną analitykę</string>
+
+    <string name="go_premium_title">Zostań Premium</string>
+    <string name="premium_feature_unlimited_alerts">Nieograniczone alerty cenowe</string>
+    <string name="premium_price_onetime">4,99 USD · płatność jednorazowa, bez subskrypcji</string>
+    <string name="premium_price_monthly">4,99 USD/mies.</string>
+    <string name="maybe_later">Może później</string>
+    <string name="price_placeholder">0.00</string>
+
+    <string name="home_subtitle">Analiza rynku na żywo</string>
+    <string name="home_top_movers_title">  Największe zmiany  24h</string>
+    <string name="home_vol_by_movement">Wolumen wg zmiany</string>
+
+    <string name="cd_clear">Wyczyść</string>
+    <string name="search_popular_weapons">Popularna broń</string>
+    <string name="search_filters">Filtry</string>
+    <string name="search_clear_filters">Wyczyść filtry</string>
+    <string name="search_price_any">Dowolna</string>
+    <string name="search_stattrak_title">Tylko StatTrak™</string>
+    <string name="search_stattrak_subtitle">Pokazuj tylko skiny StatTrak™</string>
+    <string name="search_apply_filters">Zastosuj filtry</string>
+
+    <string name="skindetail_error_title">Błąd</string>
+    <string name="skindetail_marketplace_prices">Ceny na rynkach</string>
+    <string name="skindetail_float_range">Zakres float</string>
+    <string name="skindetail_price_history">Historia cen</string>
+    <string name="skindetail_price_history_unavailable">Historia cen jeszcze niedostępna</string>
+    <string name="skindetail_lowest_badge">NAJNIŻSZA</string>
+    <string name="cd_open_browser">Otwórz w przeglądarce</string>
+    <string name="skindetail_not_listed">Niedostępny</string>
+    <string name="skindetail_not_enough_data">Za mało danych</string>
+
+    <string name="watchlist_title">Obserwowane</string>
+    <string name="watchlist_empty">Brak elementów na liście obserwowanych.\nPrzeglądaj skiny i dotknij ikony zakładki.</string>
+    <string name="watchlist_swipe_hint">Przesuń, aby usunąć</string>
+    <string name="watchlist_target_diff">Cel: %1$s (%2$s)</string>
+    <string name="watchlist_sell_target">Cel sprzedaży: %1$s</string>
+
+    <string name="portfolio_total_value">Wartość całkowita</string>
+    <string name="portfolio_pl_label">Z/S</string>
+    <string name="portfolio_invested">Zainwestowano %1$s</string>
+    <string name="portfolio_sync_steam">Synchronizuj ze Steam</string>
+    <string name="portfolio_empty_title">Brak przedmiotów</string>
+    <string name="portfolio_empty_subtitle">Zsynchronizuj ekwipunek Steam, aby zacząć śledzić swoje skiny.</string>
+    <string name="portfolio_paid">Zapłacono %1$s</string>
+    <string name="portfolio_remove_title">Usunąć z portfela?</string>
+    <string name="portfolio_remove_body">To usunie %1$s z Twojego portfela. Tej czynności nie można cofnąć.</string>
+    <string name="portfolio_signin_title">Zaloguj się, aby śledzić swój portfel</string>
+    <string name="portfolio_signin_body">Zaloguj się przez Steam w Ustawieniach, aby zsynchronizować ekwipunek i śledzić zysk/stratę.</string>
+    <string name="portfolio_edit_price_title">Edytuj cenę zakupu</string>
+
+    <string name="alerts_title">Alerty cenowe</string>
+    <string name="alerts_empty_title">Brak alertów</string>
+    <string name="alerts_empty_subtitle">Otrzymuj powiadomienia, gdy skin osiągnie docelową cenę kupna lub sprzedaży.</string>
+    <string name="alerts_create_first">Utwórz pierwszy alert</string>
+    <string name="alerts_current_price">Aktualna %1$s</string>
+    <string name="alerts_free_limit_reached">Osiągnięto darmowy limit</string>
+    <string name="alerts_free_plan">Plan darmowy</string>
+    <string name="alerts_usage_summary">%1$d / %2$d alert wykorzystany · Ulepsz plan, aby mieć więcej</string>
+    <string name="alerts_notifications_off_title">Włącz powiadomienia</string>
+    <string name="alerts_notifications_off_body">Powiadomienia są wyłączone. Bez nich nie dowiesz się, gdy ten skin osiągnie docelową cenę.</string>
+    <string name="alerts_enable">Włącz</string>
+    <string name="alerts_continue_without">Kontynuuj bez włączania</string>
+    <string name="alerts_free_plan_body">Korzystasz z planu darmowego z 1 alertem. Odblokuj nieograniczone alerty cenowe jednorazową płatnością:</string>
+    <string name="alerts_signin_title">Zaloguj się, aby zarządzać alertami cenowymi</string>
+    <string name="alerts_signin_body">Każdy handlarz skinami CS2 ma już konto Steam — użyj go, aby się zalogować, bez zapamiętywania haseł.</string>
+    <string name="alerts_signin_button">Zaloguj się przez Steam</string>
+    <string name="alerts_new_title">Nowy alert cenowy</string>
+    <string name="alerts_search_placeholder">Szukaj skina…</string>
+    <string name="alerts_type_label">Typ alertu</string>
+    <string name="alerts_target_price_label">Cena docelowa (USD)</string>
+    <string name="alerts_lowest_market_price">Najniższa cena rynkowa: %1$s</string>
+    <string name="alerts_create_button">Utwórz alert</string>
+    <string name="alerts_edit_title">Edytuj alert</string>
+    <string name="alerts_current_market_price">Aktualna cena rynkowa: %1$s</string>
+    <string name="alerts_save_changes">Zapisz zmiany</string>
+
+    <string name="alert_type_buy_below">Spada poniżej</string>
+    <string name="alert_type_buy_below_desc">Powiadom, gdy cena spadnie poniżej celu</string>
+    <string name="alert_type_sell_above">Wzrasta powyżej</string>
+    <string name="alert_type_sell_above_desc">Powiadom, gdy cena wzrośnie powyżej celu</string>
+
+    <string name="settings_version_info">Wersja 1.0.0 · MVP</string>
+    <string name="settings_disclaimer">Ceny mają charakter wyłącznie informacyjny</string>
+    <string name="settings_premium_plan">Plan Premium</string>
+    <string name="settings_free_plan">Plan darmowy</string>
+    <string name="settings_premium_badge">PREMIUM</string>
+    <string name="settings_default_marketplace">Domyślny rynek</string>
+    <string name="settings_sign_out_title">Wylogować się?</string>
+    <string name="settings_sign_out_body">Będziesz musiał zalogować się ponownie, aby zarządzać alertami.</string>
+    <string name="settings_sign_out_button">Wyloguj się</string>
+    <string name="settings_delete_account_title">Usunąć konto?</string>
+    <string name="settings_delete_account_body">To trwale usunie Twoje konto, listę obserwowanych, alerty i portfel. Tej czynności nie można cofnąć.</string>
+
+    <plurals name="search_results_count">
+        <item quantity="one">%d skin</item>
+        <item quantity="few">%d skiny</item>
+        <item quantity="many">%d skinów</item>
+        <item quantity="other">%d skina</item>
+    </plurals>
+    <plurals name="watchlist_items_tracked">
+        <item quantity="one">%d element obserwowany</item>
+        <item quantity="few">%d elementy obserwowane</item>
+        <item quantity="many">%d elementów obserwowanych</item>
+        <item quantity="other">%d elementu obserwowanego</item>
+    </plurals>
+    <plurals name="portfolio_items_count">
+        <item quantity="one">%d przedmiot</item>
+        <item quantity="few">%d przedmioty</item>
+        <item quantity="many">%d przedmiotów</item>
+        <item quantity="other">%d przedmiotu</item>
+    </plurals>
+    <plurals name="alerts_active_count">
+        <item quantity="one">%d aktywny</item>
+        <item quantity="few">%d aktywne</item>
+        <item quantity="many">%d aktywnych</item>
+        <item quantity="other">%d aktywnego</item>
+    </plurals>
+    <plurals name="alerts_count">
+        <item quantity="one">%d alert</item>
+        <item quantity="few">%d alerty</item>
+        <item quantity="many">%d alertów</item>
+        <item quantity="other">%d alertu</item>
+    </plurals>
+</resources>

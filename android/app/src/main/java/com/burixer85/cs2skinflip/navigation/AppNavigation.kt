@@ -25,6 +25,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -35,6 +37,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.network.NetworkStatusViewModel
 import com.burixer85.cs2skinflip.core.ui.components.OfflineBanner
 import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
@@ -49,17 +52,17 @@ import com.burixer85.cs2skinflip.features.skindetail.SkinDetailScreen
 import com.burixer85.cs2skinflip.features.watchlist.WatchlistScreen
 
 private data class BottomNavItem(
-    val label: String,
+    @StringRes val labelRes: Int,
     val route: String,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 )
 
 private val bottomNavItems = listOf(
-    BottomNavItem("Home", Screen.Home.route, Icons.Filled.Home, Icons.Outlined.Home),
-    BottomNavItem("Search", Screen.Search.route, Icons.Filled.Search, Icons.Outlined.Search),
-    BottomNavItem("Alerts", Screen.Alerts.route, Icons.Filled.Notifications, Icons.Outlined.Notifications),
-    BottomNavItem("Settings", Screen.Settings.route, Icons.Filled.Settings, Icons.Outlined.Settings)
+    BottomNavItem(R.string.tab_home, Screen.Home.route, Icons.Filled.Home, Icons.Outlined.Home),
+    BottomNavItem(R.string.tab_search, Screen.Search.route, Icons.Filled.Search, Icons.Outlined.Search),
+    BottomNavItem(R.string.tab_alerts, Screen.Alerts.route, Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    BottomNavItem(R.string.tab_settings, Screen.Settings.route, Icons.Filled.Settings, Icons.Outlined.Settings)
 )
 
 @Composable
@@ -193,10 +196,10 @@ private fun CS2BottomBar(navController: NavHostController) {
                 icon = {
                     Icon(
                         imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                        contentDescription = item.label
+                        contentDescription = stringResource(item.labelRes)
                     )
                 },
-                label = { Text(item.label) },
+                label = { Text(stringResource(item.labelRes)) },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = AccentOrange,
                     selectedTextColor = AccentOrange,

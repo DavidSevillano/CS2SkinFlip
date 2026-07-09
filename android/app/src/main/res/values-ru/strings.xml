@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tab_home">Главная</string>
+    <string name="tab_search">Поиск</string>
+    <string name="tab_portfolio">Портфель</string>
+    <string name="tab_settings">Настройки</string>
+    <string name="tab_alerts">Оповещения</string>
+
+    <string name="action_cancel">Отмена</string>
+    <string name="action_ok">ОК</string>
+    <string name="action_back">Назад</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_remove">Убрать</string>
+    <string name="action_clear_all">Очистить всё</string>
+    <string name="action_upgrade">Улучшить</string>
+
+    <string name="retry">Повторить</string>
+    <string name="loading">Загрузка…</string>
+    <string name="error_generic">Что-то пошло не так</string>
+    <string name="no_results">Скины не найдены</string>
+    <string name="search_hint">Поиск скинов, оружия…</string>
+    <string name="add_to_watchlist">Добавить в отслеживаемые</string>
+    <string name="remove_from_watchlist">Убрать из отслеживаемых</string>
+    <string name="upgrade_to_premium">Перейти на Premium</string>
+    <string name="premium_description">Откройте неограниченные оповещения и расширенную аналитику</string>
+
+    <string name="go_premium_title">Перейти на Premium</string>
+    <string name="premium_feature_unlimited_alerts">Неограниченные оповещения о цене</string>
+    <string name="premium_price_onetime">4,99 $ · разовый платёж, без подписки</string>
+    <string name="premium_price_monthly">4,99 $/мес</string>
+    <string name="maybe_later">Может быть позже</string>
+    <string name="price_placeholder">0.00</string>
+
+    <string name="home_subtitle">Аналитика рынка в реальном времени</string>
+    <string name="home_top_movers_title">  Лидеры движения  24ч</string>
+    <string name="home_vol_by_movement">Объём по изменению</string>
+
+    <string name="cd_clear">Очистить</string>
+    <string name="search_popular_weapons">Популярное оружие</string>
+    <string name="search_filters">Фильтры</string>
+    <string name="search_clear_filters">Сбросить фильтры</string>
+    <string name="search_price_any">Любая</string>
+    <string name="search_stattrak_title">Только StatTrak™</string>
+    <string name="search_stattrak_subtitle">Показывать только скины StatTrak™</string>
+    <string name="search_apply_filters">Применить фильтры</string>
+
+    <string name="skindetail_error_title">Ошибка</string>
+    <string name="skindetail_marketplace_prices">Цены на площадках</string>
+    <string name="skindetail_float_range">Диапазон float</string>
+    <string name="skindetail_price_history">История цен</string>
+    <string name="skindetail_price_history_unavailable">История цен пока недоступна</string>
+    <string name="skindetail_lowest_badge">МИН. ЦЕНА</string>
+    <string name="cd_open_browser">Открыть в браузере</string>
+    <string name="skindetail_not_listed">Не выставлен</string>
+    <string name="skindetail_not_enough_data">Недостаточно данных</string>
+
+    <string name="watchlist_title">Отслеживаемые</string>
+    <string name="watchlist_empty">В списке отслеживания пока пусто.\nПросматривайте скины и нажимайте на иконку закладки.</string>
+    <string name="watchlist_swipe_hint">Проведите, чтобы удалить</string>
+    <string name="watchlist_target_diff">Цель: %1$s (%2$s)</string>
+    <string name="watchlist_sell_target">Цель продажи: %1$s</string>
+
+    <string name="portfolio_total_value">Общая стоимость</string>
+    <string name="portfolio_pl_label">П/У</string>
+    <string name="portfolio_invested">Инвестировано %1$s</string>
+    <string name="portfolio_sync_steam">Синхронизировать со Steam</string>
+    <string name="portfolio_empty_title">Пока нет предметов</string>
+    <string name="portfolio_empty_subtitle">Синхронизируйте инвентарь Steam, чтобы начать отслеживать свои скины.</string>
+    <string name="portfolio_paid">Оплачено %1$s</string>
+    <string name="portfolio_remove_title">Удалить из портфеля?</string>
+    <string name="portfolio_remove_body">Это удалит %1$s из вашего портфеля. Это действие нельзя отменить.</string>
+    <string name="portfolio_signin_title">Войдите, чтобы отслеживать портфель</string>
+    <string name="portfolio_signin_body">Войдите через Steam в разделе «Настройки», чтобы синхронизировать инвентарь и отслеживать прибыль/убыток.</string>
+    <string name="portfolio_edit_price_title">Изменить цену покупки</string>
+
+    <string name="alerts_title">Оповещения о цене</string>
+    <string name="alerts_empty_title">Пока нет оповещений</string>
+    <string name="alerts_empty_subtitle">Получайте уведомление, когда скин достигнет целевой цены покупки или продажи.</string>
+    <string name="alerts_create_first">Создать первое оповещение</string>
+    <string name="alerts_current_price">Текущая %1$s</string>
+    <string name="alerts_free_limit_reached">Достигнут бесплатный лимит</string>
+    <string name="alerts_free_plan">Бесплатный план</string>
+    <string name="alerts_usage_summary">%1$d / %2$d оповещение использовано · Улучшите план для безлимита</string>
+    <string name="alerts_notifications_off_title">Включить уведомления</string>
+    <string name="alerts_notifications_off_body">Уведомления отключены. Без них вы не узнаете, когда этот скин достигнет целевой цены.</string>
+    <string name="alerts_enable">Включить</string>
+    <string name="alerts_continue_without">Продолжить без них</string>
+    <string name="alerts_free_plan_body">Вы на бесплатном плане с 1 оповещением. Откройте неограниченные оповещения о цене разовым платежом:</string>
+    <string name="alerts_signin_title">Войдите, чтобы управлять оповещениями о цене</string>
+    <string name="alerts_signin_body">У каждого трейдера скинов CS2 уже есть аккаунт Steam — используйте его для входа, без паролей для запоминания.</string>
+    <string name="alerts_signin_button">Войти через Steam</string>
+    <string name="alerts_new_title">Новое оповещение о цене</string>
+    <string name="alerts_search_placeholder">Поиск скина…</string>
+    <string name="alerts_type_label">Тип оповещения</string>
+    <string name="alerts_target_price_label">Целевая цена (USD)</string>
+    <string name="alerts_lowest_market_price">Минимальная рыночная цена: %1$s</string>
+    <string name="alerts_create_button">Создать оповещение</string>
+    <string name="alerts_edit_title">Изменить оповещение</string>
+    <string name="alerts_current_market_price">Текущая рыночная цена: %1$s</string>
+    <string name="alerts_save_changes">Сохранить изменения</string>
+
+    <string name="alert_type_buy_below">Опускается ниже</string>
+    <string name="alert_type_buy_below_desc">Уведомлять, когда цена опускается ниже цели</string>
+    <string name="alert_type_sell_above">Поднимается выше</string>
+    <string name="alert_type_sell_above_desc">Уведомлять, когда цена поднимается выше цели</string>
+
+    <string name="settings_version_info">Версия 1.0.0 · MVP</string>
+    <string name="settings_disclaimer">Цены приведены только в информационных целях</string>
+    <string name="settings_premium_plan">План Premium</string>
+    <string name="settings_free_plan">Бесплатный план</string>
+    <string name="settings_premium_badge">PREMIUM</string>
+    <string name="settings_default_marketplace">Площадка по умолчанию</string>
+    <string name="settings_sign_out_title">Выйти из аккаунта?</string>
+    <string name="settings_sign_out_body">Вам нужно будет снова войти, чтобы управлять оповещениями.</string>
+    <string name="settings_sign_out_button">Выйти</string>
+    <string name="settings_delete_account_title">Удалить аккаунт?</string>
+    <string name="settings_delete_account_body">Это навсегда удалит ваш аккаунт, список отслеживания, оповещения и портфель. Это действие нельзя отменить.</string>
+
+    <plurals name="search_results_count">
+        <item quantity="one">%d скин</item>
+        <item quantity="few">%d скина</item>
+        <item quantity="many">%d скинов</item>
+        <item quantity="other">%d скина</item>
+    </plurals>
+    <plurals name="watchlist_items_tracked">
+        <item quantity="one">%d элемент отслеживается</item>
+        <item quantity="few">%d элемента отслеживается</item>
+        <item quantity="many">%d элементов отслеживается</item>
+        <item quantity="other">%d элемента отслеживается</item>
+    </plurals>
+    <plurals name="portfolio_items_count">
+        <item quantity="one">%d предмет</item>
+        <item quantity="few">%d предмета</item>
+        <item quantity="many">%d предметов</item>
+        <item quantity="other">%d предмета</item>
+    </plurals>
+    <plurals name="alerts_active_count">
+        <item quantity="one">%d активно</item>
+        <item quantity="few">%d активны</item>
+        <item quantity="many">%d активны</item>
+        <item quantity="other">%d активно</item>
+    </plurals>
+    <plurals name="alerts_count">
+        <item quantity="one">%d оповещение</item>
+        <item quantity="few">%d оповещения</item>
+        <item quantity="many">%d оповещений</item>
+        <item quantity="other">%d оповещения</item>
+    </plurals>
+</resources>

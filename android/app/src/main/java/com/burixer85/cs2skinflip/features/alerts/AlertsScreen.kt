@@ -74,6 +74,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -84,6 +86,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.BuildConfig
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.billing.findActivity
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
@@ -147,7 +150,7 @@ fun AlertsScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Price Alerts", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.alerts_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 if (uiState is AlertsUiState.Success) {
                     val s = uiState as AlertsUiState.Success
                     val count = s.alerts.count { it.isActive }
@@ -164,7 +167,7 @@ fun AlertsScreen(
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                "$count active", color = AccentOrange,
+                                pluralStringResource(R.plurals.alerts_active_count, count, count), color = AccentOrange,
                                 fontSize = 12.sp, fontWeight = FontWeight.Medium
                             )
                         }
@@ -289,7 +292,7 @@ private fun AlertsList(
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Text(
-                "${alerts.size} alerts",
+                pluralStringResource(R.plurals.alerts_count, alerts.size, alerts.size),
                 style = MaterialTheme.typography.labelMedium,
                 color = TextTertiary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -326,10 +329,10 @@ private fun EmptyAlertsView(onAddFirst: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(20.dp))
-            Text("No alerts yet", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(stringResource(R.string.alerts_empty_title), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Get notified when a skin hits your target buy or sell price.",
+                stringResource(R.string.alerts_empty_subtitle),
                 color = TextSecondary, textAlign = TextAlign.Center, fontSize = 14.sp,
             )
             Spacer(Modifier.height(24.dp))
@@ -341,7 +344,7 @@ private fun EmptyAlertsView(onAddFirst: () -> Unit) {
             ) {
                 Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Create first alert", fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(stringResource(R.string.alerts_create_first), fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
     }
@@ -400,7 +403,7 @@ private fun AlertRow(alert: Alert, onToggle: () -> Unit, onDelete: () -> Unit, o
                             Icon(typeIcon, null, tint = typeColor, modifier = Modifier.size(11.dp))
                             Spacer(Modifier.width(3.dp))
                             Text(
-                                alert.type.displayName, fontSize = 10.sp,
+                                stringResource(alert.type.displayNameRes), fontSize = 10.sp,
                                 color = typeColor, fontWeight = FontWeight.Medium,
                             )
                         }
@@ -418,7 +421,7 @@ private fun AlertRow(alert: Alert, onToggle: () -> Unit, onDelete: () -> Unit, o
                         modifier = Modifier.padding(top = 2.dp),
                     ) {
                         Text(
-                            "Current ${currency.format(alert.currentPrice)}",
+                            stringResource(R.string.alerts_current_price, currency.format(alert.currentPrice)),
                             fontSize = 11.sp, color = TextTertiary,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
@@ -499,19 +502,19 @@ private fun FreeTierBanner(used: Int, limit: Int, onUpgrade: () -> Unit) {
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                if (atLimit) "Free limit reached" else "Free plan",
+                stringResource(if (atLimit) R.string.alerts_free_limit_reached else R.string.alerts_free_plan),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
             )
             Text(
-                "$used / $limit alert used · Upgrade for unlimited",
+                stringResource(R.string.alerts_usage_summary, used, limit),
                 fontSize = 11.sp,
                 color = TextSecondary,
             )
         }
         Text(
-            "Upgrade",
+            stringResource(R.string.action_upgrade),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = if (atLimit) PremiumGold else AccentOrange,
@@ -537,12 +540,12 @@ private fun NotificationPermissionDialog(onEnable: () -> Unit, onDismiss: () -> 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.NotificationsActive, null, tint = AccentOrange, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Turn on notifications", fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.alerts_notifications_off_title), fontWeight = FontWeight.Bold, color = TextPrimary)
             }
         },
         text = {
             Text(
-                "Notifications are off. Without them, you won't be notified when this skin hits your target price.",
+                stringResource(R.string.alerts_notifications_off_body),
                 color = TextSecondary, fontSize = 14.sp,
             )
         },
@@ -552,12 +555,12 @@ private fun NotificationPermissionDialog(onEnable: () -> Unit, onDismiss: () -> 
                 colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text("Enable", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.alerts_enable), color = Color.White, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text("Continue without", color = TextSecondary)
+                Text(stringResource(R.string.alerts_continue_without), color = TextSecondary)
             }
         },
     )
@@ -572,24 +575,24 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Go Premium", fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(stringResource(R.string.go_premium_title), fontWeight = FontWeight.Bold, color = TextPrimary)
             }
         },
         text = {
             Column {
                 Text(
-                    "You're on the free plan with 1 alert. Unlock unlimited price alerts with a one-time payment:",
+                    stringResource(R.string.alerts_free_plan_body),
                     color = TextSecondary, fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Unlimited price alerts", color = TextPrimary, fontSize = 13.sp)
+                    Text(stringResource(R.string.premium_feature_unlimited_alerts), color = TextPrimary, fontSize = 13.sp)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "$4.99 · one-time payment, no subscription",
+                    stringResource(R.string.premium_price_onetime),
                     color = TextSecondary, fontSize = 12.sp,
                 )
             }
@@ -600,12 +603,12 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Text("Upgrade", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.action_upgrade), color = Color.Black, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text("Maybe later", color = TextSecondary)
+                Text(stringResource(R.string.maybe_later), color = TextSecondary)
             }
         },
     )
@@ -630,13 +633,13 @@ private fun NotLoggedInView() {
             Icon(Icons.Default.NotificationsActive, null, tint = AccentOrange, modifier = Modifier.size(56.dp))
         }
         Text(
-            "Sign in to manage price alerts",
+            stringResource(R.string.alerts_signin_title),
             fontWeight = FontWeight.Bold, fontSize = 22.sp, color = TextPrimary,
             modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Every CS2 skin trader already has a Steam account — use it to sign in, no passwords to remember.",
+            stringResource(R.string.alerts_signin_body),
             color = TextSecondary, textAlign = TextAlign.Center, fontSize = 13.sp,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -652,7 +655,7 @@ private fun NotLoggedInView() {
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().height(52.dp),
         ) {
-            Text("Sign in with Steam", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Text(stringResource(R.string.alerts_signin_button), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
         }
     }
 }
@@ -682,7 +685,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("New price alert", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                Text(stringResource(R.string.alerts_new_title), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, "Close", tint = TextSecondary)
                 }
@@ -694,7 +697,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
             OutlinedTextField(
                 value = state.query,
                 onValueChange = viewModel::onCreateQueryChange,
-                placeholder = { Text("Search a skin…", color = TextTertiary) },
+                placeholder = { Text(stringResource(R.string.alerts_search_placeholder), color = TextTertiary) },
                 leadingIcon = { Icon(Icons.Default.Search, null, tint = TextSecondary) },
                 trailingIcon = {
                     if (state.isSearching) {
@@ -725,7 +728,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                 Spacer(Modifier.height(16.dp))
 
                 // ── Type segmented picker ─────────────────────────────────────
-                Text("Alert type", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.alerts_type_label), fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(6.dp))
                 Row(
                     Modifier
@@ -754,7 +757,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = state.type.description,
+                    text = stringResource(state.type.descriptionRes),
                     fontSize = 11.sp,
                     color = TextTertiary,
                 )
@@ -763,7 +766,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
 
                 // ── Target price ──────────────────────────────────────────────
                 Text(
-                    "Target price (USD)",
+                    stringResource(R.string.alerts_target_price_label),
                     fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(6.dp))
@@ -771,7 +774,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                     value = state.targetPrice,
                     onValueChange = viewModel::onCreateTargetPriceChange,
                     leadingIcon = { Text("$", color = TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                    placeholder = { Text("0.00", color = TextTertiary) },
+                    placeholder = { Text(stringResource(R.string.price_placeholder), color = TextTertiary) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth(),
@@ -781,7 +784,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                 if (skin.lowestMarketPrice > 0) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Lowest market price: ${Currency.format(skin.lowestMarketPrice)}",
+                        stringResource(R.string.alerts_lowest_market_price, Currency.format(skin.lowestMarketPrice)),
                         fontSize = 11.sp, color = TextTertiary,
                     )
                 }
@@ -820,7 +823,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
                     )
                 } else {
                     Text(
-                        "Create alert",
+                        stringResource(R.string.alerts_create_button),
                         fontWeight = FontWeight.Bold,
                         color = if (state.selectedSkin == null) TextTertiary else Color.White,
                     )
@@ -858,7 +861,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Edit alert", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                Text(stringResource(R.string.alerts_edit_title), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, "Close", tint = TextSecondary)
                 }
@@ -891,7 +894,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
             Spacer(Modifier.height(16.dp))
 
             // ── Alert type ────────────────────────────────────────────────────
-            Text("Alert type", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.alerts_type_label), fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             Row(
                 Modifier
@@ -919,18 +922,18 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(6.dp))
-            Text(text = state.type.description, fontSize = 11.sp, color = TextTertiary)
+            Text(text = stringResource(state.type.descriptionRes), fontSize = 11.sp, color = TextTertiary)
 
             Spacer(Modifier.height(16.dp))
 
             // ── Target price ──────────────────────────────────────────────────
-            Text("Target price (USD)", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(R.string.alerts_target_price_label), fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = state.targetPrice,
                 onValueChange = viewModel::onEditTargetPriceChange,
                 leadingIcon = { Text("$", color = TextSecondary, fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                placeholder = { Text("0.00", color = TextTertiary) },
+                placeholder = { Text(stringResource(R.string.price_placeholder), color = TextTertiary) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth(),
@@ -940,7 +943,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
             if (alert.currentPrice > 0) {
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "Current market price: ${Currency.format(alert.currentPrice)}",
+                    stringResource(R.string.alerts_current_market_price, Currency.format(alert.currentPrice)),
                     fontSize = 11.sp, color = TextTertiary,
                 )
             }
@@ -972,7 +975,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
                 if (state.submitting) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
                 } else {
-                    Text("Save changes", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text(stringResource(R.string.alerts_save_changes), fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
 

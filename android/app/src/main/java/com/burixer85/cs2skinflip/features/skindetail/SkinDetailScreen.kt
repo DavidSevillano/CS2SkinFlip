@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.Marketplace
 import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
@@ -134,7 +136,7 @@ fun SkinDetailScreen(
                     title = {},
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
@@ -150,10 +152,10 @@ fun SkinDetailScreen(
             }
             is SkinDetailUiState.Error -> {
                 TopAppBar(
-                    title = { Text("Error") },
+                    title = { Text(stringResource(R.string.skindetail_error_title)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Outlined.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
@@ -200,14 +202,14 @@ private fun SkinDetailContent(
             },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back), tint = TextPrimary)
                 }
             },
             actions = {
                 IconButton(onClick = onToggleWatchlist) {
                     Icon(
                         imageVector = if (isInWatchlist) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                        contentDescription = if (isInWatchlist) "Remove from watchlist" else "Add to watchlist",
+                        contentDescription = stringResource(if (isInWatchlist) R.string.remove_from_watchlist else R.string.add_to_watchlist),
                         tint = if (isInWatchlist) AccentOrange else TextSecondary
                     )
                 }
@@ -267,7 +269,7 @@ private fun SkinDetailContent(
         // Marketplace prices
         Column(Modifier.padding(16.dp)) {
             Text(
-                text = "Marketplace Prices",
+                text = stringResource(R.string.skindetail_marketplace_prices),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -330,7 +332,7 @@ private fun SkinDetailContent(
         // Float info
         Column(Modifier.padding(16.dp)) {
             Text(
-                text = "Float Range",
+                text = stringResource(R.string.skindetail_float_range),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
@@ -361,7 +363,7 @@ private fun SkinDetailContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Price History",
+                    text = stringResource(R.string.skindetail_price_history),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -378,7 +380,7 @@ private fun SkinDetailContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Price history not yet available",
+                        text = stringResource(R.string.skindetail_price_history_unavailable),
                         fontSize = 12.sp,
                         color = TextSecondary,
                         fontStyle = FontStyle.Italic
@@ -408,7 +410,7 @@ private fun SkinDetailContent(
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = if (isInWatchlist) "Remove from Watchlist" else "Add to Watchlist",
+                text = stringResource(if (isInWatchlist) R.string.remove_from_watchlist else R.string.add_to_watchlist),
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -459,7 +461,7 @@ private fun MarketplacePriceRow(
                 if (isLowest) {
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "LOWEST",
+                        text = stringResource(R.string.skindetail_lowest_badge),
                         fontSize = 10.sp,
                         color = color,
                         fontWeight = FontWeight.Bold
@@ -477,13 +479,13 @@ private fun MarketplacePriceRow(
                     Spacer(Modifier.width(6.dp))
                     Icon(
                         imageVector = Icons.Outlined.OpenInNew,
-                        contentDescription = "Open in browser",
+                        contentDescription = stringResource(R.string.cd_open_browser),
                         modifier = Modifier.size(14.dp),
                         tint = TextSecondary.copy(alpha = 0.6f)
                     )
                 } else {
                     Text(
-                        text = "Not listed",
+                        text = stringResource(R.string.skindetail_not_listed),
                         fontSize = 12.sp,
                         color = TextSecondary.copy(alpha = 0.6f),
                         fontStyle = FontStyle.Italic
@@ -606,7 +608,7 @@ private fun PriceLineChart(pricePoints: List<PricePoint>, range: PriceRange) {
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Not enough data points",
+                text = stringResource(R.string.skindetail_not_enough_data),
                 fontSize = 11.sp,
                 color = TextSecondary,
                 fontStyle = FontStyle.Italic
