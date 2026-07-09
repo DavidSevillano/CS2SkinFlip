@@ -16,12 +16,12 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "com.burixer85.cs2skinflip"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.burixer85.cs2skinflip"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
