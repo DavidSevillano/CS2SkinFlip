@@ -35,6 +35,8 @@
     <string name="home_subtitle">Аналитика рынка в реальном времени</string>
     <string name="home_top_movers_title">  Лидеры движения  24ч</string>
     <string name="home_vol_by_movement">Объём по изменению</string>
+    <string name="home_tab_rising">Растут</string>
+    <string name="home_tab_falling">Падают</string>
 
     <string name="cd_clear">Очистить</string>
     <string name="search_popular_weapons">Популярное оружие</string>

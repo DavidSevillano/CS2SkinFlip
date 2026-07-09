@@ -43,29 +43,39 @@ export class PriceService {
   }
 
   /**
-   * Top movers: skins with the highest 24h price growth.
+   * Top movers: skins with the highest (or lowest) 24h price growth, filtered
+   * for signal quality.
    *
    * Pure DB read — no external API calls. The bulk job keeps both `lowestPrice`
    * and `priceChange24h` fresh every 2h, and `priceChange24h` is indexed for
    * fast sorting. We then refine the values from the more accurate `PriceHistory`
-   * table to handle prices that moved between bulk runs.
+   * table to handle prices that moved between bulk runs, and drop rows that
+   * don't clear a minimum price ($1) and minimum absolute 24h change ($0.25) —
+   * below those thresholds the "movement" is almost always marketplace spread
+   * noise rather than a real, flippable price move.
    */
-  async getTopMovers(limit = 20): Promise<Array<AggregatedPrices & { name: string; iconUrl: string }>> {
-    const cacheKey = `top-movers:${limit}`
+  async getTopMovers(
+    direction: 'rising' | 'falling' = 'rising',
+    limit = 20
+  ): Promise<Array<AggregatedPrices & { name: string; iconUrl: string }>> {
+    const cacheKey = `top-movers:${direction}:${limit}`
     const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
     if (cached) return cached
 
-    // Pre-sorted by DB priceChange24h (indexed), falling back to price when
-    // change data is null (e.g. before 24h of price history has accumulated) —
-    // otherwise ties all sort to Postgres's arbitrary insertion order.
+    const sortOrder = direction === 'falling' ? 'asc' : 'desc'
+
+    // Pre-sorted by DB priceChange24h (indexed). Candidate batch is wider than
+    // `limit` because the quality filter below can discard rows (e.g. no
+    // PriceHistory entry from ~24h ago, or the move is too small in absolute
+    // terms) and we don't want to under-fill the final list.
     const skins = await prisma.skin.findMany({
       include: { price: true },
-      where: { price: { lowestPrice: { gt: 0 } } },
+      where: { price: { lowestPrice: { gte: 1 } } },
       orderBy: [
-        { price: { priceChange24h: { sort: 'desc', nulls: 'last' } } },
+        { price: { priceChange24h: { sort: sortOrder, nulls: 'last' } } },
         { price: { lowestPrice: 'desc' } },
       ],
-      take: limit * 3,
+      take: Math.max(limit * 5, 100),
     })
 
     const skinIds = skins.map((s) => s.id)
@@ -84,7 +94,7 @@ export class PriceService {
         const priceChange24h =
           current !== null && prev !== null && prev > 0
             ? ((current - prev) / prev) * 100
-            : (skin.price?.priceChange24h ?? null)
+            : null
         return {
           skinId: skin.id,
           marketHashName: skin.marketHashName,
@@ -97,14 +107,22 @@ export class PriceService {
           priceChange24h,
           volume24h: skin.price?.volume24h ?? null,
           updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
+          _prev: prev,
         }
       })
+      // Quality filter: need a real 24h-ago reference price and a meaningful
+      // absolute move. Without `_prev` we can't tell noise from a real move.
+      .filter((s) => s._prev !== null && s.lowestPrice !== null && Math.abs(s.lowestPrice - s._prev) >= 0.25)
       .sort((a, b) => {
-        const diff = (b.priceChange24h ?? -Infinity) - (a.priceChange24h ?? -Infinity)
+        const diff =
+          direction === 'falling'
+            ? (a.priceChange24h ?? Infinity) - (b.priceChange24h ?? Infinity)
+            : (b.priceChange24h ?? -Infinity) - (a.priceChange24h ?? -Infinity)
         if (diff !== 0) return diff
         return (b.lowestPrice ?? 0) - (a.lowestPrice ?? 0)
       })
       .slice(0, limit)
+      .map(({ _prev, ...rest }) => rest)
 
     if (topMovers.length > 0) {
       await redis.set(cacheKey, topMovers, { ex: CACHE_TTL.TOP_MOVERS })

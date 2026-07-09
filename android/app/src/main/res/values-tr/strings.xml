@@ -35,6 +35,8 @@
     <string name="home_subtitle">Canlı piyasa analizi</string>
     <string name="home_top_movers_title">  En Çok Hareketlenenler  24s</string>
     <string name="home_vol_by_movement">Harekete göre hacim</string>
+    <string name="home_tab_rising">Yükselenler</string>
+    <string name="home_tab_falling">Düşenler</string>
 
     <string name="cd_clear">Temizle</string>
     <string name="search_popular_weapons">Popüler silahlar</string>

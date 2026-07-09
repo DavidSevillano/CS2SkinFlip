@@ -20,7 +20,7 @@ import java.util.Locale
 interface CS2BackendApiService {
 
     @GET("skins/top-movers")
-    suspend fun getTopMovers(): List<TopMoverDto>
+    suspend fun getTopMovers(@Query("direction") direction: String = "rising"): List<TopMoverDto>
 
     @GET("skins/weapons")
     suspend fun getWeapons(): List<String>

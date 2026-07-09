@@ -14,11 +14,25 @@ class SkinRepositoryTest {
     @Test
     fun `getTrendingSkins propagates the failure instead of returning mock data`() = runBlocking {
         val backendApi = mock<CS2BackendApiService>()
-        whenever(backendApi.getTopMovers()).thenThrow(RuntimeException("no network"))
+        whenever(backendApi.getTopMovers("rising")).thenThrow(RuntimeException("no network"))
         val repository = SkinRepository(backendApi)
 
         var caught: Throwable? = null
         repository.getTrendingSkins()
+            .catch { e -> caught = e }
+            .toList()
+
+        assertTrue(caught is RuntimeException)
+    }
+
+    @Test
+    fun `getTrendingSkins forwards the direction param to the API`() = runBlocking {
+        val backendApi = mock<CS2BackendApiService>()
+        whenever(backendApi.getTopMovers("falling")).thenThrow(RuntimeException("stop"))
+        val repository = SkinRepository(backendApi)
+
+        var caught: Throwable? = null
+        repository.getTrendingSkins(direction = "falling")
             .catch { e -> caught = e }
             .toList()
 

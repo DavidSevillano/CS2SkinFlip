@@ -35,6 +35,8 @@
     <string name="home_subtitle">Analiza rynku na żywo</string>
     <string name="home_top_movers_title">  Największe zmiany  24h</string>
     <string name="home_vol_by_movement">Wolumen wg zmiany</string>
+    <string name="home_tab_rising">Rosnące</string>
+    <string name="home_tab_falling">Spadające</string>
 
     <string name="cd_clear">Wyczyść</string>
     <string name="search_popular_weapons">Popularna broń</string>

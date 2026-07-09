@@ -23,8 +23,8 @@ class SkinRepository @Inject constructor(
     private val backendApi: CS2BackendApiService
 ) {
 
-    fun getTrendingSkins(): Flow<List<Skin>> = flow {
-        emit(backendApi.getTopMovers().map { it.toDomain() })
+    fun getTrendingSkins(direction: String = "rising"): Flow<List<Skin>> = flow {
+        emit(backendApi.getTopMovers(direction).map { it.toDomain() })
     }
 
     fun searchSkins(

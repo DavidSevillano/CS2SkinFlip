@@ -35,6 +35,8 @@
     <string name="home_subtitle">Inteligencia de mercado en vivo</string>
     <string name="home_top_movers_title">  Más movidos  24h</string>
     <string name="home_vol_by_movement">Volumen por movimiento</string>
+    <string name="home_tab_rising">Suben</string>
+    <string name="home_tab_falling">Bajan</string>
 
     <string name="cd_clear">Borrar</string>
     <string name="search_popular_weapons">Armas populares</string>

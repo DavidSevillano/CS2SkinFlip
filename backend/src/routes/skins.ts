@@ -155,8 +155,9 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     return weapons.map((w) => w.weapon)
   })
 
-  app.get('/skins/top-movers', async () => {
-    return priceService.getTopMovers(20)
+  app.get('/skins/top-movers', async (request) => {
+    const { direction } = request.query as { direction?: string }
+    return priceService.getTopMovers(direction === 'falling' ? 'falling' : 'rising', 20)
   })
 
   app.get('/skins/:skinId', async (request, reply) => {
