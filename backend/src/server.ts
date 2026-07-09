@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
+import rateLimit from '@fastify/rate-limit'
 import { env } from './config/env'
 import { registerRoutes } from './routes'
 
@@ -20,6 +21,14 @@ export async function buildServer() {
     origin: [env.FRONTEND_URL],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  })
+
+  // Global per-IP rate limit. Protects Neon/Redis from abuse across every
+  // route; the DB-heavy public search (/skins) tightens this further per-route.
+  await app.register(rateLimit, {
+    global: true,
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW,
   })
 
   await app.register(cookie)

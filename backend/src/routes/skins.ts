@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
+import { env } from '../config/env'
 
 const priceService = new PriceService()
 
@@ -20,7 +21,19 @@ const searchQuerySchema = z.object({
 
 
 export const skinRoutes: FastifyPluginAsync = async (app) => {
-  app.get('/skins', async (request, reply) => {
+  // Stricter per-IP limit on the DB-heavy search: each call runs a raw
+  // regexp_replace scan over the ~24k-row Skin table, so it's the easiest
+  // route to hammer the database with. Tighter than the global default.
+  const searchRateLimit = {
+    config: {
+      rateLimit: {
+        max: env.RATE_LIMIT_SEARCH_MAX,
+        timeWindow: env.RATE_LIMIT_WINDOW,
+      },
+    },
+  }
+
+  app.get('/skins', searchRateLimit, async (request, reply) => {
     const params = searchQuerySchema.safeParse(request.query)
     if (!params.success) {
       return reply.status(400).send({ error: 'Invalid query parameters', details: params.error.flatten() })
