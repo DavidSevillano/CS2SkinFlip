@@ -17,6 +17,10 @@ const envSchema = z.object({
   GOOGLE_PLAY_SERVICE_ACCOUNT_PATH: z.string().optional(),
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.burixer85.cs2skinflip'),
   PREMIUM_PRODUCT_ID: z.string().default('premium_unlimited_alerts'),
+  // Global per-IP rate limit (requests per window). Search routes tighten this.
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+  RATE_LIMIT_WINDOW: z.string().default('1 minute'),
+  RATE_LIMIT_SEARCH_MAX: z.coerce.number().int().positive().default(30),
 })
 
 export type Env = z.infer<typeof envSchema>
