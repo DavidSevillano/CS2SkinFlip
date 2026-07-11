@@ -137,6 +137,15 @@ function calcLowestPrice(...prices: (number | null | undefined)[]): number | nul
   return valid.length > 0 ? Math.min(...valid) : null
 }
 
+// The 24h-change reference is the most recent history point at or before 24h
+// ago. We MUST bound how far below 24h we look: an unbounded `timestamp <=
+// dayAgo` matches the entire retained history (35-day retention ≈ millions of
+// rows) and, because `distinct` cannot be pushed to Postgres under a timestamp
+// `orderBy`, Prisma materialises every matching row in-process — enough to OOM a
+// 512MB instance. History is written every 2h, so a 12h window always contains a
+// reference point while keeping the result to a handful of rows per skin.
+const CHANGE_REFERENCE_WINDOW_MS = 12 * 60 * 60 * 1000
+
 export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
   log.info('[PricePopulate] Fetching prices from 3 marketplaces in parallel...')
 
@@ -151,8 +160,9 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
 
   // Batch-load previous price entries for 24h change calculation
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
   const recentHistory = await prisma.priceHistory.findMany({
-    where: { timestamp: { lte: dayAgo } },
+    where: { timestamp: { gte: windowStart, lte: dayAgo } },
     orderBy: { timestamp: 'desc' },
     distinct: ['skinId'],
     select: { skinId: true, price: true },
