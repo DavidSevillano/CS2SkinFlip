@@ -28,6 +28,7 @@ enum class PriceRange(val apiValue: String, val label: String) {
     DAY("24h", "24H"),
     WEEK("7d", "7D"),
     MONTH("30d", "30D"),
+    QUARTER("90d", "3M"),
 }
 
 @HiltViewModel

@@ -751,6 +751,7 @@ private fun formatAxisLabel(timestampMillis: Long, range: PriceRange): String {
         PriceRange.DAY -> "h a"
         PriceRange.WEEK -> "EEE"
         PriceRange.MONTH -> "MMM d"
+        PriceRange.QUARTER -> "MMM d"
     }
     return SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timestampMillis))
 }
