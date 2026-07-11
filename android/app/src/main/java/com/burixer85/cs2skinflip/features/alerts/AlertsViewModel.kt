@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
+import java.util.Locale
 import javax.inject.Inject
 
 private fun Throwable.isUnauthorized(): Boolean = this is HttpException && code() == 401
@@ -147,7 +148,8 @@ class AlertsViewModel @Inject constructor(
         _editState.value = EditAlertState(
             alert = alert,
             type = alert.type,
-            targetPrice = "%.2f".format(alert.targetPrice),
+            // Locale.US so the '.' decimal round-trips through toDoubleOrNull() on submit.
+            targetPrice = "%.2f".format(Locale.US, alert.targetPrice),
         )
     }
 
@@ -229,7 +231,7 @@ class AlertsViewModel @Inject constructor(
                 query = skin.name,
                 results = emptyList(),
                 targetPrice = if (skin.lowestMarketPrice > 0)
-                    "%.2f".format(skin.lowestMarketPrice) else "",
+                    "%.2f".format(Locale.US, skin.lowestMarketPrice) else "",
             )
         }
     }
