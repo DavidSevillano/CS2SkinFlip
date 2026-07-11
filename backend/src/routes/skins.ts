@@ -235,6 +235,7 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       '24h': { sinceMs: 24 * 60 * 60 * 1000, aggregateDaily: false },
       '7d':  { sinceMs: 7 * 24 * 60 * 60 * 1000, aggregateDaily: true },
       '30d': { sinceMs: 30 * 24 * 60 * 60 * 1000, aggregateDaily: true },
+      '90d': { sinceMs: 90 * 24 * 60 * 60 * 1000, aggregateDaily: true },
     }
     const { sinceMs, aggregateDaily } = rangeConfig[rawRange ?? '24h'] ?? rangeConfig['24h']
     const since = new Date(Date.now() - sinceMs)
@@ -249,20 +250,37 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       return history.map((h) => ({ price: h.price, timestamp: h.timestamp.toISOString(), source: h.source }))
     }
 
-    // Collapse to one point per calendar day, keeping the last (most recent)
-    // entry of each day. `history` is ordered ascending, so later writes to
-    // the same key naturally overwrite earlier ones, and Map iteration order
-    // (first-insertion order) stays ascending by day.
-    const byDay = new Map<string, (typeof history)[number]>()
+    // Para rangos agregados: agrupar por día UTC y emitir dos puntos, el de
+    // precio mínimo y el de máximo, ordenados por timestamp. Funciona igual
+    // sobre la parte raw reciente (0–14d) que sobre la ya downsampleada
+    // (14–120d), por lo que 30d y 90d quedan homogéneos. `history` viene
+    // ascendente, así que la iteración del Map queda ascendente por día.
+    type Point = { price: number; timestamp: string; source: string }
+    const byDay = new Map<string, Point[]>()
     for (const h of history) {
       const dayKey = h.timestamp.toISOString().slice(0, 10)
-      byDay.set(dayKey, h)
+      const point: Point = { price: h.price, timestamp: h.timestamp.toISOString(), source: h.source }
+      const arr = byDay.get(dayKey)
+      if (arr) arr.push(point)
+      else byDay.set(dayKey, [point])
     }
 
-    return Array.from(byDay.values()).map((h) => ({
-      price: h.price,
-      timestamp: h.timestamp.toISOString(),
-      source: h.source,
-    }))
+    const result: Point[] = []
+    for (const points of byDay.values()) {
+      let min = points[0]
+      let max = points[0]
+      for (const p of points) {
+        if (p.price < min.price) min = p
+        if (p.price > max.price) max = p
+      }
+      if (min === max) {
+        result.push(min) // día plano o un solo punto
+      } else {
+        result.push(
+          ...[min, max].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+        )
+      }
+    }
+    return result
   })
 }
