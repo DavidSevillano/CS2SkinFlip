@@ -20,8 +20,6 @@ export async function cleanupPriceHistory(log: FastifyBaseLogger) {
     log.info('[PriceHistoryCleanup] Skipped — ran less than 24h ago')
     return
   }
-  lastRunAt = now
-
   const hardCutoff = new Date(now - DAILY_RETENTION_DAYS * 24 * 60 * 60 * 1000)
   const rawCutoff = new Date(now - RAW_RETENTION_DAYS * 24 * 60 * 60 * 1000)
 
@@ -36,9 +34,9 @@ export async function cleanupPriceHistory(log: FastifyBaseLogger) {
     DELETE FROM "PriceHistory" WHERE id IN (
       SELECT id FROM (
         SELECT id,
-          row_number() OVER (PARTITION BY "skinId", date_trunc('day', "timestamp")
+          row_number() OVER (PARTITION BY "skinId", date_trunc('day', "timestamp" AT TIME ZONE 'UTC')
                              ORDER BY "price" ASC,  "timestamp" ASC) AS rn_min,
-          row_number() OVER (PARTITION BY "skinId", date_trunc('day', "timestamp")
+          row_number() OVER (PARTITION BY "skinId", date_trunc('day', "timestamp" AT TIME ZONE 'UTC')
                              ORDER BY "price" DESC, "timestamp" ASC) AS rn_max
         FROM "PriceHistory"
         WHERE "timestamp" < ${rawCutoff} AND "timestamp" >= ${hardCutoff}
@@ -46,6 +44,11 @@ export async function cleanupPriceHistory(log: FastifyBaseLogger) {
       WHERE t.rn_min > 1 AND t.rn_max > 1
     )
   `
+
+  // Solo armamos el guard tras completar ambos deletes con éxito — si cualquiera
+  // lanza (blip de conexión, timeout, deadlock), no queremos silenciar el job
+  // durante 24h sin haber liberado espacio realmente.
+  lastRunAt = now
 
   log.info(
     `[PriceHistoryCleanup] Hard-deleted ${hardDeleted} rows (>${DAILY_RETENTION_DAYS}d), ` +
