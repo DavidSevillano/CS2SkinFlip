@@ -173,6 +173,38 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     return priceService.getTopMovers(direction === 'falling' ? 'falling' : 'rising', 20)
   })
 
+  // Full bulk export consumed once per run by the static site generator that
+  // builds the public SEO site. Only skins with a non-null `lowestPrice` get an
+  // indexable page — hence the filter is on the price value, not merely the
+  // relation: a SkinPrice row can exist with all three marketplace prices (and
+  // thus `lowestPrice`) null, which would otherwise sort FIRST under
+  // `ORDER BY lowestPrice DESC` (Postgres NULLS FIRST) and be thin content.
+  // Ordered by value so the generator can cap page count by taking a prefix
+  // (Cloudflare Pages allows at most 20k files per deployment).
+  // Deliberately uncached: called ~once a day, and the ~6MB payload is a poor
+  // fit for Upstash.
+  app.get('/skins/export', async () => {
+    const skins = await prisma.skin.findMany({
+      where: { price: { lowestPrice: { not: null } } },
+      include: { price: true },
+      orderBy: { price: { lowestPrice: 'desc' } },
+    })
+
+    return skins.map((s) => ({
+      id: s.id,
+      marketHashName: s.marketHashName,
+      weapon: s.weapon,
+      rarity: s.rarity,
+      iconUrl: s.iconUrl,
+      skinportPrice: s.price!.skinportPrice,
+      csgoMarketPrice: s.price!.csgoMarketPrice,
+      waxpeerPrice: s.price!.waxpeerPrice,
+      lowestPrice: s.price!.lowestPrice,
+      priceChange24h: s.price!.priceChange24h,
+      updatedAt: s.price!.updatedAt.toISOString(),
+    }))
+  })
+
   app.get('/skins/:skinId', async (request, reply) => {
     const { skinId } = request.params as { skinId: string }
 
