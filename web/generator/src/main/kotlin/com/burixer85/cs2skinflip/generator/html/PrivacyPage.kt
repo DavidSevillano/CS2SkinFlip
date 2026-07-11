@@ -21,7 +21,7 @@ fun renderPrivacyPage(siteUrl: String): String {
         bodyBlock = {
             a(href = "/") { +"CS2SkinFlip" }
             h1 { +"Privacy Policy" }
-            p { +"Last updated: 9 July 2026" }
+            p { +"Last updated: 11 July 2026" }
 
             section {
                 h2 { +"Who we are" }
@@ -44,6 +44,12 @@ fun renderPrivacyPage(siteUrl: String): String {
                             "Messaging token so we can send you a push notification.")
                     }
                     li { +"Your tracked items: watchlist, alerts, portfolio and the target prices you set." }
+                    li {
+                        +("Purchase information. If you buy the one-time premium unlock, Google Play " +
+                            "processes your payment directly — we never see or store your payment details. " +
+                            "We receive only a purchase token from Google Play, which we verify with Google to " +
+                            "confirm the purchase and mark your account as premium.")
+                    }
                     li { +"Analytics. The Android app uses Firebase Analytics to record anonymous, aggregated usage events." }
                     li { +"Advertising. The Android app shows ads served by Google AdMob, which may collect a device advertising identifier." }
                 }
