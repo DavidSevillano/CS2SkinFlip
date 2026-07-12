@@ -30,3 +30,7 @@
 # App models
 -keep class com.burixer85.cs2skinflip.core.domain.model.** { *; }
 -keep class com.burixer85.cs2skinflip.core.data.local.** { *; }
+-keep class com.burixer85.cs2skinflip.core.data.remote.** { *; }
+
+# Google Play Services (missing_rules.txt from R8)
+-dontwarn com.google.android.gms.common.annotation.NoNullnessRewrite
