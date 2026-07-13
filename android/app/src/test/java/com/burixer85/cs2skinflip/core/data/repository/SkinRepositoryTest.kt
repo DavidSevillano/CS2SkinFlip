@@ -1,9 +1,11 @@
 package com.burixer85.cs2skinflip.core.data.repository
 
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
+import com.burixer85.cs2skinflip.core.data.remote.SteamPriceDto
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -69,5 +71,27 @@ class SkinRepositoryTest {
         }
 
         assertTrue(threw)
+    }
+
+    @Test
+    fun `getSteamPrice returns the price on success`() = runBlocking {
+        val backendApi = mock<CS2BackendApiService>()
+        whenever(backendApi.getSteamPrice("ak-47-redline")).thenReturn(SteamPriceDto(price = 32.39))
+        val repository = SkinRepository(backendApi)
+
+        val price = repository.getSteamPrice("ak-47-redline")
+
+        assertEquals(32.39, price)
+    }
+
+    @Test
+    fun `getSteamPrice returns null instead of throwing when the call fails`() = runBlocking {
+        val backendApi = mock<CS2BackendApiService>()
+        whenever(backendApi.getSteamPrice("ak-47-redline")).thenThrow(RuntimeException("timeout"))
+        val repository = SkinRepository(backendApi)
+
+        val price = repository.getSteamPrice("ak-47-redline")
+
+        assertEquals(null, price)
     }
 }

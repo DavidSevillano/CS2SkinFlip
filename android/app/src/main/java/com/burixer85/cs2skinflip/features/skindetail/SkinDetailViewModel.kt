@@ -30,6 +30,12 @@ enum class PriceRange(val apiValue: String, val label: String) {
     QUARTER("90d", "3M"),
 }
 
+sealed class SteamPriceState {
+    object Loading : SteamPriceState()
+    data class Available(val price: Double) : SteamPriceState()
+    object Unavailable : SteamPriceState()
+}
+
 @HiltViewModel
 class SkinDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
@@ -46,8 +52,12 @@ class SkinDetailViewModel @Inject constructor(
     private val _selectedRange = MutableStateFlow(PriceRange.WEEK)
     val selectedRange: StateFlow<PriceRange> = _selectedRange
 
+    private val _steamPriceState = MutableStateFlow<SteamPriceState>(SteamPriceState.Loading)
+    val steamPriceState: StateFlow<SteamPriceState> = _steamPriceState
+
     init {
         loadSkin()
+        loadSteamPrice()
     }
 
     private fun loadSkin() {
@@ -71,6 +81,16 @@ class SkinDetailViewModel @Inject constructor(
     }
 
     fun retry() = loadSkin()
+
+    private fun loadSteamPrice() {
+        viewModelScope.launch {
+            // Separate coroutine from loadSkin(): Steam is a live call that can be
+            // slow or fail (rate-limit), and must never hold up the rest of the
+            // screen, which loads from the DB-backed bulk pipeline.
+            val price = runCatching { skinRepository.getSteamPrice(skinId) }.getOrNull()
+            _steamPriceState.value = if (price != null) SteamPriceState.Available(price) else SteamPriceState.Unavailable
+        }
+    }
 
     fun onRangeSelected(range: PriceRange) {
         if (range == _selectedRange.value) return

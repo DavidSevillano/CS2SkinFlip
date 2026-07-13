@@ -92,4 +92,14 @@ class SkinRepository @Inject constructor(
     }.getOrDefault(emptyList())
 
     suspend fun getAllWeapons(): List<String> = backendApi.getWeapons()
+
+    /**
+     * Live, on-demand call — the only price in the repository not sourced from
+     * the 2h bulk job, because Steam has no bulk catalog endpoint. Any failure
+     * (network error, Steam rate-limit, item not listed) collapses to null,
+     * which the UI renders identically to "not listed".
+     */
+    suspend fun getSteamPrice(skinId: String): Double? = runCatching {
+        backendApi.getSteamPrice(skinId).price
+    }.getOrNull()
 }
