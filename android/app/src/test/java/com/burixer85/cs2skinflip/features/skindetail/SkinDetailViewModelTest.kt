@@ -100,4 +100,49 @@ class SkinDetailViewModelTest {
             viewModel.uiState.value,
         )
     }
+
+    @Test
+    fun `loadSteamPrice sets Available when the repository returns a price`() = runTest(dispatcher) {
+        val skinRepository = mock<SkinRepository>()
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenThrow(RuntimeException("stop main load"))
+        whenever(skinRepository.getSteamPrice("ak-47-redline")).thenReturn(32.39)
+        val watchlistRepository = mock<WatchlistRepository>()
+        val analytics = mock<AnalyticsService>()
+        val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
+
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(SteamPriceState.Available(32.39), viewModel.steamPriceState.value)
+    }
+
+    @Test
+    fun `loadSteamPrice sets Unavailable when the repository returns null`() = runTest(dispatcher) {
+        val skinRepository = mock<SkinRepository>()
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenThrow(RuntimeException("stop main load"))
+        whenever(skinRepository.getSteamPrice("ak-47-redline")).thenReturn(null)
+        val watchlistRepository = mock<WatchlistRepository>()
+        val analytics = mock<AnalyticsService>()
+        val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
+
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(SteamPriceState.Unavailable, viewModel.steamPriceState.value)
+    }
+
+    @Test
+    fun `loadSteamPrice failure does not affect the main uiState`() = runTest(dispatcher) {
+        val skinRepository = mock<SkinRepository>()
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenThrow(RuntimeException("no network"))
+        whenever(skinRepository.getSteamPrice("ak-47-redline")).thenThrow(RuntimeException("steam timeout"))
+        val watchlistRepository = mock<WatchlistRepository>()
+        val analytics = mock<AnalyticsService>()
+        val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
+
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value is SkinDetailUiState.Error)
+    }
 }
