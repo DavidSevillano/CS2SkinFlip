@@ -165,10 +165,12 @@ fun SkinDetailScreen(
             }
             is SkinDetailUiState.Success -> {
                 val selectedRange by viewModel.selectedRange.collectAsState()
+                val steamPriceState by viewModel.steamPriceState.collectAsState()
                 SkinDetailContent(
                     skin = state.skin,
                     isInWatchlist = state.isInWatchlist,
                     selectedRange = selectedRange,
+                    steamPriceState = steamPriceState,
                     onBack = onBack,
                     onToggleWatchlist = viewModel::toggleWatchlist,
                     onRangeSelected = viewModel::onRangeSelected
@@ -184,6 +186,7 @@ private fun SkinDetailContent(
     skin: Skin,
     isInWatchlist: Boolean,
     selectedRange: PriceRange,
+    steamPriceState: SteamPriceState,
     onBack: () -> Unit,
     onToggleWatchlist: () -> Unit,
     onRangeSelected: (PriceRange) -> Unit
@@ -297,6 +300,9 @@ private fun SkinDetailContent(
                 return "https://waxpeer.com/$slug/item"
             }
 
+            fun steamUrl(name: String): String =
+                "https://steamcommunity.com/market/listings/730/${Uri.encode(name)}"
+
             fun openUrl(url: String) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
@@ -324,6 +330,32 @@ private fun SkinDetailContent(
                     onClick = if (entry.price != null) ({ openUrl(entry.url) }) else null
                 )
                 Spacer(Modifier.height(8.dp))
+            }
+
+            when (val steamState = steamPriceState) {
+                is SteamPriceState.Loading -> {
+                    SkeletonBox(Modifier.fillMaxWidth().height(44.dp))
+                }
+                is SteamPriceState.Available -> {
+                    MarketplacePriceRow(
+                        name = Marketplace.STEAM.displayName,
+                        displayPrice = steamState.price,
+                        color = Color(0xFF66C0F4),
+                        isLowest = false, // Steam is informational only — never
+                                          // competes for the "lowest" badge, since
+                                          // it's excluded from Skin.lowestMarketPrice
+                        onClick = { openUrl(steamUrl(marketHashName)) }
+                    )
+                }
+                is SteamPriceState.Unavailable -> {
+                    MarketplacePriceRow(
+                        name = Marketplace.STEAM.displayName,
+                        displayPrice = null,
+                        color = Color(0xFF66C0F4),
+                        isLowest = false,
+                        onClick = null
+                    )
+                }
             }
         }
 
