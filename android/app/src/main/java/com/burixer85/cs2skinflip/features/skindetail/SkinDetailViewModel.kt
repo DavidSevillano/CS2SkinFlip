@@ -25,7 +25,6 @@ sealed class SkinDetailUiState {
 }
 
 enum class PriceRange(val apiValue: String, val label: String) {
-    DAY("24h", "24H"),
     WEEK("7d", "7D"),
     MONTH("30d", "30D"),
     QUARTER("90d", "3M"),
@@ -44,7 +43,7 @@ class SkinDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<SkinDetailUiState>(SkinDetailUiState.Loading)
     val uiState: StateFlow<SkinDetailUiState> = _uiState
 
-    private val _selectedRange = MutableStateFlow(PriceRange.DAY)
+    private val _selectedRange = MutableStateFlow(PriceRange.WEEK)
     val selectedRange: StateFlow<PriceRange> = _selectedRange
 
     init {

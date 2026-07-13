@@ -45,7 +45,7 @@ interface CS2BackendApiService {
     @GET("skins/{id}/price-history")
     suspend fun getPriceHistory(
         @Path("id") id: String,
-        @Query("range") range: String = "24h"
+        @Query("range") range: String = "7d"
     ): List<PriceHistoryDto>
 
     @GET("auth/me")
