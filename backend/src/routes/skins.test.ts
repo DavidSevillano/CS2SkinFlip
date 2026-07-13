@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Fastify from 'fastify'
 
-const { skinFindMany } = vi.hoisted(() => ({ skinFindMany: vi.fn() }))
+const { skinFindMany, skinFindUnique } = vi.hoisted(() => ({
+  skinFindMany: vi.fn(),
+  skinFindUnique: vi.fn(),
+}))
 vi.mock('../db/prisma', () => ({
-  prisma: { skin: { findMany: skinFindMany } },
+  prisma: { skin: { findMany: skinFindMany, findUnique: skinFindUnique } },
 }))
 
 // `skins.ts` imports `env`, whose module body calls process.exit(1) when the
@@ -21,6 +24,9 @@ vi.mock('../services/prices', () => ({
     }
   },
 }))
+
+const { getSteamPrice } = vi.hoisted(() => ({ getSteamPrice: vi.fn() }))
+vi.mock('../services/steamPrice', () => ({ getSteamPrice }))
 
 const { skinRoutes } = await import('./skins')
 
@@ -118,5 +124,48 @@ describe('GET /skins/export', () => {
     // Falls through to /skins/:skinId, whose handler calls findUnique — absent from
     // our prisma mock. Anything but a 200 export payload proves the route is gone.
     expect(res.statusCode).not.toBe(200)
+  })
+})
+
+describe('GET /skins/:skinId/steam-price', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('404s when the skin does not exist', async () => {
+    skinFindUnique.mockResolvedValue(null)
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins/missing-skin/steam-price' })
+
+    expect(res.statusCode).toBe(404)
+    expect(getSteamPrice).not.toHaveBeenCalled()
+  })
+
+  it('returns the price from the Steam price service', async () => {
+    skinFindUnique.mockResolvedValue({ marketHashName: 'AK-47 | Redline (Field-Tested)' })
+    getSteamPrice.mockResolvedValue(32.39)
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins/ak-47-redline-field-tested/steam-price' })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ price: 32.39 })
+    expect(getSteamPrice).toHaveBeenCalledWith(
+      'ak-47-redline-field-tested',
+      'AK-47 | Redline (Field-Tested)',
+      expect.anything(),
+    )
+  })
+
+  it('returns a null price (not an error) when Steam has no listing', async () => {
+    skinFindUnique.mockResolvedValue({ marketHashName: 'Some Unlisted Skin' })
+    getSteamPrice.mockResolvedValue(null)
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins/some-unlisted-skin/steam-price' })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ price: null })
   })
 })
