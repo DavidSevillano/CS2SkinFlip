@@ -81,4 +81,5 @@ enum class Marketplace(val displayName: String) {
     SKINPORT("Skinport"),
     CSGO_MARKET("CS:GO Market"),
     WAXPEER("Waxpeer"),
+    STEAM("Steam Community Market"),
 }
