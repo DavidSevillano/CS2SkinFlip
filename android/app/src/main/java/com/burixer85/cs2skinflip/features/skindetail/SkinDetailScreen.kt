@@ -748,7 +748,6 @@ private fun nearestPointIndex(touchX: Float, canvasWidthPx: Int, pointCount: Int
 
 private fun formatAxisLabel(timestampMillis: Long, range: PriceRange): String {
     val pattern = when (range) {
-        PriceRange.DAY -> "h a"
         PriceRange.WEEK -> "EEE"
         PriceRange.MONTH -> "MMM d"
         PriceRange.QUARTER -> "MMM d"

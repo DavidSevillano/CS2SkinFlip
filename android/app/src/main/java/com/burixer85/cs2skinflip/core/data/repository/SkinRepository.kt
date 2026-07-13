@@ -83,7 +83,7 @@ class SkinRepository @Inject constructor(
 
     suspend fun getSkinById(id: String): Skin {
         val skin = backendApi.getSkin(id)
-        val history = getPriceHistory(id, range = "24h")
+        val history = getPriceHistory(id, range = "7d")
         return skin.toDomain(priceHistory = history)
     }
 
