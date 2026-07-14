@@ -48,9 +48,6 @@ interface CS2BackendApiService {
         @Query("range") range: String = "7d"
     ): List<PriceHistoryDto>
 
-    @GET("skins/{id}/steam-price")
-    suspend fun getSteamPrice(@Path("id") id: String): SteamPriceDto
-
     @GET("auth/me")
     suspend fun getMe(): MeResponseDto
 
@@ -159,10 +156,6 @@ data class PriceHistoryDto(
     val price: Double,
     val timestamp: String,
     val source: String
-)
-
-data class SteamPriceDto(
-    val price: Double?
 )
 
 data class AlertsResponseDto(

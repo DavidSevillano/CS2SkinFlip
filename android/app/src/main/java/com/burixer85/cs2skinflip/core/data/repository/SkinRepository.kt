@@ -2,6 +2,7 @@ package com.burixer85.cs2skinflip.core.data.repository
 
 import com.burixer85.cs2skinflip.core.data.mock.MockData
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
+import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.burixer85.cs2skinflip.core.data.remote.toDomain
 import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
@@ -20,7 +21,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class SkinRepository @Inject constructor(
-    private val backendApi: CS2BackendApiService
+    private val backendApi: CS2BackendApiService,
+    private val steamApi: SteamApiService,
 ) {
 
     fun getTrendingSkins(direction: String = "rising"): Flow<List<Skin>> = flow {
@@ -94,12 +96,22 @@ class SkinRepository @Inject constructor(
     suspend fun getAllWeapons(): List<String> = backendApi.getWeapons()
 
     /**
-     * Live, on-demand call — the only price in the repository not sourced from
-     * the 2h bulk job, because Steam has no bulk catalog endpoint. Any failure
-     * (network error, Steam rate-limit, item not listed) collapses to null,
-     * which the UI renders identically to "not listed".
+     * Live, on-demand call made directly from the device rather than through
+     * the backend — Steam has no bulk catalog endpoint, and our backend's
+     * shared cloud IP gets a permanent 429 from Steam on this endpoint (each
+     * user's own IP does not). Any failure (network error, Steam rate-limit,
+     * item not listed) collapses to null, which the UI renders identically
+     * to "not listed".
      */
-    suspend fun getSteamPrice(skinId: String): Double? = runCatching {
-        backendApi.getSteamPrice(skinId).price
+    suspend fun getSteamPrice(marketHashName: String): Double? = runCatching {
+        val response = steamApi.getMarketPriceOverview(marketHashName = marketHashName)
+        if (response.success) parseSteamPrice(response.lowest_price) else null
     }.getOrNull()
+}
+
+private fun parseSteamPrice(raw: String?): Double? {
+    if (raw.isNullOrBlank()) return null
+    val cleaned = raw.filter { it.isDigit() || it == '.' }
+    val value = cleaned.toDoubleOrNull()
+    return if (value != null && value > 0) value else null
 }
