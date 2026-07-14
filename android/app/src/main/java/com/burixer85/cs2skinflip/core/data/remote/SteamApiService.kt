@@ -27,6 +27,21 @@ interface SteamApiService {
         @Query("l") language: String = "english",
         @Query("count") count: Int = 1000,
     ): InventoryResponse
+
+    /**
+     * Steam Community Market has no bulk pricing endpoint, and this one is
+     * rate-limited hard enough that our backend's shared cloud IP gets a
+     * permanent 429 from it. Called directly from the device instead — same
+     * rationale as [getPublicInventory] above.
+     */
+    @GET
+    @Headers("User-Agent: Mozilla/5.0")
+    suspend fun getMarketPriceOverview(
+        @Url url: String = "https://steamcommunity.com/market/priceoverview/",
+        @Query("appid") appId: Int = 730,
+        @Query("currency") currency: Int = 1, // USD
+        @Query("market_hash_name") marketHashName: String,
+    ): MarketPriceOverviewResponse
 }
 
 // --- DTOs ---
@@ -66,4 +81,11 @@ data class TagDto(
     val category: String,
     val internal_name: String,
     val localized_tag_name: String
+)
+
+data class MarketPriceOverviewResponse(
+    val success: Boolean,
+    val lowest_price: String?,   // e.g. "$32.39" or "$1,234.56" (currency=1 → USD)
+    val median_price: String?,
+    val volume: String?,
 )
