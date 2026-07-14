@@ -57,17 +57,18 @@ class SkinDetailViewModel @Inject constructor(
 
     init {
         loadSkin()
-        loadSteamPrice()
     }
 
     private fun loadSkin() {
         viewModelScope.launch {
             _uiState.value = SkinDetailUiState.Loading
+            _steamPriceState.value = SteamPriceState.Loading
             runCatching { skinRepository.getSkinById(skinId) }
                 .onSuccess { skin ->
                     val inWatchlist = watchlistRepository.isInWatchlist(skinId)
                     _uiState.value = SkinDetailUiState.Success(skin, inWatchlist)
                     analytics.logSkinViewed(skin.id, skin.name)
+                    loadSteamPrice(skin.marketHashName)
                 }
                 .onFailure { e ->
                     val messageRes = if (e is HttpException && e.code() == 404) {
@@ -82,12 +83,13 @@ class SkinDetailViewModel @Inject constructor(
 
     fun retry() = loadSkin()
 
-    private fun loadSteamPrice() {
+    private fun loadSteamPrice(marketHashName: String) {
+        // Own coroutine, launched only once the main skin data has rendered:
+        // Steam is a live, per-device call (no backend/shared cache — see
+        // SkinRepository.getSteamPrice) that can be slow or fail, and must
+        // never hold up or corrupt the rest of the screen if it does.
         viewModelScope.launch {
-            // Separate coroutine from loadSkin(): Steam is a live call that can be
-            // slow or fail (rate-limit), and must never hold up the rest of the
-            // screen, which loads from the DB-backed bulk pipeline.
-            val price = runCatching { skinRepository.getSteamPrice(skinId) }.getOrNull()
+            val price = runCatching { skinRepository.getSteamPrice(marketHashName) }.getOrNull()
             _steamPriceState.value = if (price != null) SteamPriceState.Available(price) else SteamPriceState.Unavailable
         }
     }
