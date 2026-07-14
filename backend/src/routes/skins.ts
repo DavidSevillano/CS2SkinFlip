@@ -2,7 +2,6 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
-import { getSteamPrice } from '../services/steamPrice'
 import { env } from '../config/env'
 
 const priceService = new PriceService()
@@ -226,16 +225,6 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       ...skin,
       price: skin.price ? { ...skin.price, priceChange24h } : skin.price,
     }
-  })
-
-  app.get('/skins/:skinId/steam-price', async (request, reply) => {
-    const { skinId } = request.params as { skinId: string }
-
-    const skin = await prisma.skin.findUnique({ where: { id: skinId }, select: { marketHashName: true } })
-    if (!skin) return reply.status(404).send({ error: 'Skin not found' })
-
-    const price = await getSteamPrice(skinId, skin.marketHashName, request.log)
-    return { price }
   })
 
   app.get('/skins/:skinId/price-history', async (request, reply) => {
