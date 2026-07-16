@@ -1,12 +1,14 @@
 // Generates Play Store screenshot HTML files (540x960 CSS px, captured at 2x = 1080x1920)
 // plus a 1024x500 feature graphic. Run: node build.mjs  (then capture.mjs)
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { LOCALES } from './locales.mjs'
+import { createT } from './strings.mjs'
+import { c } from './copy.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT = join(__dirname, 'html')
-mkdirSync(OUT, { recursive: true })
 
 // ---- Real skin catalog images (ByMykel/CSGO-API, same source as the backend) ----
 const IMG = {
@@ -51,8 +53,34 @@ const D = {
   filter: 'M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z',
 }
 
+// ---- Auto-fit ----
+// Va en el HTML generado, no en capture.mjs: asi el fichero sigue siendo
+// self-contained y al abrirlo en el navegador ves lo que se va a capturar.
+// Ruso, polaco y turco son un 20-40% mas largos que el ingles.
+const FIT_SCRIPT = `<script>
+(function(){
+  function fit(el){
+    var box = el.parentElement
+    var hi = parseFloat(getComputedStyle(el).fontSize)
+    var lo = parseFloat(el.dataset.fitMin)
+    function fits(){
+      return el.scrollWidth <= box.clientWidth + 1 && el.scrollHeight <= box.clientHeight + 1
+    }
+    if (fits()) return
+    for (var i = 0; i < 24; i++) {
+      var mid = (lo + hi) / 2
+      el.style.fontSize = mid + 'px'
+      if (fits()) lo = mid; else hi = mid
+    }
+    el.style.fontSize = lo + 'px'
+  }
+  document.querySelectorAll('[data-fit-min]').forEach(fit)
+  document.documentElement.setAttribute('data-fit-done', '1')
+})()
+</script>`
+
 // ---- Shared shell ----
-const shell = (title, caption, phoneContent, opts = {}) => `<!DOCTYPE html>
+const shell = (title, eyebrow, headline, phoneContent, opts = {}) => `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>${title}</title><style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { width:540px; height:960px; overflow:hidden; }
@@ -65,8 +93,12 @@ body {
   color:${C.text};
   display:flex; flex-direction:column; align-items:center;
 }
-.caption { text-align:center; padding:44px 40px 26px; }
-.eyebrow { font-size:15px; font-weight:700; letter-spacing:3px; color:${C.orange}; text-transform:uppercase; margin-bottom:10px; }
+/* Altura fija: con altura automatica un caption largo (ru/pl/tr) encogeria
+   .phone (flex:1) y el telefono saldria a distinta escala en cada idioma. */
+.caption { text-align:center; padding:44px 40px 26px; height:190px; display:flex; flex-direction:column; justify-content:center; }
+.eyebrow-box { height:26px; margin-bottom:10px; }
+.headline-box { height:84px; display:flex; align-items:center; justify-content:center; }
+.eyebrow { font-size:15px; font-weight:700; letter-spacing:3px; color:${C.orange}; text-transform:uppercase; white-space:nowrap; }
 .headline { font-size:34px; font-weight:800; line-height:1.18; letter-spacing:-.3px; }
 .headline .hl { color:${C.orange}; }
 .phone {
@@ -90,7 +122,10 @@ body {
 .imgbox img { width:88%; height:88%; object-fit:contain; }
 ${opts.css ?? ''}
 </style></head><body>
-<div class="caption">${caption}</div>
+<div class="caption">
+  <div class="eyebrow-box"><div class="eyebrow" data-fit-min="9">${eyebrow}</div></div>
+  <div class="headline-box"><div class="headline" data-fit-min="20">${headline}</div></div>
+</div>
 <div class="phone"><div class="screen">
   <div class="statusbar"><span>12:30</span><span class="sbi">
     ${icon('M12 21l8.5-8.5c-.83-.62-3.94-3-8.5-3s-7.67 2.38-8.5 3L12 21zm0-16c5.52 0 10 2.24 11.5 3.5L12 21 .5 8.5C2 7.24 6.48 5 12 5z'.replace(/M12 21l8.5.*?12 21zm/, 'm'), 14)}
@@ -99,16 +134,19 @@ ${opts.css ?? ''}
   </span></div>
   <div class="content">${phoneContent}</div>
 </div></div>
+${FIT_SCRIPT}
 </body></html>`
 
-const bottomNav = (active) => `<div class="bottomnav">
-  ${[['Home', D.home], ['Search', D.search], ['Alerts', D.bell], ['Settings', D.gear]].map(([label, d]) =>
-    `<div class="navitem${label === active ? ' active' : ''}"><span class="pill">${icon(d, 22)}</span><span>${label}</span></div>`).join('')}
+// La pestana activa se identifica por clave, no por label traducido: comparar
+// strings traducidos romperia en cuanto cambiase una traduccion.
+const bottomNav = (t, activeKey) => `<div class="bottomnav">
+  ${[['home', D.home], ['search', D.search], ['alerts', D.bell], ['settings', D.gear]].map(([key, d]) =>
+    `<div class="navitem${key === activeKey ? ' active' : ''}"><span class="pill">${icon(d, 22)}</span><span>${t.t('tab_' + key)}</span></div>`).join('')}
 </div>`
 
-const appHeader = `<div style="background:${C.surface};padding:14px 20px;">
+const appHeader = (t) => `<div style="background:${C.surface};padding:14px 20px;">
   <div style="font-size:21px;font-weight:800;color:${C.orange};">CS2 SkinFlip</div>
-  <div style="font-size:12px;color:${C.text2};">Live market intelligence</div>
+  <div style="font-size:12px;color:${C.text2};">${t.t('home_subtitle')}</div>
 </div>`
 
 // =============== 1. HOME / TOP MOVERS ===============
@@ -127,20 +165,20 @@ const moverRow = (rank, img, name, wear, price, change, up = true) => `
 </div>
 <div style="height:1px;background:${C.divider};margin:0 16px;"></div>`
 
-const homeScreen = shell('home', `
-  <div class="eyebrow">Market Trends</div>
-  <div class="headline">Spot the market's<br><span class="hl">biggest movers</span></div>`, `
-${appHeader}
+const homeScreen = (loc, t) => shell('home',
+  c(loc.play, 'home_eyebrow'),
+  c(loc.play, 'home_headline'), `
+${appHeader(t)}
 <div style="display:flex;background:${C.surface};border-bottom:1px solid ${C.divider};">
-  <div style="flex:1;text-align:center;padding:12px 0 10px;color:${C.orange};font-size:14px;font-weight:600;border-bottom:2.5px solid ${C.orange};">Rising</div>
-  <div style="flex:1;text-align:center;padding:12px 0 10px;color:${C.text2};font-size:14px;font-weight:500;">Falling</div>
+  <div style="flex:1;text-align:center;padding:12px 0 10px;color:${C.orange};font-size:14px;font-weight:600;border-bottom:2.5px solid ${C.orange};">${t.t('home_tab_rising')}</div>
+  <div style="flex:1;text-align:center;padding:12px 0 10px;color:${C.text2};font-size:14px;font-weight:500;">${t.t('home_tab_falling')}</div>
 </div>
 <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;">
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="width:28px;height:28px;border-radius:6px;background:rgba(255,107,53,.15);display:flex;align-items:center;justify-content:center;">${icon(D.trendUp, 16, C.orange)}</span>
-    <span style="font-size:15px;font-weight:600;">Top Movers · 24h</span>
+    <span style="font-size:15px;font-weight:600;">${t.t('home_top_movers_title')}</span>
   </div>
-  <span style="font-size:10.5px;color:${C.text2};">Vol by movement</span>
+  <span style="font-size:10.5px;color:${C.text2};">${t.t('home_vol_by_movement')}</span>
 </div>
 ${moverRow(1, IMG.akAsiimov, 'AK-47 | Asiimov', 'FT', '$182.40', '+12.4%')}
 ${moverRow(2, IMG.butterflyDoppler, '★ Butterfly Knife | Doppler', 'FN', '$1,942.00', '+8.7%')}
@@ -150,14 +188,14 @@ ${moverRow(5, IMG.deagleBlaze, 'Desert Eagle | Blaze', 'FN', '$706.30', '+5.9%')
 ${moverRow(6, IMG.redline, 'AK-47 | Redline', 'FT', '$44.52', '+5.1%')}
 ${moverRow(7, IMG.glockFade, 'Glock-18 | Fade', 'FN', '$1,318.00', '+4.6%')}
 ${moverRow(8, IMG.killConfirmed, 'USP-S | Kill Confirmed', 'MW', '$118.72', '+3.9%')}
-${bottomNav('Home')}`)
+${bottomNav(t, 'home')}`)
 
 // =============== 2. SKIN DETAIL / MARKETPLACE COMPARISON ===============
-const marketRow = (name, price, lowest = false) => `
+const marketRow = (t, name, price, lowest = false) => `
 <div style="display:flex;align-items:center;justify-content:space-between;background:${C.surface};border:1px solid ${lowest ? C.orange : C.divider};border-radius:10px;padding:13px 14px;margin-bottom:9px;">
   <div style="display:flex;align-items:center;gap:9px;">
     <span style="font-size:14px;font-weight:600;">${name}</span>
-    ${lowest ? `<span style="background:${C.orange};color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.5px;padding:2.5px 7px;border-radius:5px;">LOWEST</span>` : ''}
+    ${lowest ? `<span style="background:${C.orange};color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.5px;padding:2.5px 7px;border-radius:5px;">${t.t('skindetail_lowest_badge')}</span>` : ''}
   </div>
   <div style="display:flex;align-items:center;gap:8px;">
     <span style="font-size:15px;font-weight:700;color:${lowest ? C.orange : C.text};">${price}</span>
@@ -165,9 +203,9 @@ const marketRow = (name, price, lowest = false) => `
   </div>
 </div>`
 
-const detailScreen = shell('detail', `
-  <div class="eyebrow">Compare &amp; Save</div>
-  <div class="headline">The <span class="hl">lowest price</span><br>across marketplaces</div>`, `
+const detailScreen = (loc, t) => shell('detail',
+  c(loc.play, 'detail_eyebrow'),
+  c(loc.play, 'detail_headline'), `
 <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
   ${icon(D.back, 22, C.text)}
   ${icon(D.star, 22, C.orange)}
@@ -186,54 +224,54 @@ const detailScreen = shell('detail', `
   </div>
 </div>
 <div style="padding:18px 16px 0;">
-  <div style="font-size:15px;font-weight:700;margin-bottom:10px;">Marketplace Prices</div>
-  ${marketRow('Waxpeer', '$154.16', true)}
-  ${marketRow('Skinport', '$158.90')}
-  ${marketRow('CS:GO Market', '$161.34')}
+  <div style="font-size:15px;font-weight:700;margin-bottom:10px;">${t.t('skindetail_marketplace_prices')}</div>
+  ${marketRow(t, 'Waxpeer', '$154.16', true)}
+  ${marketRow(t, 'Skinport', '$158.90')}
+  ${marketRow(t, 'CS:GO Market', '$161.34')}
 </div>
 <div style="padding:6px 16px;">
-  <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Float Range</div>
+  <div style="font-size:15px;font-weight:700;margin-bottom:8px;">${t.t('skindetail_float_range')}</div>
   <div style="display:flex;background:${C.surface};border:1px solid ${C.divider};border-radius:10px;padding:12px 8px;">
-    ${[['Min', '0.1800'], ['Median', '0.2650'], ['Max', '0.3500']].map(([l, v]) =>
+    ${[[t.t('skindetail_float_min'), '0.1800'], [t.t('skindetail_float_median'), '0.2650'], [t.t('skindetail_float_max'), '0.3500']].map(([l, v]) =>
       `<div style="flex:1;text-align:center;"><div style="font-size:13px;font-weight:600;">${v}</div><div style="font-size:11px;color:${C.text2};">${l}</div></div>`).join('')}
   </div>
 </div>
-${bottomNav('Search')}`)
+${bottomNav(t, 'search')}`)
 
 // =============== 3. PRICE ALERTS ===============
-const alertCard = (img, name, sub, target, current, on = true) => `
+const alertCard = (t, img, name, sub, target, current, on = true) => `
 <div style="background:${C.surface};border:1px solid ${C.divider};border-radius:12px;padding:13px 14px;margin:0 16px 10px;display:flex;gap:11px;align-items:center;">
   <div class="imgbox" style="width:52px;height:52px;border-radius:8px;"><img src="${img}"></div>
   <div style="flex:1;min-width:0;">
     <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
     <div style="font-size:11.5px;color:${C.orange};font-weight:600;margin-top:2px;">${sub} ${target}</div>
-    <div style="font-size:11px;color:${C.text2};margin-top:2px;">Current market price: ${current}</div>
+    <div style="font-size:11px;color:${C.text2};margin-top:2px;">${t.t('alerts_current_market_price', current)}</div>
   </div>
   <div style="width:40px;height:22px;border-radius:12px;flex:none;position:relative;background:${on ? C.orange : C.text3};">
     <div style="position:absolute;top:2.5px;${on ? 'right:3px' : 'left:3px'};width:17px;height:17px;border-radius:50%;background:#fff;"></div>
   </div>
 </div>`
 
-const alertsScreen = shell('alerts', `
-  <div class="eyebrow">Price Alerts</div>
-  <div class="headline">Get notified the<br>moment <span class="hl">prices drop</span></div>`, `
+const alertsScreen = (loc, t) => shell('alerts',
+  c(loc.play, 'alerts_eyebrow'),
+  c(loc.play, 'alerts_headline'), `
 <div style="background:${C.surface};padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-  <div style="font-size:19px;font-weight:800;">Price Alerts</div>
+  <div style="font-size:19px;font-weight:800;">${t.t('alerts_title')}</div>
   <div style="width:34px;height:34px;border-radius:10px;background:${C.orange};display:flex;align-items:center;justify-content:center;">${icon(D.plus, 20, '#fff')}</div>
 </div>
 <div style="margin:12px 14px 14px;background:${C.elevated};border:1px solid ${C.divider};border-radius:14px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.45);">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
     <div style="width:20px;height:20px;border-radius:5px;background:${C.orange};display:flex;align-items:center;justify-content:center;">${icon(D.bell, 13, '#fff')}</div>
-    <span style="font-size:11.5px;color:${C.text2};">CS2 SkinFlip · now</span>
+    <span style="font-size:11.5px;color:${C.text2};">${c(loc.play, 'notif_meta')}</span>
   </div>
-  <div style="font-size:13.5px;font-weight:700;">🔻 Price alert: AK-47 | Redline (FT)</div>
-  <div style="font-size:12.5px;color:${C.text2};margin-top:2px;">Dropped to $42.10 — below your $45.00 target</div>
+  <div style="font-size:13.5px;font-weight:700;">${c(loc.play, 'notif_title')}</div>
+  <div style="font-size:12.5px;color:${C.text2};margin-top:2px;">${c(loc.play, 'notif_body')}</div>
 </div>
-${alertCard(IMG.redline, 'AK-47 | Redline (FT)', 'Below', '$45.00', '$44.52')}
-${alertCard(IMG.butterflyDoppler, '★ Butterfly Knife | Doppler (FN)', 'Below', '$1,800.00', '$1,942.00')}
-${alertCard(IMG.vulcan, 'AK-47 | Vulcan (MW)', 'Below', '$900.00', '$948.20')}
-${alertCard(IMG.awpNeonoir, 'AWP | Neo-Noir (FN)', 'Above', '$120.00', '$112.35', false)}
-${bottomNav('Alerts')}`)
+${alertCard(t, IMG.redline, 'AK-47 | Redline (FT)', c(loc.play, 'alert_below'), '$45.00', '$44.52')}
+${alertCard(t, IMG.butterflyDoppler, '★ Butterfly Knife | Doppler (FN)', c(loc.play, 'alert_below'), '$1,800.00', '$1,942.00')}
+${alertCard(t, IMG.vulcan, 'AK-47 | Vulcan (MW)', c(loc.play, 'alert_below'), '$900.00', '$948.20')}
+${alertCard(t, IMG.awpNeonoir, 'AWP | Neo-Noir (FN)', c(loc.play, 'alert_above'), '$120.00', '$112.35', false)}
+${bottomNav(t, 'alerts')}`)
 
 // =============== 4. PRICE HISTORY ===============
 // smooth-ish rising series for the chart
@@ -252,9 +290,9 @@ const chartSvg = `
   <circle cx="${xy[xy.length - 1][0]}" cy="${xy[xy.length - 1][1]}" r="4.5" fill="${C.orange}" stroke="#fff" stroke-width="1.5"/>
 </svg>`
 
-const historyScreen = shell('history', `
-  <div class="eyebrow">Price History</div>
-  <div class="headline">Buy the dip,<br><span class="hl">sell the spike</span></div>`, `
+const historyScreen = (loc, t) => shell('history',
+  c(loc.play, 'history_eyebrow'),
+  c(loc.play, 'history_headline'), `
 <div style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
   ${icon(D.back, 22, C.text)}
   ${icon(D.star, 22, C.orange)}
@@ -272,7 +310,7 @@ const historyScreen = shell('history', `
 </div>
 <div style="margin:16px 16px 0;background:${C.surface};border:1px solid ${C.divider};border-radius:14px;padding:14px;">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <span style="font-size:15px;font-weight:700;">Price History</span>
+    <span style="font-size:15px;font-weight:700;">${t.t('skindetail_price_history')}</span>
     <div style="display:flex;gap:5px;">
       ${['24H', '7D', '1M', '3M'].map((r, i) => `<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:8px;${i === 2 ? `background:${C.orange};color:#fff;` : `color:${C.text2};border:1px solid ${C.divider};`}">${r}</span>`).join('')}
     </div>
@@ -282,13 +320,13 @@ const historyScreen = shell('history', `
 </div>
 <div style="margin:12px 16px 0;display:flex;gap:10px;">
   <div style="flex:1;background:${C.surface};border:1px solid ${C.divider};border-radius:12px;padding:11px;text-align:center;">
-    <div style="font-size:11px;color:${C.text2};">30d low</div><div style="font-size:15px;font-weight:700;color:${C.green};">$42.10</div>
+    <div style="font-size:11px;color:${C.text2};">${c(loc.play, 'low_30d')}</div><div style="font-size:15px;font-weight:700;color:${C.green};">$42.10</div>
   </div>
   <div style="flex:1;background:${C.surface};border:1px solid ${C.divider};border-radius:12px;padding:11px;text-align:center;">
-    <div style="font-size:11px;color:${C.text2};">30d high</div><div style="font-size:15px;font-weight:700;color:${C.red};">$62.04</div>
+    <div style="font-size:11px;color:${C.text2};">${c(loc.play, 'high_30d')}</div><div style="font-size:15px;font-weight:700;color:${C.red};">$62.04</div>
   </div>
 </div>
-${bottomNav('Search')}`)
+${bottomNav(t, 'search')}`)
 
 // =============== 5. PORTFOLIO ===============
 const portfolioRow = (img, name, wear, qty, value, change, up) => `
@@ -304,30 +342,30 @@ const portfolioRow = (img, name, wear, qty, value, change, up) => `
   </div>
 </div>`
 
-const portfolioScreen = shell('portfolio', `
-  <div class="eyebrow">Portfolio</div>
-  <div class="headline">Know what your<br>inventory is <span class="hl">really worth</span></div>`, `
-<div style="background:${C.surface};padding:14px 20px;font-size:19px;font-weight:800;">Portfolio</div>
+const portfolioScreen = (loc, t) => shell('portfolio',
+  c(loc.play, 'portfolio_eyebrow'),
+  c(loc.play, 'portfolio_headline'), `
+<div style="background:${C.surface};padding:14px 20px;font-size:19px;font-weight:800;">${t.t('tab_portfolio')}</div>
 <div style="margin:14px 16px;background:linear-gradient(135deg, rgba(255,107,53,.16), rgba(255,107,53,.04));border:1px solid rgba(255,107,53,.35);border-radius:16px;padding:18px;">
-  <div style="font-size:12px;color:${C.text2};">Total inventory value</div>
+  <div style="font-size:12px;color:${C.text2};">${t.t('portfolio_total_value')}</div>
   <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px;">
     <span style="font-size:32px;font-weight:800;">$3,847.62</span>
-    <span class="chip-up" style="font-size:13px;">+3.2% today</span>
+    <span class="chip-up" style="font-size:13px;">${c(loc.play, 'today_change')}</span>
   </div>
   <div style="display:flex;gap:8px;margin-top:14px;">
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;background:${C.orange};border-radius:10px;padding:9px 0;font-size:12.5px;font-weight:700;color:#fff;">${icon(D.sync, 15, '#fff')} Sync Steam inventory</div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;background:${C.orange};border-radius:10px;padding:9px 0;font-size:12.5px;font-weight:700;color:#fff;">${icon(D.sync, 15, '#fff')} ${t.t('portfolio_sync_steam')}</div>
     <div style="width:40px;display:flex;align-items:center;justify-content:center;background:${C.elevated};border:1px solid ${C.divider};border-radius:10px;">${icon(D.plus, 18, C.text)}</div>
   </div>
 </div>
 <div style="display:flex;justify-content:space-between;padding:0 18px 9px;font-size:13px;">
-  <span style="font-weight:700;">Your items · 14</span><span style="color:${C.text2};">Sorted by value</span>
+  <span style="font-weight:700;">${t.plural('portfolio_items_count', 14)}</span><span style="color:${C.text2};">${c(loc.play, 'sorted_by_value')}</span>
 </div>
 ${portfolioRow(IMG.karambitFade, '★ Karambit | Fade', 'FN', 1, '$2,412.00', '+4.1%', true)}
 ${portfolioRow(IMG.printstream, 'M4A1-S | Printstream', 'MW', 1, '$412.85', '+6.8%', true)}
 ${portfolioRow(IMG.lightningStrike, 'AWP | Lightning Strike', 'FN', 1, '$398.40', '−1.2%', false)}
 ${portfolioRow(IMG.akAsiimov, 'AK-47 | Asiimov', 'FT', 2, '$364.80', '+12.4%', true)}
 ${portfolioRow(IMG.killConfirmed, 'USP-S | Kill Confirmed', 'MW', 1, '$118.72', '+3.9%', true)}
-${bottomNav('Home')}`)
+${bottomNav(t, 'home')}`)
 
 // =============== 6. SEARCH ===============
 const searchCard = (img, name, wear, rarity, rarityColor, price, change, up = true) => `
@@ -344,9 +382,9 @@ const searchCard = (img, name, wear, rarity, rarityColor, price, change, up = tr
   <span class="${up ? 'chip-up' : 'chip-down'}">${change}</span>
 </div>`
 
-const searchScreen = shell('search', `
-  <div class="eyebrow">Skin Search</div>
-  <div class="headline">Search <span class="hl">20,000+ skins</span><br>with smart filters</div>`, `
+const searchScreen = (loc, t) => shell('search',
+  c(loc.play, 'search_eyebrow'),
+  c(loc.play, 'search_headline'), `
 <div style="background:${C.surface};padding:12px 16px 12px;">
   <div style="display:flex;gap:9px;align-items:center;">
     <div style="flex:1;display:flex;align-items:center;gap:9px;background:${C.elevated};border:1px solid ${C.divider};border-radius:12px;padding:10px 13px;">
@@ -361,13 +399,13 @@ const searchScreen = shell('search', `
     <span style="font-size:11.5px;font-weight:600;color:${C.text2};border:1px solid ${C.divider};padding:4px 12px;border-radius:14px;">Price</span>
   </div>
 </div>
-<div style="padding:12px 18px 8px;font-size:12.5px;color:${C.text2};">128 results</div>
+<div style="padding:12px 18px 8px;font-size:12.5px;color:${C.text2};">${t.plural('search_results_count', 128)}</div>
 ${searchCard(IMG.awpAsiimov, 'AWP | Asiimov', 'FT', 'Covert', C.covert, '$154.16', '+7.2%')}
 ${searchCard(IMG.akAsiimov, 'AK-47 | Asiimov', 'FT', 'Covert', C.covert, '$182.40', '+12.4%')}
 ${searchCard(IMG.printstream, 'M4A1-S | Printstream', 'FT', 'Covert', C.covert, '$318.20', '+2.1%')}
 ${searchCard(IMG.m4Neonoir, 'M4A4 | Neo-Noir', 'FT', 'Covert', C.covert, '$38.94', '−0.8%', false)}
 ${searchCard(IMG.howl, 'M4A4 | Howl', 'FT', 'Contraband', C.contraband, '$4,310.00', '+1.6%')}
-${bottomNav('Search')}`)
+${bottomNav(t, 'search')}`)
 
 // =============== FEATURE GRAPHIC 1024x500 ===============
 const featureGraphic = `<!DOCTYPE html>
@@ -395,7 +433,7 @@ body {
 </body></html>`
 
 // =============== FEATURE GRAPHIC v2 (hybrid: icon-led layout, brand palette) ===============
-const featureGraphicV2 = `<!DOCTYPE html>
+const featureGraphicV2 = (loc) => `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 * { margin:0; padding:0; box-sizing:border-box; }
 html,body { width:1024px; height:500px; overflow:hidden; }
@@ -413,29 +451,41 @@ body {
     <span style="width:10px;height:10px;border-radius:50%;background:${C.orange};box-shadow:0 0 10px ${C.orange};"></span>
     <span style="font-size:17px;font-weight:700;letter-spacing:3px;color:${C.text2};">CS2 SKINFLIP</span>
   </div>
-  <div style="font-size:46px;font-weight:800;line-height:1.14;letter-spacing:-.5px;white-space:nowrap;">Track market prices<br>for <span style="color:${C.orange};">CS2 skins</span></div>
+  <div style="height:112px;display:flex;align-items:center;">
+    <div style="font-size:46px;font-weight:800;line-height:1.14;letter-spacing:-.5px;" data-fit-min="24">${c(loc.play, 'fg_headline')}</div>
+  </div>
   <div style="display:flex;gap:11px;margin-top:26px;">
-    ${['Price alerts', 'Top movers', 'Portfolio'].map(t =>
-      `<span style="font-size:16px;font-weight:600;color:${C.text};background:rgba(255,255,255,.06);border:1px solid ${C.divider};padding:8px 18px;border-radius:22px;display:flex;align-items:center;gap:8px;"><span style="width:8px;height:8px;border-radius:50%;background:${C.orange};"></span>${t}</span>`).join('')}
+    ${[c(loc.play, 'fg_chip_alerts'), c(loc.play, 'fg_chip_movers'), c(loc.play, 'fg_chip_portfolio')].map(label =>
+      `<span style="font-size:16px;font-weight:600;color:${C.text};background:rgba(255,255,255,.06);border:1px solid ${C.divider};padding:8px 18px;border-radius:22px;display:flex;align-items:center;gap:8px;white-space:nowrap;"><span style="width:8px;height:8px;border-radius:50%;background:${C.orange};flex:none;"></span>${label}</span>`).join('')}
   </div>
 </div>
 <div style="padding-right:84px;">
   <div style="width:308px;height:308px;border-radius:70px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.65), 0 0 90px rgba(63,185,80,.28);">
-    <img src="icon.png" style="width:100%;height:100%;object-fit:cover;">
+    <img src="../../icon.png" style="width:100%;height:100%;object-fit:cover;">
   </div>
 </div>
+${FIT_SCRIPT}
 </body></html>`
 
 // ---- write files ----
-const files = {
-  'feature-graphic-v2.html': featureGraphicV2,
-  '01-home.html': homeScreen,
-  '02-detail.html': detailScreen,
-  '03-alerts.html': alertsScreen,
-  '04-history.html': historyScreen,
-  '05-portfolio.html': portfolioScreen,
-  '06-search.html': searchScreen,
-  'feature-graphic.html': featureGraphic,
+rmSync(OUT, { recursive: true, force: true })
+
+let n = 0
+for (const loc of LOCALES) {
+  const t = createT(loc)
+  const dir = join(OUT, loc.play)
+  mkdirSync(dir, { recursive: true })
+
+  const files = {
+    '01-home.html':            homeScreen(loc, t),
+    '02-detail.html':          detailScreen(loc, t),
+    '03-alerts.html':          alertsScreen(loc, t),
+    '04-history.html':         historyScreen(loc, t),
+    '05-portfolio.html':       portfolioScreen(loc, t),
+    '06-search.html':          searchScreen(loc, t),
+    'feature-graphic-v2.html': featureGraphicV2(loc),
+  }
+  for (const [name, html] of Object.entries(files)) writeFileSync(join(dir, name), html)
+  n += Object.keys(files).length
 }
-for (const [name, html] of Object.entries(files)) writeFileSync(join(OUT, name), html)
-console.log('Wrote', Object.keys(files).length, 'files to', OUT)
+console.log(`Wrote ${n} files across ${LOCALES.length} locales to ${OUT}`)
