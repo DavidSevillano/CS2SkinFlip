@@ -1,0 +1,44 @@
+=== TÍTULO (30/30) ===
+CS2 SkinFlip: Precios de Skins
+
+Alternativa si el contador se queda corto: "CS2 SkinFlip: Precio Skins" (26)
+
+=== DESCRIPCIÓN BREVE (79/80) ===
+Sigue los precios de skins de CS2, crea alertas y valora tu inventario de Steam
+
+=== DESCRIPCIÓN COMPLETA ===
+CS2 SkinFlip es el rastreador de precios de skins definitivo para Counter-Strike 2 (CS2, antes CS:GO). Compara precios de skins entre los principales mercados, sigue el historial de precios y toma mejores decisiones de compra y venta — todo desde tu teléfono.
+
+📊 COMPARA PRECIOS DE SKINS ENTRE MERCADOS
+Consulta los precios de más de 20.000 skins de CS2 — cuchillos, guantes, rifles y todos los acabados, desde los clásicos de CS:GO hasta los últimos lanzamientos de Counter-Strike 2 — en varios mercados a la vez: Skinport, Waxpeer y Market.CSGO. CS2 SkinFlip siempre destaca el precio más bajo disponible, para que nunca pagues de más por una skin.
+
+🔔 ALERTAS DE PRECIO PERSONALIZADAS
+Crea una alerta de precio para cualquier skin y recibe una notificación push cuando el precio alcance tu objetivo. Ya estés esperando a que baje un cuchillo o a que una skin de AK-47 entre en tu presupuesto, no volverás a perderte una oportunidad.
+
+📈 GRÁFICOS DE HISTORIAL DE PRECIOS
+Cada skin tiene un gráfico de precios detallado para que veas cómo ha evolucionado su valor con el tiempo — detecta tendencias antes de comprar o vender.
+
+🚀 TOP MOVERS Y TENDENCIAS DEL MERCADO
+Descubre qué skins de CS2 suben y bajan más rápido con la sección Top Movers, actualizada varias veces al día. Las pestañas de subidas y bajadas te ayudan a encontrar oportunidades de un vistazo.
+
+⭐ LISTA DE SEGUIMIENTO
+Guarda tus skins favoritas en tu lista de seguimiento y sigue su precio de un vistazo, sin tener que buscarlas cada vez.
+
+💼 PORTAFOLIO Y VALOR DEL INVENTARIO
+Registra las skins que posees y observa cómo cambia el valor total de tu inventario con el mercado. Sincroniza objetos directamente desde tu inventario de Steam o añádelos a mano — perfecto para coleccionistas y traders que quieren saber exactamente cuánto valen sus skins.
+
+🔎 BÚSQUEDA POTENTE DE SKINS
+Busca en el catálogo completo de skins de CS2 con filtros por desgaste (de Factory New a Battle-Scarred), StatTrak™, rareza y rango de precio. Encuentra exactamente la skin que buscas y comprueba su precio al instante antes de tradear.
+
+🔐 INICIA SESIÓN CON STEAM
+Accede rápido y de forma segura con tu cuenta de Steam — sin contraseñas nuevas ni cuentas extra.
+
+🌍 DISPONIBLE EN TU IDIOMA
+CS2 SkinFlip está disponible en español, inglés, portugués, ruso, turco y polaco.
+
+Seas coleccionista de skins, trader que revende skins para sacar beneficio, o simplemente quieras vender tu inventario al mejor precio, CS2 SkinFlip pone toda la información del mercado en tu bolsillo.
+
+Descarga CS2 SkinFlip ahora — el rastreador gratuito de precios de skins de CS2 — y empieza a tradear con ventaja.
+
+---
+CS2 SkinFlip es una herramienta de seguimiento de precios creada por fans y no está afiliada, respaldada ni asociada con Valve Corporation. Counter-Strike 2, CS:GO y Steam son marcas registradas de Valve Corporation. Los precios provienen de mercados de terceros y se ofrecen únicamente con fines informativos.
