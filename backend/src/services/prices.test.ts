@@ -25,7 +25,7 @@ vi.mock('../redis/client', () => ({
 
 const { PriceService } = await import('./prices')
 
-const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
+const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
 
 describe('PriceService.getTopMovers — 24h-change reference query', () => {
   beforeEach(() => {
@@ -53,8 +53,14 @@ describe('PriceService.getTopMovers — 24h-change reference query', () => {
 
     expect(gte).toBeInstanceOf(Date)
     expect(lte).toBeInstanceOf(Date)
+    // `after` is the only safe reference for a lower-bound assertion: both
+    // bounds derive from a Date.now() taken inside the call, so comparing
+    // against `before` is flaky by a millisecond whenever the clock ticks.
     expect(after - lte.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000)
-    expect(lte.getTime() - gte.getTime()).toBe(TWELVE_HOURS_MS)
-    expect(before - gte.getTime()).toBeGreaterThanOrEqual(36 * 60 * 60 * 1000)
+    expect(before - lte.getTime()).toBeLessThanOrEqual(24 * 60 * 60 * 1000)
+    expect(lte.getTime() - gte.getTime()).toBe(CHANGE_REFERENCE_WINDOW_MS)
+    expect(after - gte.getTime()).toBeGreaterThanOrEqual(
+      24 * 60 * 60 * 1000 + CHANGE_REFERENCE_WINDOW_MS,
+    )
   })
 })

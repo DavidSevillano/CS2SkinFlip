@@ -2,13 +2,13 @@ import { prisma } from '../db/prisma'
 import type { FastifyBaseLogger } from 'fastify'
 
 // Resolución decreciente:
-//   0–14 días   → raw (~12 pts/día, cada 2h)
-//   14–120 días → 2 pts/día (precio mínimo y máximo del día)
-//   >120 días   → borrado
+//   0–14 días  → raw (~4 pts/día, cada 6h)
+//   14–90 días → 1 pt/día (precio mínimo del día)
+//   >90 días   → borrado
 const RAW_RETENTION_DAYS = 14
-const DAILY_RETENTION_DAYS = 120
+const DAILY_RETENTION_DAYS = 90
 
-// El job se invoca cada 2h; el downsample escanea toda la franja 14–120d, así que
+// El job se invoca cada 6h; el downsample escanea toda la franja 14–90d, así que
 // solo hacemos el trabajo real como mucho una vez cada 24h. Guard en memoria: tras
 // un reinicio vuelve a correr, lo cual es inofensivo por ser idempotente.
 const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -28,20 +28,18 @@ export async function cleanupPriceHistory(log: FastifyBaseLogger) {
     DELETE FROM "PriceHistory" WHERE "timestamp" < ${hardCutoff}
   `
 
-  // 2) Downsample de la franja 14–120d: por (skinId, día UTC) conservar solo las
-  //    filas con precio mínimo y máximo; borrar las intermedias. Idempotente.
+  // 2) Downsample de la franja 14–90d: por (skinId, día UTC) conservar solo la
+  //    fila con precio mínimo; borrar las demás. Idempotente.
   const downsampled = await prisma.$executeRaw`
     DELETE FROM "PriceHistory" WHERE id IN (
       SELECT id FROM (
         SELECT id,
           row_number() OVER (PARTITION BY "skinId", date_trunc('day', "timestamp" AT TIME ZONE 'UTC')
-                             ORDER BY "price" ASC,  "timestamp" ASC) AS rn_min,
-          row_number() OVER (PARTITION BY "skinId", date_trunc('day', "timestamp" AT TIME ZONE 'UTC')
-                             ORDER BY "price" DESC, "timestamp" ASC) AS rn_max
+                             ORDER BY "price" ASC, "timestamp" ASC) AS rn_min
         FROM "PriceHistory"
         WHERE "timestamp" < ${rawCutoff} AND "timestamp" >= ${hardCutoff}
       ) t
-      WHERE t.rn_min > 1 AND t.rn_max > 1
+      WHERE t.rn_min > 1
     )
   `
 
@@ -52,6 +50,6 @@ export async function cleanupPriceHistory(log: FastifyBaseLogger) {
 
   log.info(
     `[PriceHistoryCleanup] Hard-deleted ${hardDeleted} rows (>${DAILY_RETENTION_DAYS}d), ` +
-    `downsampled away ${downsampled} rows (${RAW_RETENTION_DAYS}–${DAILY_RETENTION_DAYS}d, kept daily min/max)`,
+    `downsampled away ${downsampled} rows (${RAW_RETENTION_DAYS}–${DAILY_RETENTION_DAYS}d, kept daily min)`,
   )
 }
