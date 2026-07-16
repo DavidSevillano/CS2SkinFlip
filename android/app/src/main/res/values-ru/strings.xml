@@ -35,7 +35,7 @@
     <string name="price_placeholder">0.00</string>
 
     <string name="home_subtitle">Аналитика рынка в реальном времени</string>
-    <string name="home_top_movers_title">  Лидеры движения  24ч</string>
+    <string name="home_top_movers_title">Лидеры движения · 24ч</string>
     <string name="home_vol_by_movement">Объём по изменению</string>
     <string name="home_tab_rising">Растут</string>
     <string name="home_tab_falling">Падают</string>
