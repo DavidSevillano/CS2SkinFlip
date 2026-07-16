@@ -44,3 +44,8 @@ local.properties
 
 # Git worktrees (superpowers)
 .worktrees/
+
+# ─── Play Store assets (generados) ────────────────────────
+store-assets/screenshots/out/
+store-assets/screenshots/src/html/
+store-assets/screenshots/node_modules/
