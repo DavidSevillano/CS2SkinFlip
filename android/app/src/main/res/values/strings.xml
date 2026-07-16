@@ -43,7 +43,7 @@
 
     <!-- Home -->
     <string name="home_subtitle">Live market intelligence</string>
-    <string name="home_top_movers_title">  Top Movers  24h</string>
+    <string name="home_top_movers_title">Top Movers · 24h</string>
     <string name="home_vol_by_movement">Vol by movement</string>
     <string name="home_tab_rising">Rising</string>
     <string name="home_tab_falling">Falling</string>

@@ -35,7 +35,7 @@
     <string name="price_placeholder">0.00</string>
 
     <string name="home_subtitle">Analiza rynku na żywo</string>
-    <string name="home_top_movers_title">  Największe zmiany  24h</string>
+    <string name="home_top_movers_title">Największe zmiany · 24h</string>
     <string name="home_vol_by_movement">Wolumen wg zmiany</string>
     <string name="home_tab_rising">Rosnące</string>
     <string name="home_tab_falling">Spadające</string>
