@@ -93,6 +93,56 @@ describe('request.ip resolution behind a proxy', () => {
 })
 
 /**
+ * Replays the exact shape observed from production via GET /debug/client-ip on
+ * 2026-07-16, so the configured TRUST_PROXY is pinned to real measurements
+ * rather than an assumption about Render's internals. Render terminates TLS at a
+ * container-local proxy (socket is 127.0.0.1) and the chain is
+ * [client, Cloudflare edge, Render LB] — three trusted hops.
+ */
+describe('the measured Render topology', () => {
+  const RENDER_SOCKET = '127.0.0.1'
+  const CLIENT = '188.26.223.54'
+  const MEASURED_HOPS = 3
+
+  async function resolveVia(xff: string, trustProxy: number | boolean) {
+    const app = Fastify({ trustProxy })
+    app.get('/', async (request) => ({ ip: request.ip }))
+    const res = await app.inject({
+      method: 'GET',
+      url: '/',
+      remoteAddress: RENDER_SOCKET,
+      headers: { 'x-forwarded-for': xff },
+    })
+    return res.json().ip
+  }
+
+  it('resolves the real client at the measured hop count', async () => {
+    // Chain exactly as observed, Cloudflare edge + Render LB appended.
+    const observed = `${CLIENT}, 104.22.23.18, 10.26.179.131`
+    expect(await resolveVia(observed, MEASURED_HOPS)).toBe(CLIENT)
+  })
+
+  it('still resolves the real client when the caller forges a leading entry', async () => {
+    // Observed when curling with `X-Forwarded-For: 9.9.9.9`: Render appends
+    // rather than strips, so the forged value survives into the chain — it just
+    // lands beyond the trusted hops and is ignored.
+    const forged = `9.9.9.9, ${CLIENT}, 188.114.111.60, 10.31.118.132`
+    expect(await resolveVia(forged, MEASURED_HOPS)).toBe(CLIENT)
+  })
+
+  it('would hand the forger their chosen IP under trustProxy: true', async () => {
+    const forged = `9.9.9.9, ${CLIENT}, 188.114.111.60, 10.31.118.132`
+    expect(await resolveVia(forged, true)).toBe('9.9.9.9')
+  })
+
+  it('collapses every caller onto localhost while trustProxy is off', async () => {
+    // Matches production today: resolvedIp came back as 127.0.0.1 for everyone.
+    const observed = `${CLIENT}, 104.22.23.18, 10.26.179.131`
+    expect(await resolveVia(observed, false)).toBe(RENDER_SOCKET)
+  })
+})
+
+/**
  * End-to-end through @fastify/rate-limit itself — request.ip resolving correctly
  * only matters if the limiter actually keys buckets off it.
  */
