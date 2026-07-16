@@ -26,8 +26,12 @@ services:
         sync: false
       - key: FCM_SERVICE_ACCOUNT_PATH
         value: /etc/secrets/firebase-service-account.json
-      # Reverse-proxy hops in front of this service (Cloudflare + Render's LB).
-      # Must be the measured hop count, not `true` — see config/trustProxy.ts.
-      # Measure it once with GET /debug/client-ip, then set it here.
+      # Reverse-proxy hops in front of this service, so rate limiting keys on the
+      # caller instead of the proxy. Measured 2026-07-16 via GET /debug/client-ip:
+      # the socket is a container-local proxy (127.0.0.1) and X-Forwarded-For is
+      # [client, Cloudflare edge, Render LB] — three trusted hops, stable across
+      # samples. Must be this count and not `true`; see config/trustProxy.ts.
+      # Re-measure with /debug/client-ip if Render ever changes its topology:
+      # a wrong count degrades to coarser buckets rather than failing loudly.
       - key: TRUST_PROXY
-        sync: false
+        value: 3
