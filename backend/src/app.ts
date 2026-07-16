@@ -31,9 +31,9 @@ async function main() {
     populateSkins(app.log)
       .then(() => populatePrices(app.log))
       .then(() => startPriceRefreshJob(app.log))
-      .catch((err) => app.log.error('[Startup] Job chain failed:', err))
+      .catch((err) => app.log.error({ err }, '[Startup] Job chain failed'))
   } catch (err) {
-    app.log.error(err)
+    app.log.error({ err }, '[Startup] Server failed to start')
     process.exit(1)
   }
 }

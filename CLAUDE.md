@@ -11,7 +11,10 @@ CS2SkinFlip/
 └── web/        ← Static SEO site generator (Kotlin Multiplatform), deployed to Cloudflare Pages — see web/README.md
 ```
 
-`docs/superpowers/plans/` and `docs/superpowers/specs/` contain design docs for both shipped and still-unimplemented features — a plan/spec file existing does **not** mean the feature is in the code. Notably, the "premium bundle priority alerts" (per-alert-interval refresh for premium users) and "price history daily aggregation" (downsampled long-range charts) plans are speculative only — nothing in `backend/src/` implements either. Verify against actual source before treating a plan doc as current behavior.
+`docs/superpowers/plans/` and `docs/superpowers/specs/` contain design docs for both shipped and still-unimplemented features — a plan/spec file existing does **not** mean the feature is in the code. Verify against actual source before treating a plan doc as current behavior.
+
+- **"premium bundle priority alerts"** (per-alert-interval refresh for premium users) is speculative only — `isPremium` gates the alert limit in `routes/alerts.ts` and nothing else.
+- **"price history daily aggregation"** is **shipped**, not speculative: `jobs/cleanupPriceHistory.ts` does the in-place downsample and `GET /skins/:id/history?range=90d` serves it. The spec's retention numbers are stale (it describes 120d / 2 points per day); the code is the source of truth.
 
 ---
 
@@ -42,10 +45,13 @@ Copy `.env` and fill in:
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | Neon (PostgreSQL) connection string |
+| `DATABASE_URL` | Neon (PostgreSQL) connection string — must be the **pooled** endpoint (host contains `-pooler`) |
+| `DIRECT_DATABASE_URL` | Same Neon host **without** `-pooler`. Used only by `prisma migrate` / `db push` / `db pull`, which need session state the pooler drops. Not read at runtime, so Render doesn't set it |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash Redis (serverless) |
 | `JWT_SECRET` | Min 32 chars |
 | `FRONTEND_URL` | Used for CORS allowlist |
+| `TRUST_PROXY` | Reverse-proxy hop count in front of the app. Required in production for per-IP rate limiting to work — see [Rate limiting](#rate-limiting). Defaults to `false` (local dev) |
+| `LOG_LEVEL` | Pino level — defaults to `info` in every environment. Set to `warn`/`error` to quieten, `debug` to troubleshoot |
 | `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_PATH` | Optional — path to a Google Play service account JSON, used to verify one-time premium purchases |
 | `GOOGLE_PLAY_PACKAGE_NAME` | Defaults to `com.burixer85.cs2skinflip` |
@@ -73,7 +79,7 @@ Free accounts get 1 alert (`FREE_ALERT_LIMIT` in `src/routes/alerts.ts`); a one-
 
 ## Architecture
 
-Fastify + Prisma + TypeScript. No test suite yet.
+Fastify + Prisma + TypeScript. Vitest (`npm test`), colocated `*.test.ts` next to the module under test; prisma/redis/axios are mocked via `vi.mock`, nothing hits the network or a real DB.
 
 ### Startup sequence (`app.ts`)
 
@@ -81,7 +87,7 @@ Fastify + Prisma + TypeScript. No test suite yet.
 buildServer() → listen → populateSkins() → populatePrices() → startPriceRefreshJob()
 ```
 
-`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePrices` runs the full bulk price fetch on startup and re-runs every 2 hours.
+`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePrices` runs the full bulk price fetch on startup and re-runs every 6 hours.
 
 ### Route structure (`src/routes/`)
 
@@ -96,8 +102,8 @@ buildServer() → listen → populateSkins() → populatePrices() → startPrice
 
 ### Price pipeline
 
-Three marketplaces are fetched in parallel on startup and every 2h (`populatePrices`).
-**All endpoints are bulk and public — no API keys, no rate-limit concerns** (12 calls/day per marketplace):
+Three marketplaces are fetched in parallel on startup and every 6h (`populatePrices`).
+**All endpoints are bulk and public — no API keys, no rate-limit concerns** (4 calls/day per marketplace):
 
 1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items.
 2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `GET https://market.csgo.com/api/v2/prices/USD.json`, ~25k items.
@@ -137,8 +143,17 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 | `steam:inventory:{steamId}` | 10 min |
 | `prices:{skinId}` | 5 min |
 | `top-movers:20` | 15 min |
+| `pipeline:prices:lastSuccessfulRun` | none (never expires) |
 
 `top-movers:20` is explicitly invalidated at the end of every bulk price run.
+
+`app.ts` wipes every `prices:*` key on boot — anything that must survive a deploy has to live outside that namespace, which is why the freshness marker below is `pipeline:`-prefixed and not `prices:`.
+
+### Health / price-pipeline monitoring
+
+`GET /health` returns `"prices": "fresh" | "stale" | "unknown"` alongside `status: "ok"`, plus `pricesLastRun` (ISO string or null) for debugging. Freshness comes from `pipeline:prices:lastSuccessfulRun` (epoch ms), written at the end of `populatePrices` **only when `updated > 0`** — every marketplace fetcher swallows its own errors and returns an empty map, so all three APIs breaking still completes the job normally; without that guard `/health` would stay green while serving frozen prices, which is the whole point of the marker. Stale threshold is 8h against a 6h job interval (one run plus slack). Redis down or a never-run pipeline both report `unknown`; the request still returns 200.
+
+The uptime monitor is configured as a **keyword monitor on `fresh`** — only the healthy payload contains that substring, so `stale`/`unknown` both alert. Changing these strings breaks the monitor.
 
 ### Schema notes
 
@@ -154,9 +169,28 @@ All filters are combined as `AND` conditions. Wear is matched via `marketHashNam
 
 `PriceService.getTopMovers(direction, limit)` (`src/services/prices.ts`) takes `direction: 'rising' | 'falling'`, over-fetches `limit * 5` candidates ordered by `priceChange24h`, then discards rows without a real 24h-ago reference price or with an absolute move under $0.25, before truncating to `limit`. Route: `GET /skins/top-movers?direction=`. Cached in Redis per direction as `top-movers:{direction}:{limit}` (15 min TTL, invalidated at the end of every bulk price run same as before).
 
+### Logging
+
+Pino, configured in `server.ts` from `LOG_LEVEL` (default `info`, so job output like `[PricePopulate] Done — X skins updated` is visible in Render's logs). `pino-pretty` is only attached when `NODE_ENV === 'development'`; production emits JSON.
+
+**Pino uses printf-style interpolation, so the error must go in the merge object, not as a trailing argument:**
+
+```ts
+log.error({ err }, '[PriceRefresh] Scheduled run failed')   // ✅ serializes type/message/stack
+log.error('[PriceRefresh] Scheduled run failed:', err)      // ❌ err silently discarded — no %s/%o placeholder
+```
+
 ### Rate limiting
 
 `@fastify/rate-limit` is registered globally in `server.ts`, keyed by request IP: `RATE_LIMIT_MAX` (default 100) requests per `RATE_LIMIT_WINDOW` (default `'1 minute'`). `skins.ts` applies a tighter override on search: `RATE_LIMIT_SEARCH_MAX` (default 30) over the same window.
+
+Keying on IP only works if `request.ip` is the caller. In production the app sits behind Cloudflare and Render's load balancer, so the socket address is theirs — **`TRUST_PROXY` must be set or every user shares one bucket** and a few concurrent users 429 everyone.
+
+`TRUST_PROXY` is a hop count, deliberately **not** `true`: `true` trusts the whole `X-Forwarded-For` chain and resolves `request.ip` to its leftmost entry, which the client supplies and can forge — letting an attacker mint a fresh bucket per request and escape the limit entirely. A hop count resolves to an address appended by our own proxies. `parseTrustProxy` (`src/config/trustProxy.ts`) coerces the env string; both behaviours are pinned by `trustProxy.test.ts`.
+
+Get the hop count from `GET /debug/client-ip` (needs `DEBUG_SECRET` + the `X-Debug-Secret` header) rather than guessing: call it from a machine whose public IP you know and set `TRUST_PROXY` to the `hops` whose `ip` matches. Default is `false` (correct for local dev, where nothing fronts the app).
+
+**Render is 3** (measured 2026-07-16, stable across samples): the socket is a container-local proxy (`127.0.0.1`) and `X-Forwarded-For` arrives as `[client, Cloudflare edge, Render LB]`. `trustProxy.test.ts` replays that exact chain. The Render service is **not** Blueprint-managed, so `render.yaml` is documentation only — `TRUST_PROXY` has to be set in the Render dashboard, and a deploy will not pick it up from the repo. If `/debug/client-ip` ever shows `resolvedIp` drifting off the real caller, re-measure: a wrong count degrades to coarser buckets silently rather than erroring.
 
 ---
 

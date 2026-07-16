@@ -5,6 +5,7 @@ import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
 import { env } from './config/env'
 import { registerRoutes } from './routes'
+import { getPriceHealth } from './jobs/populatePrices'
 
 export async function buildServer() {
   const app = Fastify({
@@ -14,7 +15,7 @@ export async function buildServer() {
     // count and not `true`.
     trustProxy: env.TRUST_PROXY,
     logger: {
-      level: env.NODE_ENV === 'development' ? 'info' : 'warn',
+      level: env.LOG_LEVEL,
       transport:
         env.NODE_ENV === 'development'
           ? { target: 'pino-pretty', options: { colorize: true } }
@@ -43,11 +44,19 @@ export async function buildServer() {
     cookie: { cookieName: 'token', signed: false },
   })
 
-  app.get('/health', async () => ({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    env: env.NODE_ENV,
-  }))
+  // `prices` is what the uptime monitor keys on: a process that answers but
+  // serves prices nothing has refreshed in 8h is not healthy. Only 'fresh'
+  // contains the keyword, so 'stale'/'unknown' both alert.
+  app.get('/health', async () => {
+    const prices = await getPriceHealth()
+    return {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      env: env.NODE_ENV,
+      prices: prices.freshness,
+      pricesLastRun: prices.lastRun?.toISOString() ?? null,
+    }
+  })
 
   await registerRoutes(app)
 

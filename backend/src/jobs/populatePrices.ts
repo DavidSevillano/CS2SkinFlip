@@ -3,6 +3,7 @@ import zlib from 'zlib'
 import { promisify } from 'util'
 import { prisma } from '../db/prisma'
 import { redis } from '../redis/client'
+import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import type { FastifyBaseLogger } from 'fastify'
 
 const brotliDecompress = promisify(zlib.brotliDecompress)
@@ -137,14 +138,42 @@ function calcLowestPrice(...prices: (number | null | undefined)[]): number | nul
   return valid.length > 0 ? Math.min(...valid) : null
 }
 
-// The 24h-change reference is the most recent history point at or before 24h
-// ago. We MUST bound how far below 24h we look: an unbounded `timestamp <=
-// dayAgo` matches the entire retained history (35-day retention ≈ millions of
-// rows) and, because `distinct` cannot be pushed to Postgres under a timestamp
-// `orderBy`, Prisma materialises every matching row in-process — enough to OOM a
-// 512MB instance. History is written every 2h, so a 12h window always contains a
-// reference point while keeping the result to a handful of rows per skin.
-const CHANGE_REFERENCE_WINDOW_MS = 12 * 60 * 60 * 1000
+// ─── Pipeline freshness ──────────────────────────────────────────────────────
+// `/health` reports whether prices are still moving, not just whether the
+// process answers. Deliberately outside the `prices:*` namespace: app.ts wipes
+// that glob on every boot, which would blank the marker on each deploy.
+export const PRICE_RUN_TIMESTAMP_KEY = 'pipeline:prices:lastSuccessfulRun'
+
+// The bulk job runs every 6h, so 8h is one run plus slack: a single failed run
+// alerts, a slow one doesn't.
+const PRICE_STALE_AFTER_MS = 8 * 60 * 60 * 1000
+
+// 'unknown' covers both a Redis outage and a never-yet-run pipeline. Neither is
+// 'fresh', so the keyword monitor alerts on them — which is what we want.
+export type PriceFreshness = 'fresh' | 'stale' | 'unknown'
+
+export interface PriceHealth {
+  freshness: PriceFreshness
+  lastRun: Date | null
+}
+
+export async function getPriceHealth(): Promise<PriceHealth> {
+  try {
+    // Upstash deserializes JSON, but a value written by an older/raw client can
+    // still come back as a string.
+    const raw = await redis.get(PRICE_RUN_TIMESTAMP_KEY)
+    const last = typeof raw === 'string' ? Number(raw) : raw
+    if (typeof last !== 'number' || !Number.isFinite(last)) {
+      return { freshness: 'unknown', lastRun: null }
+    }
+    return {
+      freshness: Date.now() - last < PRICE_STALE_AFTER_MS ? 'fresh' : 'stale',
+      lastRun: new Date(last),
+    }
+  } catch {
+    return { freshness: 'unknown', lastRun: null }
+  }
+}
 
 export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
   log.info('[PricePopulate] Fetching prices from 3 marketplaces in parallel...')
@@ -230,5 +259,19 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
   }
 
   await redis.del('top-movers:20')
+
+  // Only a run that actually moved prices counts as successful. Each fetcher
+  // swallows its own errors and returns an empty map, so all three marketplaces
+  // breaking at once still reaches this line — without this guard /health would
+  // report 'fresh' while serving frozen prices, which is the exact failure the
+  // freshness marker exists to catch.
+  if (updated > 0) {
+    await redis.set(PRICE_RUN_TIMESTAMP_KEY, Date.now())
+  } else {
+    log.error(
+      '[PricePopulate] No skins updated — every marketplace returned nothing. Leaving the freshness marker untouched; /health will report stale.',
+    )
+  }
+
   log.info(`[PricePopulate] Done — ${updated} skins updated, ${historyRows.length} history entries saved`)
 }

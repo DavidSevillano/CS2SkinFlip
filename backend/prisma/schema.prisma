@@ -4,7 +4,14 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Neon's pooled endpoint (`-pooler`). PgBouncer in transaction mode, which is
+  // what the app wants: short-lived queries, no session state.
+  url       = env("DATABASE_URL")
+  // Migrations need session state (advisory locks, DDL transactions) that the
+  // pooler drops, so Migrate/db push/db pull go straight to the compute endpoint
+  // — the same host without `-pooler`. Never read at runtime; the Docker build
+  // runs `prisma generate` with neither var set and doesn't need them.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 model User {
@@ -45,8 +52,8 @@ model Skin {
 model SkinPrice {
   id              String   @id @default(cuid())
   skinId          String   @unique
-  // Three bulk-public marketplaces — each refreshed every 2h via a single HTTP call.
-  // No API keys, no rate-limit issues (12 requests/day per marketplace).
+  // Three bulk-public marketplaces — each refreshed every 6h via a single HTTP call.
+  // No API keys, no rate-limit issues (4 requests/day per marketplace).
   skinportPrice   Float?   // api.skinport.com (USD)
   csgoMarketPrice Float?   // market.csgo.com (USD)
   waxpeerPrice    Float?   // api.waxpeer.com (USD)

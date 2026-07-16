@@ -1,9 +1,9 @@
 import { populatePrices } from './populatePrices'
 import { cleanupPriceHistory } from './cleanupPriceHistory'
 import { AlertService } from '../services/alerts'
+import { REFRESH_INTERVAL_MS } from '../config/priceHistory'
 import type { FastifyBaseLogger } from 'fastify'
 
-const REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 hours
 const alertService = new AlertService()
 
 export function startPriceRefreshJob(log: FastifyBaseLogger) {
@@ -16,7 +16,7 @@ export function startPriceRefreshJob(log: FastifyBaseLogger) {
   }
 
   const interval = setInterval(() => {
-    run().catch((err) => log.error('[PriceRefresh] Scheduled run failed:', err))
+    run().catch((err) => log.error({ err }, '[PriceRefresh] Scheduled run failed'))
   }, REFRESH_INTERVAL_MS)
 
   log.info(`[PriceRefresh] Job started — refreshing every ${REFRESH_INTERVAL_MS / 1000 / 60} minutes`)

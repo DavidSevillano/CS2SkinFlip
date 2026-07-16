@@ -23,19 +23,23 @@ vi.mock('../db/prisma', () => ({
   },
 }))
 
-const { redisDel } = vi.hoisted(() => ({ redisDel: vi.fn() }))
-vi.mock('../redis/client', () => ({ redis: { del: redisDel } }))
+const { redisDel, redisSet, redisGet } = vi.hoisted(() => ({
+  redisDel: vi.fn(),
+  redisSet: vi.fn(),
+  redisGet: vi.fn(),
+}))
+vi.mock('../redis/client', () => ({ redis: { del: redisDel, set: redisSet, get: redisGet } }))
 
 // Keep the marketplace fetchers offline: an empty payload yields empty price
 // maps, so no upserts/history are written and the test isolates the read query.
 const { axiosGet } = vi.hoisted(() => ({ axiosGet: vi.fn() }))
 vi.mock('axios', () => ({ default: { get: axiosGet } }))
 
-const { populatePrices } = await import('./populatePrices')
+const { populatePrices, getPriceHealth, PRICE_RUN_TIMESTAMP_KEY } = await import('./populatePrices')
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any
 
-const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
+const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
 
 describe('populatePrices — 24h-change reference query', () => {
   beforeEach(() => {
@@ -45,6 +49,8 @@ describe('populatePrices — 24h-change reference query', () => {
     priceHistoryFindMany.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
     redisDel.mockResolvedValue(undefined)
+    redisSet.mockResolvedValue('OK')
+    redisGet.mockResolvedValue(null)
   })
 
   it('bounds the reference-price window on the lower end (has a gte), not just lte', async () => {
@@ -58,16 +64,103 @@ describe('populatePrices — 24h-change reference query', () => {
     expect(where.timestamp.lte).toBeInstanceOf(Date)
   })
 
-  it('makes the window exactly 12h wide, ending ~24h ago', async () => {
+  it('makes the window exactly CHANGE_REFERENCE_WINDOW_MS wide, ending ~24h ago', async () => {
     const before = Date.now()
     await populatePrices(log)
     const after = Date.now()
 
     const { gte, lte } = priceHistoryFindMany.mock.calls[0][0].where.timestamp
 
-    // lte is ~24h ago; gte is 12h before that.
+    // Both bounds derive from a Date.now() taken *inside* the call, which sits
+    // somewhere in [before, after]. So `after` is the only safe reference for a
+    // lower-bound assertion — comparing against `before` makes these off-by-a-
+    // millisecond flaky whenever the clock ticks mid-call.
     expect(after - lte.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000)
-    expect(lte.getTime() - gte.getTime()).toBe(TWELVE_HOURS_MS)
-    expect(before - gte.getTime()).toBeGreaterThanOrEqual(36 * 60 * 60 * 1000)
+    expect(before - lte.getTime()).toBeLessThanOrEqual(24 * 60 * 60 * 1000)
+
+    // lte is ~24h ago; gte is one window below that.
+    expect(lte.getTime() - gte.getTime()).toBe(CHANGE_REFERENCE_WINDOW_MS)
+    expect(after - gte.getTime()).toBeGreaterThanOrEqual(
+      24 * 60 * 60 * 1000 + CHANGE_REFERENCE_WINDOW_MS,
+    )
+  })
+})
+
+// The freshness marker is what turns the uptime pinger into a pipeline monitor,
+// so the case it must never get wrong is the silent one: every marketplace fetch
+// failing still runs the job to completion (each fetcher catches its own error
+// and returns an empty map), and marking that as a successful run would leave
+// /health green while prices froze.
+describe('populatePrices — price freshness marker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    axiosGet.mockResolvedValue({ data: [] })
+    skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
+    priceHistoryFindMany.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 0 })
+    redisDel.mockResolvedValue(undefined)
+    redisSet.mockResolvedValue('OK')
+    skinPriceUpsert.mockResolvedValue({})
+  })
+
+  it('does not mark the run successful when no marketplace returned a price', async () => {
+    await populatePrices(log)
+
+    const marked = redisSet.mock.calls.some(([key]) => key === PRICE_RUN_TIMESTAMP_KEY)
+    expect(marked).toBe(false)
+    expect(log.error).toHaveBeenCalled()
+  })
+
+  it('marks the run successful once at least one skin got a price', async () => {
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('market.csgo.com')) {
+        return { data: [{ market_hash_name: 'AK-47 | Redline (Field-Tested)', price: '12.50', volume: '5' }] }
+      }
+      return { data: [] }
+    })
+
+    const before = Date.now()
+    await populatePrices(log)
+    const after = Date.now()
+
+    const call = redisSet.mock.calls.find(([key]) => key === PRICE_RUN_TIMESTAMP_KEY)
+    expect(call).toBeDefined()
+    expect(call![1]).toBeGreaterThanOrEqual(before)
+    expect(call![1]).toBeLessThanOrEqual(after)
+  })
+
+  it('stays outside the prices:* namespace that app.ts wipes on every boot', () => {
+    expect(PRICE_RUN_TIMESTAMP_KEY.startsWith('prices:')).toBe(false)
+  })
+})
+
+describe('getPriceHealth', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('reports fresh inside the 8h window', async () => {
+    redisGet.mockResolvedValue(Date.now() - 7 * 60 * 60 * 1000)
+    expect(await getPriceHealth()).toMatchObject({ freshness: 'fresh' })
+  })
+
+  it('reports stale past the 8h window', async () => {
+    redisGet.mockResolvedValue(Date.now() - 9 * 60 * 60 * 1000)
+    expect(await getPriceHealth()).toMatchObject({ freshness: 'stale' })
+  })
+
+  it('reports unknown when the marker was never written', async () => {
+    redisGet.mockResolvedValue(null)
+    expect(await getPriceHealth()).toEqual({ freshness: 'unknown', lastRun: null })
+  })
+
+  it('reports unknown instead of throwing when Redis is down', async () => {
+    redisGet.mockRejectedValue(new Error('upstash unreachable'))
+    expect(await getPriceHealth()).toEqual({ freshness: 'unknown', lastRun: null })
+  })
+
+  it('accepts a marker that comes back as a string', async () => {
+    redisGet.mockResolvedValue(String(Date.now() - 60 * 1000))
+    expect(await getPriceHealth()).toMatchObject({ freshness: 'fresh' })
   })
 })

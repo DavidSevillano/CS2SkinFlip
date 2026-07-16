@@ -1,16 +1,11 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
+import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import type { AggregatedPrices } from '../types'
-
-// How far below the 24h mark to look for a reference price. Bounding the lower
-// end of the history window keeps `distinct` reads from scanning the entire
-// retained table (see populatePrices for the OOM this pattern caused). History
-// is written every 2h, so 12h always contains a reference point.
-const CHANGE_REFERENCE_WINDOW_MS = 12 * 60 * 60 * 1000
 
 export class PriceService {
 
-  /** Read stored prices from DB (populated by bulk job every 2h). Cached 5 min. */
+  /** Read stored prices from DB (populated by bulk job every 6h). Cached 5 min. */
   async getPricesForSkin(skinId: string, marketHashName: string): Promise<AggregatedPrices> {
     const cacheKey = `prices:${skinId}`
     const cached = await redis.get<AggregatedPrices>(cacheKey)
