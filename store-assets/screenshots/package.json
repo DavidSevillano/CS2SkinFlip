@@ -1,0 +1,14 @@
+{
+  "name": "cs2skinflip-store-screenshots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node src/build.mjs",
+    "capture": "node src/capture.mjs",
+    "test": "node --test \"src/**/*.test.mjs\"",
+    "all": "npm run build && npm run capture"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.43.1"
+  }
+}
