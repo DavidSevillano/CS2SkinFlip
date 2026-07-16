@@ -26,3 +26,8 @@ services:
         sync: false
       - key: FCM_SERVICE_ACCOUNT_PATH
         value: /etc/secrets/firebase-service-account.json
+      # Reverse-proxy hops in front of this service (Cloudflare + Render's LB).
+      # Must be the measured hop count, not `true` — see config/trustProxy.ts.
+      # Measure it once with GET /debug/client-ip, then set it here.
+      - key: TRUST_PROXY
+        sync: false

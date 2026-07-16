@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseTrustProxy } from './trustProxy'
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -17,6 +18,12 @@ const envSchema = z.object({
   GOOGLE_PLAY_SERVICE_ACCOUNT_PATH: z.string().optional(),
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.burixer85.cs2skinflip'),
   PREMIUM_PRODUCT_ID: z.string().default('premium_unlimited_alerts'),
+  // Number of reverse-proxy hops in front of the app, so `request.ip` (and the
+  // per-IP rate limit keyed on it) resolves to the caller rather than the proxy.
+  // `false` locally where nothing fronts us; on a host like Render, the hop
+  // count — measure it with GET /debug/client-ip. Avoid `true`: it trusts the
+  // whole X-Forwarded-For chain, making the resolved IP client-forgeable.
+  TRUST_PROXY: z.string().default('false').transform(parseTrustProxy),
   // Global per-IP rate limit (requests per window). Search routes tighten this.
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW: z.string().default('1 minute'),

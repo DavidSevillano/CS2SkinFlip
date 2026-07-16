@@ -8,6 +8,11 @@ import { registerRoutes } from './routes'
 
 export async function buildServer() {
   const app = Fastify({
+    // Render fronts us with Cloudflare + its own load balancer, so the socket
+    // address is theirs, not the caller's. Without this every user shares one
+    // rate-limit bucket. See TRUST_PROXY in config/env.ts for why this is a hop
+    // count and not `true`.
+    trustProxy: env.TRUST_PROXY,
     logger: {
       level: env.NODE_ENV === 'development' ? 'info' : 'warn',
       transport:
