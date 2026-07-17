@@ -71,6 +71,7 @@ Copy `.env` and fill in:
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | Upstash Redis (serverless) |
 | `JWT_SECRET` | Min 32 chars |
 | `FRONTEND_URL` | Used for CORS allowlist |
+| `JOBS_SECRET` | Min 32 chars. Protects `POST /jobs/refresh-prices`; must match the `JOBS_SECRET` GitHub repo secret. **Without it the `/jobs` routes don't register and no scheduled refresh can run** — `/health` goes `stale` within 8h and the uptime monitor alerts |
 | `TRUST_PROXY` | Reverse-proxy hop count in front of the app. Required in production for per-IP rate limiting to work — see [Rate limiting](#rate-limiting). Defaults to `false` (local dev) |
 | `LOG_LEVEL` | Pino level — defaults to `info` in every environment. Set to `warn`/`error` to quieten, `debug` to troubleshoot |
 | `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |
@@ -105,10 +106,14 @@ Fastify + Prisma + TypeScript. Vitest (`npm test`), colocated `*.test.ts` next t
 ### Startup sequence (`app.ts`)
 
 ```
-buildServer() → listen → populateSkins() → populatePrices() → startPriceRefreshJob()
+buildServer() → listen → populateSkins() → populatePrices() only if SkinPrice is empty
 ```
 
-`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePrices` runs the full bulk price fetch on startup and re-runs every 6 hours.
+`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePrices` runs on startup **only in a real bootstrap** (empty `SkinPrice`: new DB, `db:reset`) — a routine restart refreshes nothing.
+
+**The periodic refresh is not scheduled in this process.** `.github/workflows/refresh-prices.yml` cron-triggers `POST /jobs/refresh-prices` every 6h (00/06/12/18 UTC), which runs populatePrices → alert check → history cleanup behind a Redis lock (`src/jobs/runner.ts`). A `setInterval` here would restart its clock on every deploy and double up if the service ever ran 2 instances.
+
+The 6h cadence therefore lives in the workflow cron, mirrored by `REFRESH_INTERVAL_MS` in `src/config/priceHistory.ts`. Change one and you must change the other: `CHANGE_REFERENCE_WINDOW_MS` is defined against it, and `priceHistory.test.ts` pins the relationship.
 
 ### Route structure (`src/routes/`)
 
@@ -120,10 +125,11 @@ buildServer() → listen → populateSkins() → populatePrices() → startPrice
 | `alerts.ts` | `/alerts` | Auth required |
 | `portfolio.ts` | `/portfolio` | Auth required |
 | `prices.ts` | `/prices` | On-demand single-skin and batch price refresh |
+| `jobs.ts` | `/jobs` | Cron trigger — `X-Jobs-Secret` header; `POST /jobs/refresh-prices` (202 + runId), `GET /jobs/refresh-prices/status`. Not registered at all without `JOBS_SECRET` |
 
 ### Price pipeline
 
-Three marketplaces are fetched in parallel on startup and every 6h (`populatePrices`).
+Three marketplaces are fetched in parallel every 6h by the cron-triggered job (`populatePrices`), plus once on startup if `SkinPrice` is empty.
 **All endpoints are bulk and public — no API keys, no rate-limit concerns** (4 calls/day per marketplace):
 
 1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items.

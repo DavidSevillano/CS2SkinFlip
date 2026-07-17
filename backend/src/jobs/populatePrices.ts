@@ -175,7 +175,12 @@ export async function getPriceHealth(): Promise<PriceHealth> {
   }
 }
 
-export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
+export interface PopulatePricesSummary {
+  updated: number
+  historyRows: number
+}
+
+export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePricesSummary> {
   log.info('[PricePopulate] Fetching prices from 3 marketplaces in parallel...')
 
   const [skinportMap, csgoMarketMap, waxpeerMap] = await Promise.all([
@@ -274,4 +279,6 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<void> {
   }
 
   log.info(`[PricePopulate] Done — ${updated} skins updated, ${historyRows.length} history entries saved`)
+
+  return { updated, historyRows: historyRows.length }
 }
