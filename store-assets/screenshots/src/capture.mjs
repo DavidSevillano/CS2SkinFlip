@@ -1,6 +1,6 @@
 // html/{locale}/*.html -> out/{locale}/*.png a 2x.
 // Espera a las imagenes remotas de Steam y al auto-fit antes de disparar.
-import { readdirSync, mkdirSync, rmSync } from 'node:fs'
+import { readdirSync, mkdirSync, rmSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import puppeteer from 'puppeteer'
@@ -10,17 +10,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const HTML = join(__dirname, 'html')
 const OUT = join(__dirname, '../out')
 
+// scale = deviceScaleFactor. Play exige el feature graphic en 1024x500 EXACTOS
+// (24-bit PNG, sin alpha), asi que va a 1x: a 2x salen 2048x1000 y lo rechaza.
+// Los screenshots no tienen esa restriccion (Play acepta 320-3840 px de lado),
+// asi que van a 2x para que el texto no se vea blando.
 const SIZES = {
-  'feature-graphic-v2': { width: 1024, height: 500 },
-  default:              { width: 540,  height: 960 },
+  'feature-graphic-v2': { width: 1024, height: 500, scale: 1 },
+  default:              { width: 540,  height: 960, scale: 2 },
 }
 const sizeFor = (name) => SIZES[name] ?? SIZES.default
 
 async function capturePage(page, file, dir, outDir) {
   const name = file.replace(/\.html$/, '')
-  const { width, height } = sizeFor(name)
+  const { width, height, scale } = sizeFor(name)
 
-  await page.setViewport({ width, height, deviceScaleFactor: 2 })
+  await page.setViewport({ width, height, deviceScaleFactor: scale })
   await page.goto(pathToFileURL(join(dir, file)).href, { waitUntil: 'networkidle0', timeout: 60_000 })
 
   // Las imagenes de skins vienen de community.akamai.steamstatic.com: hay que
@@ -63,7 +67,7 @@ async function capturePage(page, file, dir, outDir) {
 
   const path = join(outDir, `${name}.png`)
   await page.screenshot({ path })
-  return { path, expected: [width * 2, height * 2] }
+  return { path, expected: [width * scale, height * scale] }
 }
 
 const browser = await puppeteer.launch({ headless: 'new' })
@@ -78,8 +82,17 @@ try {
     mkdirSync(outDir, { recursive: true })
 
     for (const file of readdirSync(dir).filter(f => f.endsWith('.html'))) {
-      await capturePage(page, file, dir, outDir)
-      console.log('  ✓', loc.play, file.replace(/\.html$/, ''))
+      const { path, expected } = await capturePage(page, file, dir, outDir)
+
+      // Play valida las dimensiones al subir y rechaza el asset sin mas
+      // explicacion, asi que se comprueban aqui: cabecera IHDR del PNG.
+      const b = readFileSync(path)
+      const got = [b.readUInt32BE(16), b.readUInt32BE(20)]
+      if (got[0] !== expected[0] || got[1] !== expected[1]) {
+        throw new Error(`${path}: ${got.join('x')}, esperaba ${expected.join('x')}`)
+      }
+
+      console.log('  ✓', loc.play, file.replace(/\.html$/, '').padEnd(18), got.join('x'))
       n++
     }
   }
