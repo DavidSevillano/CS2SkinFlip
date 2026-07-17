@@ -8,6 +8,7 @@ import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
 import com.burixer85.cs2skinflip.core.util.toUserMessageRes
@@ -42,6 +43,7 @@ class SkinDetailViewModel @Inject constructor(
     private val skinRepository: SkinRepository,
     private val watchlistRepository: WatchlistRepository,
     private val analytics: AnalyticsService,
+    private val steamSession: SteamSessionManager,
 ) : ViewModel() {
 
     private val skinId: String = checkNotNull(savedStateHandle["skinId"])
@@ -54,6 +56,10 @@ class SkinDetailViewModel @Inject constructor(
 
     private val _steamPriceState = MutableStateFlow<SteamPriceState>(SteamPriceState.Loading)
     val steamPriceState: StateFlow<SteamPriceState> = _steamPriceState
+
+    // Drives the "connect your Steam session" hint under the Steam price row.
+    private val _steamSessionConnected = MutableStateFlow(false)
+    val steamSessionConnected: StateFlow<Boolean> = _steamSessionConnected
 
     init {
         loadSkin()
@@ -89,8 +95,26 @@ class SkinDetailViewModel @Inject constructor(
         // SkinRepository.getSteamPrice) that can be slow or fail, and must
         // never hold up or corrupt the rest of the screen if it does.
         viewModelScope.launch {
+            _steamSessionConnected.value = steamSession.isConnected()
             val price = runCatching { skinRepository.getSteamPrice(marketHashName) }.getOrNull()
             _steamPriceState.value = if (price != null) SteamPriceState.Available(price) else SteamPriceState.Unavailable
+        }
+    }
+
+    /**
+     * Called when the screen re-enters composition — i.e. on return from the
+     * Steam login screen the hint navigates to. A price that failed without a
+     * session is retried exactly on the disconnected→connected transition, so
+     * the row fills in right where the user asked for it.
+     */
+    fun onScreenReentered() {
+        val wasConnected = _steamSessionConnected.value
+        val connectedNow = steamSession.isConnected()
+        _steamSessionConnected.value = connectedNow
+        if (connectedNow && !wasConnected && _steamPriceState.value is SteamPriceState.Unavailable) {
+            val skin = (_uiState.value as? SkinDetailUiState.Success)?.skin ?: return
+            _steamPriceState.value = SteamPriceState.Loading
+            loadSteamPrice(skin.marketHashName)
         }
     }
 

@@ -164,7 +164,8 @@ fun AppNavigation(
                 val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
                 SkinDetailScreen(
                     skinId = skinId,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onConnectSteamClick = { navController.navigate(Screen.SteamLogin.route) },
                 )
             }
         }

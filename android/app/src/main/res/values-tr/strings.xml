@@ -177,6 +177,7 @@
     <string name="settings_steam_session_connected">Bağlı — bağlantıyı kesmek için dokunun</string>
     <string name="settings_steam_session_disconnected">Steam fiyatının her saatte yüklenmesi için bağlanın</string>
     <string name="steam_login_title">Steam\'de oturum aç</string>
+    <string name="skindetail_steam_connect_hint">Bu fiyatın her zaman yüklenmesi için Steam oturumunuzu bağlayın</string>
     <string name="settings_section_account">Hesap</string>
     <string name="settings_section_my_skins">Skinlerim</string>
     <string name="settings_section_general">Genel</string>
