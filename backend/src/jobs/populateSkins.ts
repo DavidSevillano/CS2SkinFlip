@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { prisma } from '../db/prisma'
-import { redis } from '../redis/client'
+import { invalidateTopMoversCache } from '../services/prices'
 import type { FastifyBaseLogger } from 'fastify'
 
 const BYMYKEL_SKINS_URL =
@@ -148,6 +148,6 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
     }
   }
 
-  await redis.del('top-movers:20')
+  await invalidateTopMoversCache()
   log.info(`[PopulateSkins] Done — imported: ${imported}, skipped: ${skipped}`)
 }

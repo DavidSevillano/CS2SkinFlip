@@ -5,6 +5,7 @@ import { prisma } from './db/prisma'
 import { populateSkins } from './jobs/populateSkins'
 import { populatePrices } from './jobs/populatePrices'
 import { redis } from './redis/client'
+import { invalidateTopMoversCache } from './services/prices'
 
 async function main() {
   const app = await buildServer()
@@ -24,7 +25,7 @@ async function main() {
     // Clear ALL price caches on startup so clients get fresh data immediately
     const keys = await redis.keys('prices:*')
     if (keys.length > 0) await Promise.all(keys.map(k => redis.del(k)))
-    await redis.del('top-movers:20')
+    await invalidateTopMoversCache()
 
     // The periodic refresh is triggered externally (a GitHub Actions cron ->
     // POST /jobs/refresh-prices), not scheduled here: a setInterval in this

@@ -3,6 +3,34 @@ import { redis, CACHE_TTL } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import type { AggregatedPrices } from '../types'
 
+// ─── Top-movers cache ────────────────────────────────────────────────────────
+// The key format and the invalidation glob are derived from one prefix on
+// purpose. They used to be independent: the writer's key grew a `direction`
+// segment and the three invalidation sites went on deleting `top-movers:20`,
+// a key nobody had written since — so a bulk price run left the cache in place
+// and top-movers stayed stale until the 15-min TTL expired. Nothing errored,
+// which is exactly why this must be structural rather than a comment.
+const TOP_MOVERS_CACHE_PREFIX = 'top-movers'
+
+function topMoversCacheKey(direction: 'rising' | 'falling', limit: number): string {
+  return `${TOP_MOVERS_CACHE_PREFIX}:${direction}:${limit}`
+}
+
+/**
+ * Drops every cached top-movers list. Call after anything that moves the prices
+ * underneath them — the bulk price run, a catalog import.
+ *
+ * Globs rather than enumerating (direction × limit): the route pins both today,
+ * but `getTopMovers` takes them as parameters, so a second caller with a
+ * different limit would silently escape a hardcoded list.
+ */
+export async function invalidateTopMoversCache(): Promise<number> {
+  const keys = await redis.keys(`${TOP_MOVERS_CACHE_PREFIX}:*`)
+  if (keys.length === 0) return 0
+  await Promise.all(keys.map((key) => redis.del(key)))
+  return keys.length
+}
+
 export class PriceService {
 
   /** Read stored prices from DB (populated by bulk job every 6h). Cached 5 min. */
@@ -59,7 +87,7 @@ export class PriceService {
     direction: 'rising' | 'falling' = 'rising',
     limit = 20
   ): Promise<Array<AggregatedPrices & { name: string; iconUrl: string }>> {
-    const cacheKey = `top-movers:${direction}:${limit}`
+    const cacheKey = topMoversCacheKey(direction, limit)
     const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
     if (cached) return cached
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { fakeRedisStore } from '../test/fakeRedis'
 
 // Regression guard for the Render OOM (2026-07): populatePrices used to load the
 // 24h-change reference with an unbounded `where: { timestamp: { lte: dayAgo } }`,
@@ -23,12 +24,18 @@ vi.mock('../db/prisma', () => ({
   },
 }))
 
-const { redisDel, redisSet, redisGet } = vi.hoisted(() => ({
+const { redisDel, redisSet, redisGet, redisKeys } = vi.hoisted(() => ({
   redisDel: vi.fn(),
   redisSet: vi.fn(),
   redisGet: vi.fn(),
+  redisKeys: vi.fn(),
 }))
-vi.mock('../redis/client', () => ({ redis: { del: redisDel, set: redisSet, get: redisGet } }))
+vi.mock('../redis/client', () => ({
+  redis: { del: redisDel, set: redisSet, get: redisGet, keys: redisKeys },
+  // populatePrices pulls in services/prices for the cache invalidator, which
+  // imports CACHE_TTL at module scope — a missing named export fails the link.
+  CACHE_TTL: { TOP_MOVERS: 900, SKIN_PRICES: 300 },
+}))
 
 // Keep the marketplace fetchers offline: an empty payload yields empty price
 // maps, so no upserts/history are written and the test isolates the read query.
@@ -49,6 +56,7 @@ describe('populatePrices — 24h-change reference query', () => {
     priceHistoryFindMany.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
     redisDel.mockResolvedValue(undefined)
+    redisKeys.mockResolvedValue([])
     redisSet.mockResolvedValue('OK')
     redisGet.mockResolvedValue(null)
   })
@@ -99,6 +107,7 @@ describe('populatePrices — price freshness marker', () => {
     priceHistoryFindMany.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
     redisDel.mockResolvedValue(undefined)
+    redisKeys.mockResolvedValue([])
     redisSet.mockResolvedValue('OK')
     skinPriceUpsert.mockResolvedValue({})
   })
@@ -173,6 +182,7 @@ describe('populatePrices — run summary', () => {
     priceHistoryFindMany.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
     redisDel.mockResolvedValue(undefined)
+    redisKeys.mockResolvedValue([])
     redisSet.mockResolvedValue('OK')
     redisGet.mockResolvedValue(null)
   })
@@ -181,5 +191,42 @@ describe('populatePrices — run summary', () => {
     const summary = await populatePrices(log)
 
     expect(summary).toEqual({ updated: 0, historyRows: 0 })
+  })
+})
+
+// The run rewrites every price the top-movers lists are built from, so leaving
+// them cached serves numbers the run just superseded. The bug this pins was
+// silent for exactly that reason: nothing failed, the lists were merely up to
+// 15 minutes (the TTL) behind the prices shown everywhere else in the app.
+describe('populatePrices — top-movers cache', () => {
+  let fake: ReturnType<typeof fakeRedisStore>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fake = fakeRedisStore()
+    redisGet.mockImplementation(fake.get)
+    redisSet.mockImplementation(fake.set)
+    redisKeys.mockImplementation(fake.keys)
+    redisDel.mockImplementation(fake.del)
+
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('market.csgo.com')) {
+        return { data: [{ market_hash_name: 'AK-47 | Redline (Field-Tested)', price: '12.50', volume: '5' }] }
+      }
+      return { data: [] }
+    })
+    skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
+    priceHistoryFindMany.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 1 })
+    skinPriceUpsert.mockResolvedValue({})
+  })
+
+  it('leaves no cached top-movers list behind after a run', async () => {
+    fake.store.set('top-movers:rising:20', [{ skinId: 'stale' }])
+    fake.store.set('top-movers:falling:20', [{ skinId: 'stale' }])
+
+    await populatePrices(log)
+
+    expect([...fake.store.keys()].filter((key) => key.startsWith('top-movers:'))).toEqual([])
   })
 })
