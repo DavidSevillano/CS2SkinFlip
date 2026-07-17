@@ -8,6 +8,7 @@ import com.burixer85.cs2skinflip.core.data.remote.MeResponseDto
 import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import com.burixer85.cs2skinflip.core.preferences.UserPreferences
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -72,7 +73,8 @@ class SettingsViewModelTest {
         whenever(billingRepository.syncPendingPurchases()).thenReturn(syncPendingPurchases)
         whenever(backendApi.getMe()).thenReturn(meResponse())
 
-        val viewModel = SettingsViewModel(preferences, authRepository, backendApi, billingRepository)
+        val steamSession = SteamSessionManager(mock()).apply { readCookies = { null } }
+        val viewModel = SettingsViewModel(preferences, authRepository, backendApi, billingRepository, steamSession)
         return Deps(viewModel, backendApi, billingRepository)
     }
 

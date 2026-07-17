@@ -173,6 +173,10 @@
     <string name="settings_delete_account_body">To trwale usunie Twoje konto, listę obserwowanych, alerty i portfel. Tej czynności nie można cofnąć.</string>
     <string name="settings_item_sign_out">Wyloguj się</string>
     <string name="settings_item_default_marketplace">Domyślny rynek</string>
+    <string name="settings_item_steam_session">Sesja Steam</string>
+    <string name="settings_steam_session_connected">Połączona — dotknij, aby rozłączyć</string>
+    <string name="settings_steam_session_disconnected">Połącz, aby cena Steam ładowała się o każdej porze</string>
+    <string name="steam_login_title">Zaloguj się do Steam</string>
     <string name="settings_section_account">Konto</string>
     <string name="settings_section_my_skins">Moje skiny</string>
     <string name="settings_section_general">Ogólne</string>

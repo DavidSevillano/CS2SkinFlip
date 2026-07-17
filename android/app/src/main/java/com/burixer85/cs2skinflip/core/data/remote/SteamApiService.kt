@@ -1,6 +1,7 @@
 package com.burixer85.cs2skinflip.core.data.remote
 
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.Query
 import retrofit2.http.Url
@@ -35,14 +36,18 @@ interface SteamApiService {
      * rationale as [getPublicInventory] above.
      */
     @GET
-    // UA consistent with the transport: these calls go out through Cronet with
-    // Chrome's TLS fingerprint (see CronetTransport), so identify as Chrome too.
-    @Headers("User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
     suspend fun getMarketPriceOverview(
         @Url url: String = "https://steamcommunity.com/market/priceoverview/",
         @Query("appid") appId: Int = 730,
         @Query("currency") currency: Int = 1, // USD
         @Query("market_hash_name") marketHashName: String,
+        // The device WebView's real UA (SteamSessionManager.browserUserAgent) —
+        // must match the identity the session cookies were minted under.
+        @Header("User-Agent") userAgent: String,
+        // Steam Community session cookies when the user opted in (Settings →
+        // Steam session). Steam load-sheds anonymous calls per IP block at peak
+        // hours but serves logged-in ones — see SteamSessionManager. Null = anonymous.
+        @Header("Cookie") sessionCookie: String? = null,
     ): MarketPriceOverviewResponse
 }
 

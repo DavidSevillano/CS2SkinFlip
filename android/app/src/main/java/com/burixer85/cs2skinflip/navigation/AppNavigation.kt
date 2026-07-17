@@ -48,6 +48,7 @@ import com.burixer85.cs2skinflip.features.home.HomeScreen
 import com.burixer85.cs2skinflip.features.portfolio.PortfolioScreen
 import com.burixer85.cs2skinflip.features.search.SearchScreen
 import com.burixer85.cs2skinflip.features.settings.SettingsScreen
+import com.burixer85.cs2skinflip.features.settings.SteamLoginScreen
 import com.burixer85.cs2skinflip.features.skindetail.SkinDetailScreen
 import com.burixer85.cs2skinflip.features.watchlist.WatchlistScreen
 
@@ -127,8 +128,15 @@ fun AppNavigation(
                         onPortfolioClick = {
                             navController.navigate(Screen.Portfolio.route)
                         },
+                        onSteamSessionClick = {
+                            navController.navigate(Screen.SteamLogin.route)
+                        },
                     )
                 }
+            }
+
+            composable(Screen.SteamLogin.route) {
+                SteamLoginScreen(onBack = { navController.popBackStack() })
             }
 
             composable(Screen.Watchlist.route) {

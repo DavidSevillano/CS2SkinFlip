@@ -9,6 +9,7 @@ import com.burixer85.cs2skinflip.core.data.remote.MeResponseDto
 import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import com.burixer85.cs2skinflip.core.preferences.UserPreferences
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,10 +35,24 @@ class SettingsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val backendApi: CS2BackendApiService,
     private val billingRepository: BillingRepository,
+    private val steamSession: SteamSessionManager,
 ) : ViewModel() {
 
     val marketplace: StateFlow<DefaultMarketplace> =
         preferences.marketplace.stateIn(viewModelScope, SharingStarted.Eagerly, DefaultMarketplace.LOWEST)
+
+    private val _steamSessionConnected = MutableStateFlow(steamSession.isConnected())
+    val steamSessionConnected: StateFlow<Boolean> = _steamSessionConnected
+
+    /** Re-reads the cookie jar — call when Settings regains focus after the login screen. */
+    fun refreshSteamSession() {
+        _steamSessionConnected.value = steamSession.isConnected()
+    }
+
+    fun disconnectSteamSession() {
+        steamSession.disconnect()
+        refreshSteamSession()
+    }
 
     private val _accountState = MutableStateFlow<AccountUiState>(AccountUiState.Loading)
     val accountState: StateFlow<AccountUiState> = _accountState

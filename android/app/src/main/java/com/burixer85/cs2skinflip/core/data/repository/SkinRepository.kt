@@ -3,6 +3,7 @@ package com.burixer85.cs2skinflip.core.data.repository
 import com.burixer85.cs2skinflip.core.data.mock.MockData
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import com.burixer85.cs2skinflip.core.data.remote.toDomain
 import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
@@ -23,6 +24,7 @@ import javax.inject.Singleton
 class SkinRepository @Inject constructor(
     private val backendApi: CS2BackendApiService,
     private val steamApi: SteamApiService,
+    private val steamSession: SteamSessionManager,
 ) {
 
     fun getTrendingSkins(direction: String = "rising"): Flow<List<Skin>> = flow {
@@ -104,7 +106,11 @@ class SkinRepository @Inject constructor(
      * to "not listed".
      */
     suspend fun getSteamPrice(marketHashName: String): Double? = runCatching {
-        val response = steamApi.getMarketPriceOverview(marketHashName = marketHashName)
+        val response = steamApi.getMarketPriceOverview(
+            marketHashName = marketHashName,
+            userAgent = steamSession.browserUserAgent,
+            sessionCookie = steamSession.sessionCookieHeader(),
+        )
         // Steam frequently omits lowest_price (it needs a live listings lookup and is
         // dropped under load) while median_price — recent-sales based — is always
         // present for any item that trades, so it serves as the fallback.
