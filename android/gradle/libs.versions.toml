@@ -22,6 +22,8 @@ billing = "7.1.1"
 playServicesAds = "23.3.0"
 umpSdk = "3.0.0"
 playReview = "2.0.2"
+playServicesCronet = "18.1.0"
+cronetOkhttp = "0.1.0"
 junit = "4.13.2"
 mockitoKotlin = "5.4.0"
 
@@ -84,6 +86,10 @@ ump-sdk = { group = "com.google.android.ump", name = "user-messaging-platform", 
 
 # Play In-App Review
 review-ktx = { group = "com.google.android.play", name = "review-ktx", version.ref = "playReview" }
+
+# Cronet (Chromium network stack, via Play services)
+play-services-cronet = { group = "com.google.android.gms", name = "play-services-cronet", version.ref = "playServicesCronet" }
+cronet-okhttp = { group = "com.google.net.cronet", name = "cronet-okhttp", version.ref = "cronetOkhttp" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

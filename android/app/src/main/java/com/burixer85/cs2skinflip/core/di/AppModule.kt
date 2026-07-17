@@ -12,6 +12,7 @@ import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
 import com.burixer85.cs2skinflip.core.auth.AuthInterceptor
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
+import com.burixer85.cs2skinflip.core.network.CronetTransport
 import com.google.gson.GsonBuilder
 import dagger.Module
 import dagger.Provides
@@ -67,10 +68,12 @@ object AppModule {
     @Provides
     @Singleton
     @Named("steam")
-    fun provideSteamRetrofit(client: OkHttpClient): Retrofit =
+    fun provideSteamRetrofit(client: OkHttpClient, cronetTransport: CronetTransport): Retrofit =
         Retrofit.Builder()
             .baseUrl("https://api.steampowered.com/")
-            .client(client)
+            // Steam traffic rides Cronet once available (Chrome's TLS fingerprint —
+            // OkHttp's gets 429'd by Steam's market bot filter, see CronetTransport)
+            .client(client.newBuilder().addInterceptor(cronetTransport.interceptor).build())
             .addConverterFactory(GsonConverterFactory.create(GsonBuilder().create()))
             .build()
 
