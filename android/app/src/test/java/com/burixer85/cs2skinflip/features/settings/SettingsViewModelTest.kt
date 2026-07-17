@@ -19,7 +19,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -55,12 +57,22 @@ class SettingsViewModelTest {
         val viewModel: SettingsViewModel,
         val backendApi: CS2BackendApiService,
         val billingRepository: BillingRepository,
+        val steamSession: SteamSessionManager,
     )
+
+    /** A SteamSessionManager backed by a mutable in-memory cookie jar. */
+    private fun fakeSession(initialCookies: String?) = SteamSessionManager(mock()).apply {
+        var jar = initialCookies
+        readCookies = { jar }
+        writeCookie = { _, cookie -> if (cookie.contains("1970")) jar = null }
+        userAgentProvider = { "ua" }
+    }
 
     private suspend fun viewModel(
         loggedIn: Boolean = true,
         purchaseUpdates: MutableSharedFlow<List<Purchase>> = MutableSharedFlow(extraBufferCapacity = 1),
         syncPendingPurchases: Boolean = false,
+        steamSession: SteamSessionManager = fakeSession(null),
     ): Deps {
         val preferences = mock<UserPreferences>()
         val authRepository = mock<AuthRepository>()
@@ -73,9 +85,21 @@ class SettingsViewModelTest {
         whenever(billingRepository.syncPendingPurchases()).thenReturn(syncPendingPurchases)
         whenever(backendApi.getMe()).thenReturn(meResponse())
 
-        val steamSession = SteamSessionManager(mock()).apply { readCookies = { null } }
         val viewModel = SettingsViewModel(preferences, authRepository, backendApi, billingRepository, steamSession)
-        return Deps(viewModel, backendApi, billingRepository)
+        return Deps(viewModel, backendApi, billingRepository, steamSession)
+    }
+
+    @Test
+    fun `signing out also disconnects the Steam session`() = runTest {
+        val session = fakeSession("steamLoginSecure=tok")
+        val deps = viewModel(steamSession = session)
+        deps.viewModel.refreshSteamSession()
+        assertTrue(deps.viewModel.steamSessionConnected.value)
+
+        deps.viewModel.signOut()
+
+        assertFalse(session.isConnected())
+        assertFalse(deps.viewModel.steamSessionConnected.value)
     }
 
     @Test

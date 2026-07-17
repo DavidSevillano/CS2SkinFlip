@@ -2,6 +2,7 @@ package com.burixer85.cs2skinflip.features.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -337,6 +338,7 @@ fun SettingsScreen(
             onConfirm = {
                 viewModel.signOut()
                 showSignOutDialog = false
+                Toast.makeText(context, R.string.settings_signed_out_toast, Toast.LENGTH_SHORT).show()
             },
             onDismiss = { showSignOutDialog = false },
         )

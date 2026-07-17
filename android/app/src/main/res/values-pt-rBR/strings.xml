@@ -178,6 +178,7 @@
     <string name="settings_steam_session_disconnected">Conecte para o preço da Steam carregar a qualquer hora</string>
     <string name="steam_login_title">Entrar no Steam</string>
     <string name="skindetail_steam_connect_hint">Conecte sua sessão do Steam para sempre carregar este preço</string>
+    <string name="settings_signed_out_toast">Você saiu da conta</string>
     <string name="settings_section_account">Conta</string>
     <string name="settings_section_my_skins">Minhas skins</string>
     <string name="settings_section_general">Geral</string>

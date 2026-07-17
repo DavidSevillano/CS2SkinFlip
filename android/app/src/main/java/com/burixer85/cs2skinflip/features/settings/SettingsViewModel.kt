@@ -109,6 +109,12 @@ class SettingsViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             authRepository.logout()
+            // The Steam web session is the same person's Steam identity, so signing
+            // out of the account clears it too — otherwise the row still read
+            // "Conectada" after sign-out, and the cookies would outlive the account
+            // on a shared device.
+            steamSession.disconnect()
+            _steamSessionConnected.value = false
             _accountState.value = AccountUiState.SignedOut
         }
     }

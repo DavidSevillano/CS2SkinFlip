@@ -178,6 +178,7 @@
     <string name="settings_steam_session_disconnected">Połącz, aby cena Steam ładowała się o każdej porze</string>
     <string name="steam_login_title">Zaloguj się do Steam</string>
     <string name="skindetail_steam_connect_hint">Połącz sesję Steam, aby ta cena zawsze się ładowała</string>
+    <string name="settings_signed_out_toast">Wylogowano</string>
     <string name="settings_section_account">Konto</string>
     <string name="settings_section_my_skins">Moje skiny</string>
     <string name="settings_section_general">Ogólne</string>
