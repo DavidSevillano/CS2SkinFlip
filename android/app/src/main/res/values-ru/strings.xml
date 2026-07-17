@@ -177,6 +177,7 @@
     <string name="settings_steam_session_connected">Подключена — нажмите, чтобы отключить</string>
     <string name="settings_steam_session_disconnected">Подключите, чтобы цена Steam загружалась в любое время</string>
     <string name="steam_login_title">Вход в Steam</string>
+    <string name="skindetail_steam_connect_hint">Подключите сессию Steam, чтобы эта цена загружалась всегда</string>
     <string name="settings_section_account">Аккаунт</string>
     <string name="settings_section_my_skins">Мои скины</string>
     <string name="settings_section_general">Общие</string>

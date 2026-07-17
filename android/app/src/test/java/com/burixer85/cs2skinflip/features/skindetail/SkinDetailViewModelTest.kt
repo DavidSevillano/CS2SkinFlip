@@ -8,6 +8,7 @@ import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -34,6 +35,11 @@ class SkinDetailViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
 
+    private fun disconnectedSession() = SteamSessionManager(mock()).apply {
+        readCookies = { null }
+        userAgentProvider = { "test-ua" }
+    }
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -52,7 +58,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value is SkinDetailUiState.Error)
@@ -67,7 +73,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "missing-skin"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(SkinDetailUiState.Error(R.string.skindetail_not_found), viewModel.uiState.value)
@@ -81,7 +87,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
@@ -98,7 +104,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(
@@ -137,10 +143,57 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(SteamPriceState.Available(32.39), viewModel.steamPriceState.value)
+    }
+
+    @Test
+    fun `retries the Steam price when the session connects after an unavailable result`() = runTest(dispatcher) {
+        val skinRepository = mock<SkinRepository>()
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenReturn(fakeSkin("AK-47 | Redline (Field-Tested)"))
+        whenever(skinRepository.getSteamPrice("AK-47 | Redline (Field-Tested)")).thenReturn(null, 32.39)
+        val watchlistRepository = mock<WatchlistRepository>()
+        whenever(watchlistRepository.isInWatchlist("ak-47-redline")).thenReturn(false)
+        val analytics = mock<AnalyticsService>()
+        val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
+        var cookies: String? = null
+        val session = SteamSessionManager(mock()).apply {
+            readCookies = { cookies }
+            userAgentProvider = { "test-ua" }
+        }
+
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, session)
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(SteamPriceState.Unavailable, viewModel.steamPriceState.value)
+
+        cookies = "steamLoginSecure=token"
+        viewModel.onScreenReentered()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(SteamPriceState.Available(32.39), viewModel.steamPriceState.value)
+        assertTrue(viewModel.steamSessionConnected.value)
+    }
+
+    @Test
+    fun `reentering without a session change does not refetch the Steam price`() = runTest(dispatcher) {
+        val skinRepository = mock<SkinRepository>()
+        whenever(skinRepository.getSkinById("ak-47-redline")).thenReturn(fakeSkin("AK-47 | Redline (Field-Tested)"))
+        whenever(skinRepository.getSteamPrice("AK-47 | Redline (Field-Tested)")).thenReturn(null)
+        val watchlistRepository = mock<WatchlistRepository>()
+        whenever(watchlistRepository.isInWatchlist("ak-47-redline")).thenReturn(false)
+        val analytics = mock<AnalyticsService>()
+        val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
+
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.onScreenReentered()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(SteamPriceState.Unavailable, viewModel.steamPriceState.value)
+        verify(skinRepository, org.mockito.kotlin.times(1)).getSteamPrice("AK-47 | Redline (Field-Tested)")
     }
 
     @Test
@@ -153,7 +206,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(SteamPriceState.Unavailable, viewModel.steamPriceState.value)
@@ -167,7 +220,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value is SkinDetailUiState.Error)
@@ -185,7 +238,7 @@ class SkinDetailViewModelTest {
         val analytics = mock<AnalyticsService>()
         val savedStateHandle = SavedStateHandle(mapOf("skinId" to "ak-47-redline"))
 
-        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics)
+        val viewModel = SkinDetailViewModel(savedStateHandle, skinRepository, watchlistRepository, analytics, disconnectedSession())
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value is SkinDetailUiState.Success)

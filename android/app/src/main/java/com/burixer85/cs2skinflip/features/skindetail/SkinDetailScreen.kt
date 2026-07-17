@@ -114,6 +114,7 @@ private val wearSegments = listOf(
 fun SkinDetailScreen(
     skinId: String,
     onBack: () -> Unit,
+    onConnectSteamClick: () -> Unit,
     viewModel: SkinDetailViewModel = hiltViewModel(),
     adsViewModel: AdsViewModel = hiltViewModel(),
 ) {
@@ -122,6 +123,9 @@ fun SkinDetailScreen(
 
     LaunchedEffect(Unit) {
         adsViewModel.onSkinDetailEntered()
+        // Also re-runs when popping back from the Steam login screen — retries
+        // a Steam price that failed anonymously now that a session exists.
+        viewModel.onScreenReentered()
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -166,14 +170,17 @@ fun SkinDetailScreen(
             is SkinDetailUiState.Success -> {
                 val selectedRange by viewModel.selectedRange.collectAsState()
                 val steamPriceState by viewModel.steamPriceState.collectAsState()
+                val steamSessionConnected by viewModel.steamSessionConnected.collectAsState()
                 SkinDetailContent(
                     skin = state.skin,
                     isInWatchlist = state.isInWatchlist,
                     selectedRange = selectedRange,
                     steamPriceState = steamPriceState,
+                    steamSessionConnected = steamSessionConnected,
                     onBack = onBack,
                     onToggleWatchlist = viewModel::toggleWatchlist,
-                    onRangeSelected = viewModel::onRangeSelected
+                    onRangeSelected = viewModel::onRangeSelected,
+                    onConnectSteamClick = onConnectSteamClick,
                 )
             }
         }
@@ -187,9 +194,11 @@ private fun SkinDetailContent(
     isInWatchlist: Boolean,
     selectedRange: PriceRange,
     steamPriceState: SteamPriceState,
+    steamSessionConnected: Boolean,
     onBack: () -> Unit,
     onToggleWatchlist: () -> Unit,
-    onRangeSelected: (PriceRange) -> Unit
+    onRangeSelected: (PriceRange) -> Unit,
+    onConnectSteamClick: () -> Unit,
 ) {
     val rarityColor = rarityColor(skin.rarity)
 
@@ -355,6 +364,19 @@ private fun SkinDetailContent(
                         isLowest = false,
                         onClick = null
                     )
+                    // Steam load-sheds anonymous requests at peak hours; a
+                    // signed-in session is what makes this row reliable, so an
+                    // empty row is the one moment the suggestion is relevant.
+                    if (!steamSessionConnected) {
+                        Text(
+                            text = stringResource(R.string.skindetail_steam_connect_hint),
+                            color = Color(0xFF66C0F4),
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .padding(top = 6.dp, start = 4.dp)
+                                .clickable { onConnectSteamClick() },
+                        )
+                    }
                 }
             }
         }
