@@ -17,6 +17,11 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().default('http://localhost:8080'),
   MOBILE_DEEP_LINK: z.string().default('cs2skinflip://auth/callback'),
   DEBUG_SECRET: z.string().optional(),
+  // Protects POST /jobs/refresh-prices, the external cron's entry point. Its own
+  // var rather than reusing DEBUG_SECRET: debug routes are meant to be switchable
+  // off in production, whereas the job routes must stay on for prices to refresh
+  // at all — and the two secrets rotate on different schedules.
+  JOBS_SECRET: z.string().min(32, 'JOBS_SECRET must be at least 32 characters').optional(),
   FCM_SERVICE_ACCOUNT_PATH: z.string().optional(),
   GOOGLE_PLAY_SERVICE_ACCOUNT_PATH: z.string().optional(),
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.burixer85.cs2skinflip'),

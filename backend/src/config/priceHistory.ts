@@ -6,6 +6,12 @@
 
 // How often the bulk job fetches every marketplace and writes a PriceHistory
 // point per skin. Also the effective resolution of the raw retention band.
+//
+// The schedule itself lives in `.github/workflows/refresh-prices.yml` (cron
+// '0 */6 * * *'): nothing in this process schedules the refresh any more. This
+// constant is that cron's mirror, kept here because the invariant below is
+// defined against it — change the workflow and you MUST change this to match,
+// or the reference window silently stops guaranteeing a hit.
 export const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 // How far below the 24h mark to look for a reference price.

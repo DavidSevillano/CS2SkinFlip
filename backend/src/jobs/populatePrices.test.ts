@@ -164,3 +164,22 @@ describe('getPriceHealth', () => {
     expect(await getPriceHealth()).toMatchObject({ freshness: 'fresh' })
   })
 })
+
+describe('populatePrices — run summary', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    axiosGet.mockResolvedValue({ data: [] })
+    skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
+    priceHistoryFindMany.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 0 })
+    redisDel.mockResolvedValue(undefined)
+    redisSet.mockResolvedValue('OK')
+    redisGet.mockResolvedValue(null)
+  })
+
+  it('reports zero updates when every marketplace returns nothing', async () => {
+    const summary = await populatePrices(log)
+
+    expect(summary).toEqual({ updated: 0, historyRows: 0 })
+  })
+})

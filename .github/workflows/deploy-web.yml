@@ -2,7 +2,8 @@ name: Deploy SEO web
 
 on:
   schedule:
-    # Daily at 04:00 UTC, after the backend's 2-hourly bulk price refresh has settled.
+    # Daily at 04:00 UTC — 4h after the 00:00 UTC run of refresh-prices.yml, so
+    # the bulk price refresh has settled before the site is regenerated.
     - cron: '0 4 * * *'
   workflow_dispatch:
 

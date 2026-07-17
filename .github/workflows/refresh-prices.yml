@@ -1,0 +1,103 @@
+name: Refresh prices
+
+on:
+  schedule:
+    # Every 6h at 00:00, 06:00, 12:00 and 18:00 UTC.
+    #
+    # This cadence is mirrored by REFRESH_INTERVAL_MS in
+    # backend/src/config/priceHistory.ts — change one and you MUST change the
+    # other, or the 24h reference window stops guaranteeing a price point and
+    # every skin silently reports a null 24h change.
+    #
+    # /health's 8h staleness threshold (PRICE_STALE_AFTER_MS) leaves slack for
+    # one missed run before UptimeRobot alerts on the `prices: fresh` keyword.
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-prices
+  # Never cancel: an in-flight refresh takes minutes and killing it mid-write
+  # buys nothing. The backend's Redis lock already prevents a double run.
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the refresh
+        id: trigger
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          JOBS_SECRET: ${{ secrets.JOBS_SECRET }}
+        run: |
+          set -euo pipefail
+          # --max-time 120 absorbs a Render free-tier cold start.
+          response=$(curl -sS -X POST "$BACKEND_URL/jobs/refresh-prices" \
+            -H "X-Jobs-Secret: $JOBS_SECRET" \
+            --max-time 120 \
+            -w '\n%{http_code}')
+          body=$(echo "$response" | head -n -1)
+          code=$(echo "$response" | tail -n 1)
+          echo "HTTP $code — $body"
+
+          if [ "$code" = "409" ]; then
+            echo "::notice::A refresh is already running; nothing to do."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$code" != "202" ]; then
+            echo "::error::Trigger failed with HTTP $code"
+            exit 1
+          fi
+
+          echo "run_id=$(echo "$body" | jq -r '.runId')" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the run to finish
+        if: steps.trigger.outputs.skip == 'false'
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          JOBS_SECRET: ${{ secrets.JOBS_SECRET }}
+          RUN_ID: ${{ steps.trigger.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 40); do
+            sleep 20
+            body=$(curl -sS "$BACKEND_URL/jobs/refresh-prices/status" \
+              -H "X-Jobs-Secret: $JOBS_SECRET" --max-time 30) || continue
+
+            # Tolerate a body that isn't a status (a Render 502 HTML page mid-run,
+            # or a 404 'no-run-recorded'): a bare `jq -r '.runId'` exits non-zero
+            # on non-JSON and `set -e` would abort the step, turning a blip into a
+            # red run over a refresh that is still happily working. Retry instead
+            # — the loop's own timeout is the backstop.
+            run_id=$(echo "$body" | jq -r '.runId // empty' 2>/dev/null) || true
+            state=$(echo "$body" | jq -r '.state // empty' 2>/dev/null) || true
+            if [ -z "$state" ]; then
+              echo "[$i/40] no usable state in status response, retrying"
+              continue
+            fi
+
+            # Ignore a leftover status from an earlier run. The status is written
+            # as 'running' before the POST returns 202, so this should never fire
+            # — it is cheap and rules out a false green.
+            if [ "$run_id" != "$RUN_ID" ]; then
+              echo "[$i/40] ignoring status for a different run ($run_id)"
+              continue
+            fi
+
+            echo "[$i/40] state=$state"
+            case "$state" in
+              ok)
+                echo "::notice::Refresh finished — $(echo "$body" | jq -r '.updated') skins updated in $(echo "$body" | jq -r '.durationMs')ms"
+                exit 0
+                ;;
+              failed)
+                echo "::error::Refresh failed: $(echo "$body" | jq -r '.error')"
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "::error::Timed out after ~13 min waiting for the refresh to finish"
+          exit 1
