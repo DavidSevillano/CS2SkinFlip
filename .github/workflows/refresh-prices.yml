@@ -31,8 +31,29 @@ jobs:
           JOBS_SECRET: ${{ secrets.JOBS_SECRET }}
         run: |
           set -euo pipefail
+
+          # A secret pasted with a trailing newline or a stray space makes curl
+          # reject the URL outright (error 3: "Malformed input to a URL
+          # function") before it ever connects, and the secret is masked in the
+          # logs — so the failure is invisible unless we say what we found.
+          # Normalise rather than trust the secret's shape.
+          url=$(printf '%s' "$BACKEND_URL" | tr -d '[:space:]')
+          url="${url%/}"
+          if [ -z "$url" ]; then
+            echo "::error::The BACKEND_URL secret is empty or not set on this repo."
+            exit 1
+          fi
+          case "$url" in
+            http://*|https://*) ;;
+            *)
+              echo "::error::BACKEND_URL must start with http:// or https:// — got ${#url} chars after trimming. Check the secret's value."
+              exit 1
+              ;;
+          esac
+          echo "Target host: $(printf '%s' "$url" | sed -E 's#^(https?://[^/]*).*#\1#')"
+
           # --max-time 120 absorbs a Render free-tier cold start.
-          response=$(curl -sS -X POST "$BACKEND_URL/jobs/refresh-prices" \
+          response=$(curl -sS -X POST "$url/jobs/refresh-prices" \
             -H "X-Jobs-Secret: $JOBS_SECRET" \
             --max-time 120 \
             -w '\n%{http_code}')
@@ -61,9 +82,15 @@ jobs:
           RUN_ID: ${{ steps.trigger.outputs.run_id }}
         run: |
           set -euo pipefail
+
+          # Same normalisation as the trigger step; the trigger already proved
+          # the value is usable, so no re-validation here.
+          url=$(printf '%s' "$BACKEND_URL" | tr -d '[:space:]')
+          url="${url%/}"
+
           for i in $(seq 1 40); do
             sleep 20
-            body=$(curl -sS "$BACKEND_URL/jobs/refresh-prices/status" \
+            body=$(curl -sS "$url/jobs/refresh-prices/status" \
               -H "X-Jobs-Secret: $JOBS_SECRET" --max-time 30) || continue
 
             # Tolerate a body that isn't a status (a Render 502 HTML page mid-run,
