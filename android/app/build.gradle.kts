@@ -134,6 +134,10 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp.logging)
 
+    // Cronet transport for Steam calls (Chrome TLS fingerprint — see CronetTransport)
+    implementation(libs.play.services.cronet)
+    implementation(libs.cronet.okhttp)
+
     // Coil
     implementation(libs.coil.compose)
 

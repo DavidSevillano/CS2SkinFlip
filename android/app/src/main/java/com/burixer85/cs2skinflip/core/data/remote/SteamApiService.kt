@@ -35,7 +35,9 @@ interface SteamApiService {
      * rationale as [getPublicInventory] above.
      */
     @GET
-    @Headers("User-Agent: Mozilla/5.0")
+    // UA consistent with the transport: these calls go out through Cronet with
+    // Chrome's TLS fingerprint (see CronetTransport), so identify as Chrome too.
+    @Headers("User-Agent: Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36")
     suspend fun getMarketPriceOverview(
         @Url url: String = "https://steamcommunity.com/market/priceoverview/",
         @Query("appid") appId: Int = 730,
