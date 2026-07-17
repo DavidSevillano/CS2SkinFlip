@@ -173,6 +173,10 @@
     <string name="settings_delete_account_body">Это навсегда удалит ваш аккаунт, список отслеживания, оповещения и портфель. Это действие нельзя отменить.</string>
     <string name="settings_item_sign_out">Выйти</string>
     <string name="settings_item_default_marketplace">Площадка по умолчанию</string>
+    <string name="settings_item_steam_session">Сессия Steam</string>
+    <string name="settings_steam_session_connected">Подключена — нажмите, чтобы отключить</string>
+    <string name="settings_steam_session_disconnected">Подключите, чтобы цена Steam загружалась в любое время</string>
+    <string name="steam_login_title">Вход в Steam</string>
     <string name="settings_section_account">Аккаунт</string>
     <string name="settings_section_my_skins">Мои скины</string>
     <string name="settings_section_general">Общие</string>

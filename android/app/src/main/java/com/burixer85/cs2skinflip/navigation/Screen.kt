@@ -7,6 +7,7 @@ sealed class Screen(val route: String) {
     object Watchlist : Screen("watchlist")
     object Portfolio : Screen("portfolio")
     object Alerts : Screen("alerts")
+    object SteamLogin : Screen("steam_login")
     object SkinDetail : Screen("skin_detail/{skinId}") {
         fun createRoute(skinId: String) = "skin_detail/$skinId"
     }

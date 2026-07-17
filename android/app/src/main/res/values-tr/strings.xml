@@ -173,6 +173,10 @@
     <string name="settings_delete_account_body">Bu işlem hesabını, izleme listeni, uyarılarını ve portföyünü kalıcı olarak siler. Bu işlem geri alınamaz.</string>
     <string name="settings_item_sign_out">Oturumu kapat</string>
     <string name="settings_item_default_marketplace">Varsayılan pazar yeri</string>
+    <string name="settings_item_steam_session">Steam oturumu</string>
+    <string name="settings_steam_session_connected">Bağlı — bağlantıyı kesmek için dokunun</string>
+    <string name="settings_steam_session_disconnected">Steam fiyatının her saatte yüklenmesi için bağlanın</string>
+    <string name="steam_login_title">Steam\'de oturum aç</string>
     <string name="settings_section_account">Hesap</string>
     <string name="settings_section_my_skins">Skinlerim</string>
     <string name="settings_section_general">Genel</string>

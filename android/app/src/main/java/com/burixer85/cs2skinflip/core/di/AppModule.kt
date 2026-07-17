@@ -60,6 +60,10 @@ object AppModule {
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
                         else HttpLoggingInterceptor.Level.NONE
+                // Debug logs full headers — keep the backend JWT and the user's
+                // Steam session cookie out of logcat.
+                redactHeader("Authorization")
+                redactHeader("Cookie")
             })
             .build()
 
