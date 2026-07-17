@@ -1,7 +1,12 @@
 # Play Store screenshots
 
 Genera los 42 PNG de la ficha: 6 screenshots (1080×1920) + 1 feature graphic
-(2048×1000), × 6 locales.
+(1024×500), × 6 locales.
+
+Los screenshots se capturan a 2x (viewport 540×960) porque Play acepta de 320 a
+3840 px de lado. El feature graphic va a 1x: Play lo exige en **1024×500 exactos**
+y rechaza cualquier otro tamano, asi que 2x no vale. `capture.mjs` verifica las
+dimensiones de cada PNG contra la cabecera IHDR y peta si no cuadran.
 
 ## Uso
 
