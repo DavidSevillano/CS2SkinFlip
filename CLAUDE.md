@@ -169,10 +169,12 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 | `steam:player:{steamId}` | 1 hour |
 | `steam:inventory:{steamId}` | 10 min |
 | `prices:{skinId}` | 5 min |
-| `top-movers:20` | 15 min |
+| `top-movers:{direction}:{limit}` | 15 min |
 | `pipeline:prices:lastSuccessfulRun` | none (never expires) |
 
-`top-movers:20` is explicitly invalidated at the end of every bulk price run.
+Top-movers keys are invalidated at the end of every bulk price run, on a catalog import, and on boot — all three via `invalidateTopMoversCache()` (`src/services/prices.ts`), which globs `top-movers:*`.
+
+**Never write a `top-movers:` key literal outside `services/prices.ts`.** That module owns the format and the invalidation glob, derived from one prefix. They were independent until 2026-07: the key grew a `direction` segment while three call sites went on deleting `top-movers:20`, a key nobody wrote any more, so a bulk run left the lists cached and top-movers served superseded prices until the TTL expired. Nothing errored — which is why `prices.test.ts` fails the build if any other module spells the literal out.
 
 `app.ts` wipes every `prices:*` key on boot — anything that must survive a deploy has to live outside that namespace, which is why the freshness marker below is `pipeline:`-prefixed and not `prices:`.
 
@@ -194,7 +196,7 @@ All filters are combined as `AND` conditions. Wear is matched via `marketHashNam
 
 ### Top movers quality filter (Rising/Falling)
 
-`PriceService.getTopMovers(direction, limit)` (`src/services/prices.ts`) takes `direction: 'rising' | 'falling'`, over-fetches `limit * 5` candidates ordered by `priceChange24h`, then discards rows without a real 24h-ago reference price or with an absolute move under $0.25, before truncating to `limit`. Route: `GET /skins/top-movers?direction=`. Cached in Redis per direction as `top-movers:{direction}:{limit}` (15 min TTL, invalidated at the end of every bulk price run same as before).
+`PriceService.getTopMovers(direction, limit)` (`src/services/prices.ts`) takes `direction: 'rising' | 'falling'`, over-fetches `limit * 5` candidates ordered by `priceChange24h`, then discards rows without a real 24h-ago reference price or with an absolute move under $0.25, before truncating to `limit`. Route: `GET /skins/top-movers?direction=`. Cached in Redis per direction as `top-movers:{direction}:{limit}` (15 min TTL) — see [Caching](#caching-redis--upstash) for how those keys get invalidated.
 
 ### Logging
 

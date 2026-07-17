@@ -4,6 +4,7 @@ import { promisify } from 'util'
 import { prisma } from '../db/prisma'
 import { redis } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
+import { invalidateTopMoversCache } from '../services/prices'
 import type { FastifyBaseLogger } from 'fastify'
 
 const brotliDecompress = promisify(zlib.brotliDecompress)
@@ -263,7 +264,7 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
     await prisma.priceHistory.createMany({ data: historyRows })
   }
 
-  await redis.del('top-movers:20')
+  await invalidateTopMoversCache()
 
   // Only a run that actually moved prices counts as successful. Each fetcher
   // swallows its own errors and returns an empty map, so all three marketplaces
