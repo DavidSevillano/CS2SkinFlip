@@ -18,6 +18,27 @@ CS2SkinFlip/
 
 ---
 
+# Store assets
+
+`store-assets/screenshots/` genera los 42 PNG de la ficha de Play (6 screenshots
++ 1 feature graphic × 6 locales) desde HTML con Puppeteer. `npm run all`.
+
+La UI simulada dentro del telefono lee las traducciones reales de
+`android/app/src/main/res/values-*/strings.xml`, asi que un cambio de traduccion
+en la app se hereda en los screenshots. El copy de marketing (captions, feature
+graphic) vive en `src/copy.mjs` y hay que mantenerlo en los 6 idiomas — hay un
+test de paridad de claves que lo comprueba. Ver `store-assets/screenshots/README.md`.
+
+`store-assets/listing/{en,es,pt-BR,ru,tr,pl}.txt` tiene el titulo y las
+descripciones corta/larga de la ficha. Son la fuente de referencia, pero **Play
+Console no los lee**: hay que copiarlos a mano por idioma. Los limites de Play
+(30 / 80 / 4000 caracteres) no los valida nada automaticamente.
+
+`out/` y `src/html/` son artefactos generados y estan gitignorados; `src/icon.png`
+es fuente y lo consume el feature graphic.
+
+---
+
 # Backend
 
 ## Commands
