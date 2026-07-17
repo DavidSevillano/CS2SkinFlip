@@ -100,6 +100,18 @@ class SkinRepositoryTest {
     }
 
     @Test
+    fun `getSteamPrice falls back to median_price when Steam omits lowest_price`() = runBlocking {
+        val steamApi = mock<SteamApiService>()
+        whenever(steamApi.getMarketPriceOverview(marketHashName = "M4A4 | Asiimov (Field-Tested)"))
+            .thenReturn(MarketPriceOverviewResponse(success = true, lowest_price = null, median_price = "\$317.14", volume = "2"))
+        val repository = SkinRepository(mock(), steamApi)
+
+        val price = repository.getSteamPrice("M4A4 | Asiimov (Field-Tested)")
+
+        assertEquals(317.14, price)
+    }
+
+    @Test
     fun `getSteamPrice returns null when Steam reports the item as not listed`() = runBlocking {
         val steamApi = mock<SteamApiService>()
         whenever(steamApi.getMarketPriceOverview(url = any(), appId = any(), currency = any(), marketHashName = any()))

@@ -105,7 +105,12 @@ class SkinRepository @Inject constructor(
      */
     suspend fun getSteamPrice(marketHashName: String): Double? = runCatching {
         val response = steamApi.getMarketPriceOverview(marketHashName = marketHashName)
-        if (response.success) parseSteamPrice(response.lowest_price) else null
+        // Steam frequently omits lowest_price (it needs a live listings lookup and is
+        // dropped under load) while median_price — recent-sales based — is always
+        // present for any item that trades, so it serves as the fallback.
+        if (response.success) {
+            parseSteamPrice(response.lowest_price) ?: parseSteamPrice(response.median_price)
+        } else null
     }.getOrNull()
 }
 
