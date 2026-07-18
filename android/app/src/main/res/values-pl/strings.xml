@@ -173,11 +173,11 @@
     <string name="settings_delete_account_body">To trwale usunie Twoje konto, listę obserwowanych, alerty i portfel. Tej czynności nie można cofnąć.</string>
     <string name="settings_item_sign_out">Wyloguj się</string>
     <string name="settings_item_default_marketplace">Domyślny rynek</string>
-    <string name="settings_item_steam_session">Sesja Steam</string>
-    <string name="settings_steam_session_connected">Połączona — dotknij, aby rozłączyć</string>
-    <string name="settings_steam_session_disconnected">Połącz, aby cena Steam ładowała się o każdej porze</string>
+    <string name="settings_item_steam_session">Ceny Steam na żywo</string>
+    <string name="settings_steam_session_connected">Połączono — dotknij, aby rozłączyć</string>
+    <string name="settings_steam_session_disconnected">Opcjonalnie — połącz, aby widzieć cenę Steam o każdej porze</string>
     <string name="steam_login_title">Zaloguj się do Steam</string>
-    <string name="skindetail_steam_connect_hint">Połącz sesję Steam, aby ta cena zawsze się ładowała</string>
+    <string name="skindetail_steam_connect_hint">Połącz ze Steam, aby widzieć tę cenę o każdej porze</string>
     <string name="settings_signed_out_toast">Wylogowano</string>
     <string name="skindetail_steam_reference_label">Cena referencyjna Steam</string>
     <string name="settings_section_account">Konto</string>
