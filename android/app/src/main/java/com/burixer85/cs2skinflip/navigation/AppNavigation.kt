@@ -114,7 +114,10 @@ fun AppNavigation(
                     AlertsScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                        }
+                        },
+                        onSignInClick = {
+                            navController.navigate(Screen.SteamLogin.route)
+                        },
                     )
                 }
             }
@@ -128,7 +131,7 @@ fun AppNavigation(
                         onPortfolioClick = {
                             navController.navigate(Screen.Portfolio.route)
                         },
-                        onSteamSessionClick = {
+                        onSignInClick = {
                             navController.navigate(Screen.SteamLogin.route)
                         },
                     )

@@ -179,6 +179,7 @@
     <string name="steam_login_title">Entrar no Steam</string>
     <string name="skindetail_steam_connect_hint">Conecte-se à Steam para ver este preço a qualquer hora</string>
     <string name="settings_signed_out_toast">Você saiu da conta</string>
+    <string name="steam_prices_connected_toast">Preços da Steam ao vivo conectados</string>
     <string name="skindetail_steam_reference_label">Preço de referência da Steam</string>
     <string name="settings_section_account">Conta</string>
     <string name="settings_section_my_skins">Minhas skins</string>

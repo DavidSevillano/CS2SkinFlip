@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Star
@@ -53,7 +52,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.core.billing.findActivity
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,7 +69,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.burixer85.cs2skinflip.BuildConfig
 import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.preferences.AppLanguage
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
@@ -97,17 +94,12 @@ private const val TERMS_URL = "https://davidsevillano.github.io/cs2skinflip-lega
 fun SettingsScreen(
     onWatchlistClick: () -> Unit,
     onPortfolioClick: () -> Unit,
-    onSteamSessionClick: () -> Unit,
+    onSignInClick: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val accountState by viewModel.accountState.collectAsState()
     val marketplace by viewModel.marketplace.collectAsState()
-    val steamSessionConnected by viewModel.steamSessionConnected.collectAsState()
-
-    // Coming back from the Steam login screen re-enters this composition —
-    // re-read the cookie jar so the row reflects the fresh session.
-    LaunchedEffect(Unit) { viewModel.refreshSteamSession() }
     val deleteAccountError by viewModel.deleteAccountError.collectAsState()
     val purchaseError by viewModel.purchaseError.collectAsState()
 
@@ -117,12 +109,6 @@ fun SettingsScreen(
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
     var currentAppLanguage by remember { mutableStateOf(LocaleHelper.getLanguage(context)) }
-
-    fun signInWithSteam() {
-        runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL.trimEnd('/')}/auth/steam")))
-        }
-    }
 
     fun openUrl(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
@@ -202,7 +188,7 @@ fun SettingsScreen(
                 iconTint = AccentOrange,
                 label = stringResource(R.string.settings_item_sign_in_steam),
                 subtitle = stringResource(R.string.settings_item_sign_in_subtitle),
-                onClick = { signInWithSteam() },
+                onClick = onSignInClick,
             )
         }
 
@@ -248,20 +234,6 @@ fun SettingsScreen(
             label = stringResource(R.string.settings_item_default_marketplace),
             subtitle = stringResource(marketplace.labelRes),
             onClick = { showMarketplaceSheet = true },
-        )
-        HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
-        SettingsItem(
-            icon = Icons.Default.Link,
-            iconTint = Color(0xFF66C0F4), // Steam blue, same as the price row
-            label = stringResource(R.string.settings_item_steam_session),
-            subtitle = stringResource(
-                if (steamSessionConnected) R.string.settings_steam_session_connected
-                else R.string.settings_steam_session_disconnected
-            ),
-            onClick = {
-                if (steamSessionConnected) viewModel.disconnectSteamSession() else onSteamSessionClick()
-            },
-            showChevron = !steamSessionConnected,
         )
 
         Spacer(Modifier.height(8.dp))

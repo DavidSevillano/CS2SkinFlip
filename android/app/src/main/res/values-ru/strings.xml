@@ -179,6 +179,7 @@
     <string name="steam_login_title">Вход в Steam</string>
     <string name="skindetail_steam_connect_hint">Подключитесь к Steam, чтобы видеть эту цену в любое время</string>
     <string name="settings_signed_out_toast">Вы вышли из аккаунта</string>
+    <string name="steam_prices_connected_toast">Цены Steam в реальном времени подключены</string>
     <string name="skindetail_steam_reference_label">Справочная цена Steam</string>
     <string name="settings_section_account">Аккаунт</string>
     <string name="settings_section_my_skins">Мои скины</string>
