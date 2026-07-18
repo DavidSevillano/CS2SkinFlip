@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,8 +30,6 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -92,7 +91,6 @@ import com.burixer85.cs2skinflip.core.ui.theme.AccentOrange
 import com.burixer85.cs2skinflip.core.ui.theme.Background
 import com.burixer85.cs2skinflip.core.ui.theme.DividerColor
 import com.burixer85.cs2skinflip.core.ui.theme.Surface
-import com.burixer85.cs2skinflip.core.ui.theme.SurfaceElevated
 import com.burixer85.cs2skinflip.core.ui.theme.SurfaceVariant
 import com.burixer85.cs2skinflip.core.ui.theme.TextPrimary
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
@@ -204,7 +202,12 @@ private fun SkinDetailContent(
 ) {
     val rarityColor = rarityColor(skin.rarity)
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+    ) {
         // Top bar
         TopAppBar(
             title = {
@@ -415,29 +418,8 @@ private fun SkinDetailContent(
             }
         }
 
-        // Watchlist button
-        Spacer(Modifier.height(8.dp))
-        Button(
-            onClick = onToggleWatchlist,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(52.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isInWatchlist) SurfaceElevated else AccentOrange
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                imageVector = if (isInWatchlist) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                contentDescription = null
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = stringResource(if (isInWatchlist) R.string.remove_from_watchlist else R.string.add_to_watchlist),
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+        // Watchlist is toggled from the bookmark action in the top bar; no
+        // duplicate button here.
         Spacer(Modifier.height(24.dp))
     }
 }
