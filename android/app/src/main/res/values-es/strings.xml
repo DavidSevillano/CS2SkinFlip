@@ -173,11 +173,11 @@
     <string name="settings_delete_account_body">Esto elimina permanentemente tu cuenta, lista de seguimiento, alertas y cartera. Esta acción no se puede deshacer.</string>
     <string name="settings_item_sign_out">Cerrar sesión</string>
     <string name="settings_item_default_marketplace">Mercado predeterminado</string>
-    <string name="settings_item_steam_session">Sesión de Steam</string>
-    <string name="settings_steam_session_connected">Conectada — toca para desconectar</string>
-    <string name="settings_steam_session_disconnected">Conéctala para que el precio de Steam cargue a cualquier hora</string>
+    <string name="settings_item_steam_session">Precios de Steam en directo</string>
+    <string name="settings_steam_session_connected">Conectado — toca para desconectar</string>
+    <string name="settings_steam_session_disconnected">Opcional — conéctate para ver el precio de Steam a cualquier hora</string>
     <string name="steam_login_title">Iniciar sesión en Steam</string>
-    <string name="skindetail_steam_connect_hint">Conecta tu sesión de Steam para cargar siempre este precio</string>
+    <string name="skindetail_steam_connect_hint">Conéctate a Steam para ver este precio a cualquier hora</string>
     <string name="settings_signed_out_toast">Has cerrado sesión</string>
     <string name="skindetail_steam_reference_label">Precio de referencia de Steam</string>
     <string name="settings_section_account">Cuenta</string>
