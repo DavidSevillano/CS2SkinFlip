@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -144,7 +146,7 @@ fun SkinDetailScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
-                    windowInsets = WindowInsets(0.dp)
+                    windowInsets = WindowInsets.statusBars
                 )
                 Column(Modifier.padding(16.dp)) {
                     SkeletonBox(Modifier.fillMaxWidth().height(200.dp))
@@ -163,7 +165,7 @@ fun SkinDetailScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
-                    windowInsets = WindowInsets(0.dp)
+                    windowInsets = WindowInsets.statusBars
                 )
                 ErrorState(message = stringResource(state.messageRes), onRetry = viewModel::retry, modifier = Modifier.fillMaxSize())
             }
@@ -227,7 +229,7 @@ private fun SkinDetailContent(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
-            windowInsets = WindowInsets(0.dp)
+            windowInsets = WindowInsets.statusBars
         )
 
         // Skin image hero
@@ -273,6 +275,16 @@ private fun SkinDetailContent(
                 )
                 PriceChangeChip(change = skin.priceChange24h ?: 0.0)
             }
+            Spacer(Modifier.height(12.dp))
+            // Steam is the reference price, not a place flippers transact (15% fee,
+            // wallet-locked funds), so it sits apart from the marketplace list below
+            // and never competes for the "lowest" badge.
+            SteamReferenceChip(
+                state = steamPriceState,
+                marketHashName = skin.marketHashName,
+                sessionConnected = steamSessionConnected,
+                onConnectSteamClick = onConnectSteamClick,
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -309,9 +321,6 @@ private fun SkinDetailContent(
                 return "https://waxpeer.com/$slug/item"
             }
 
-            fun steamUrl(name: String): String =
-                "https://steamcommunity.com/market/listings/730/${Uri.encode(name)}"
-
             fun openUrl(url: String) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
@@ -330,7 +339,7 @@ private fun SkinDetailContent(
             )
             val lowestPrice = entries.mapNotNull { it.price }.minOrNull()
 
-            entries.forEach { entry ->
+            entries.forEachIndexed { index, entry ->
                 MarketplacePriceRow(
                     name = entry.marketplace.displayName,
                     displayPrice = entry.price,
@@ -338,46 +347,7 @@ private fun SkinDetailContent(
                     isLowest = entry.price != null && entry.price == lowestPrice,
                     onClick = if (entry.price != null) ({ openUrl(entry.url) }) else null
                 )
-                Spacer(Modifier.height(8.dp))
-            }
-
-            when (val steamState = steamPriceState) {
-                is SteamPriceState.Loading -> {
-                    SkeletonBox(Modifier.fillMaxWidth().height(44.dp))
-                }
-                is SteamPriceState.Available -> {
-                    MarketplacePriceRow(
-                        name = Marketplace.STEAM.displayName,
-                        displayPrice = steamState.price,
-                        color = Color(0xFF66C0F4),
-                        isLowest = false, // Steam is informational only — never
-                                          // competes for the "lowest" badge, since
-                                          // it's excluded from Skin.lowestMarketPrice
-                        onClick = { openUrl(steamUrl(marketHashName)) }
-                    )
-                }
-                is SteamPriceState.Unavailable -> {
-                    MarketplacePriceRow(
-                        name = Marketplace.STEAM.displayName,
-                        displayPrice = null,
-                        color = Color(0xFF66C0F4),
-                        isLowest = false,
-                        onClick = null
-                    )
-                    // Steam load-sheds anonymous requests at peak hours; a
-                    // signed-in session is what makes this row reliable, so an
-                    // empty row is the one moment the suggestion is relevant.
-                    if (!steamSessionConnected) {
-                        Text(
-                            text = stringResource(R.string.skindetail_steam_connect_hint),
-                            color = Color(0xFF66C0F4),
-                            fontSize = 12.sp,
-                            modifier = Modifier
-                                .padding(top = 6.dp, start = 4.dp)
-                                .clickable { onConnectSteamClick() },
-                        )
-                    }
-                }
+                if (index < entries.lastIndex) Spacer(Modifier.height(8.dp))
             }
         }
 
@@ -469,6 +439,94 @@ private fun SkinDetailContent(
             )
         }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+/**
+ * The Steam Community Market reference price, shown apart from the marketplace
+ * list with the Steam mark. Steam is where players anchor value but not where
+ * flippers transact, so it reads as a reference, not a fourth buy option.
+ */
+@Composable
+private fun SteamReferenceChip(
+    state: SteamPriceState,
+    marketHashName: String,
+    sessionConnected: Boolean,
+    onConnectSteamClick: () -> Unit,
+) {
+    val steamBlue = Color(0xFF66C0F4)
+    val context = LocalContext.current
+    val available = state as? SteamPriceState.Available
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(steamBlue.copy(alpha = 0.10f))
+                .then(
+                    if (available != null) Modifier.clickable {
+                        val url = "https://steamcommunity.com/market/listings/730/${Uri.encode(marketHashName)}"
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                    } else Modifier
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_steam),
+                contentDescription = null,
+                tint = steamBlue,
+                modifier = Modifier.size(24.dp),
+            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.skindetail_steam_reference_label),
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                )
+                Spacer(Modifier.height(2.dp))
+                when (state) {
+                    is SteamPriceState.Loading ->
+                        SkeletonBox(Modifier.width(64.dp).height(18.dp))
+                    is SteamPriceState.Available ->
+                        Text(
+                            text = Currency.format(state.price),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                        )
+                    is SteamPriceState.Unavailable ->
+                        Text(
+                            text = stringResource(R.string.skindetail_not_listed),
+                            fontSize = 13.sp,
+                            color = TextSecondary.copy(alpha = 0.7f),
+                            fontStyle = FontStyle.Italic,
+                        )
+                }
+            }
+            if (available != null) {
+                Icon(
+                    imageVector = Icons.Outlined.OpenInNew,
+                    contentDescription = stringResource(R.string.cd_open_browser),
+                    modifier = Modifier.size(16.dp),
+                    tint = steamBlue,
+                )
+            }
+        }
+        // Steam load-sheds anonymous requests at peak hours; a signed-in session
+        // is what makes this reliable, so an empty chip is when the hint is useful.
+        if (state is SteamPriceState.Unavailable && !sessionConnected) {
+            Text(
+                text = stringResource(R.string.skindetail_steam_connect_hint),
+                color = steamBlue,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .padding(top = 6.dp, start = 4.dp)
+                    .clickable { onConnectSteamClick() },
+            )
+        }
     }
 }
 

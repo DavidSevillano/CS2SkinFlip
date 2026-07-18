@@ -179,6 +179,7 @@
     <string name="steam_login_title">Iniciar sesión en Steam</string>
     <string name="skindetail_steam_connect_hint">Conecta tu sesión de Steam para cargar siempre este precio</string>
     <string name="settings_signed_out_toast">Has cerrado sesión</string>
+    <string name="skindetail_steam_reference_label">Precio de referencia de Steam</string>
     <string name="settings_section_account">Cuenta</string>
     <string name="settings_section_my_skins">Mis skins</string>
     <string name="settings_section_general">General</string>

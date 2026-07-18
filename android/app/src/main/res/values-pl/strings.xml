@@ -179,6 +179,7 @@
     <string name="steam_login_title">Zaloguj się do Steam</string>
     <string name="skindetail_steam_connect_hint">Połącz sesję Steam, aby ta cena zawsze się ładowała</string>
     <string name="settings_signed_out_toast">Wylogowano</string>
+    <string name="skindetail_steam_reference_label">Cena referencyjna Steam</string>
     <string name="settings_section_account">Konto</string>
     <string name="settings_section_my_skins">Moje skiny</string>
     <string name="settings_section_general">Ogólne</string>
