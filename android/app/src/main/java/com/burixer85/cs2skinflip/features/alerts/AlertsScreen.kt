@@ -1,9 +1,7 @@
 package com.burixer85.cs2skinflip.features.alerts
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,7 +83,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.burixer85.cs2skinflip.BuildConfig
 import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.billing.findActivity
 import com.burixer85.cs2skinflip.core.domain.model.Alert
@@ -112,6 +109,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun AlertsScreen(
     onSkinClick: (String) -> Unit = {},
+    onSignInClick: () -> Unit = {},
     viewModel: AlertsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -191,7 +189,7 @@ fun AlertsScreen(
             when (val state = uiState) {
                 is AlertsUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
                 is AlertsUiState.Error -> ErrorState(stringResource(state.messageRes), modifier = Modifier.fillMaxSize())
-                is AlertsUiState.NotLoggedIn -> NotLoggedInView()
+                is AlertsUiState.NotLoggedIn -> NotLoggedInView(onSignInClick = onSignInClick)
                 is AlertsUiState.Success -> AlertsList(
                     alerts = state.alerts,
                     onToggle = viewModel::toggleAlert,
@@ -615,8 +613,7 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
 }
 
 @Composable
-private fun NotLoggedInView() {
-    val context = LocalContext.current
+private fun NotLoggedInView(onSignInClick: () -> Unit) {
 
     Column(
         Modifier
@@ -646,11 +643,7 @@ private fun NotLoggedInView() {
         Spacer(Modifier.height(24.dp))
 
         Button(
-            onClick = {
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.BACKEND_URL.trimEnd('/')}/auth/steam"))
-                )
-            },
+            onClick = onSignInClick,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B2838)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().height(52.dp),

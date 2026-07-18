@@ -44,14 +44,9 @@ class SettingsViewModel @Inject constructor(
     private val _steamSessionConnected = MutableStateFlow(steamSession.isConnected())
     val steamSessionConnected: StateFlow<Boolean> = _steamSessionConnected
 
-    /** Re-reads the cookie jar — call when Settings regains focus after the login screen. */
+    /** Re-reads the cookie jar — used to assert the sign-out coupling below. */
     fun refreshSteamSession() {
         _steamSessionConnected.value = steamSession.isConnected()
-    }
-
-    fun disconnectSteamSession() {
-        steamSession.disconnect()
-        refreshSteamSession()
     }
 
     private val _accountState = MutableStateFlow<AccountUiState>(AccountUiState.Loading)

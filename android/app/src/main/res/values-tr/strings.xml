@@ -179,6 +179,7 @@
     <string name="steam_login_title">Steam\'de oturum aç</string>
     <string name="skindetail_steam_connect_hint">Bu fiyatı istediğin zaman görmek için Steam\'e bağlan</string>
     <string name="settings_signed_out_toast">Oturumunuz kapatıldı</string>
+    <string name="steam_prices_connected_toast">Canlı Steam fiyatları bağlandı</string>
     <string name="skindetail_steam_reference_label">Steam referans fiyatı</string>
     <string name="settings_section_account">Hesap</string>
     <string name="settings_section_my_skins">Skinlerim</string>

@@ -194,6 +194,7 @@
     <string name="steam_login_title">Sign in to Steam</string>
     <string name="skindetail_steam_connect_hint">Connect to Steam to see this price anytime</string>
     <string name="settings_signed_out_toast">You\'ve been signed out</string>
+    <string name="steam_prices_connected_toast">Live Steam prices connected</string>
     <string name="skindetail_steam_reference_label">Steam reference price</string>
     <string name="settings_section_account">Account</string>
     <string name="settings_section_my_skins">My Skins</string>
