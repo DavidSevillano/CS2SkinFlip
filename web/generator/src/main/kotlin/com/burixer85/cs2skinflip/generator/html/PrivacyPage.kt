@@ -21,7 +21,7 @@ fun renderPrivacyPage(siteUrl: String): String {
         bodyBlock = {
             a(href = "/") { +"CS2SkinFlip" }
             h1 { +"Privacy Policy" }
-            p { +"Last updated: 11 July 2026" }
+            p { +"Last updated: 18 July 2026" }
 
             section {
                 h2 { +"Who we are" }
@@ -38,6 +38,12 @@ fun renderPrivacyPage(siteUrl: String): String {
                         +("Steam account data. If you sign in to the app, we store your Steam ID, " +
                             "username and avatar URL so we can associate your watchlist, alerts and " +
                             "portfolio with your account. We never see or store your Steam password.")
+                    }
+                    li {
+                        +("Session cookie. After you sign in, we set a technical, httpOnly session " +
+                            "cookie (valid for up to 7 days) so you stay signed in between visits. It is " +
+                            "strictly necessary for sign-in to work — it is not used for tracking or " +
+                            "advertising, and it is deleted when you sign out or delete your account.")
                     }
                     li {
                         +("Notification token. If you enable price alerts, we store a Firebase Cloud " +
