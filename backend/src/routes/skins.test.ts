@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Fastify from 'fastify'
 
-const { skinFindMany } = vi.hoisted(() => ({
+const { skinFindMany, skinCount, priceHistoryFindMany } = vi.hoisted(() => ({
   skinFindMany: vi.fn(),
+  skinCount: vi.fn(),
+  priceHistoryFindMany: vi.fn(),
 }))
 vi.mock('../db/prisma', () => ({
-  prisma: { skin: { findMany: skinFindMany } },
+  prisma: {
+    skin: { findMany: skinFindMany, count: skinCount },
+    priceHistory: { findMany: priceHistoryFindMany },
+  },
 }))
 
 // `skins.ts` imports `env`, whose module body calls process.exit(1) when the
@@ -120,5 +125,66 @@ describe('GET /skins/export', () => {
     // Falls through to /skins/:skinId, whose handler calls findUnique — absent from
     // our prisma mock. Anything but a 200 export payload proves the route is gone.
     expect(res.statusCode).not.toBe(200)
+  })
+})
+
+// Same class of bug as the Render OOM that `populatePrices.test.ts` guards, in the
+// other half of the codebase that reads a 24h reference price. The search route
+// resolved `priceChange24h` with an unbounded `timestamp: { lte: dayAgo }`, so
+// `distinct: ['skinId']` — which Prisma cannot push down to Postgres under a
+// timestamp `orderBy` — materialised the *entire retained history* of every skin
+// on the page (~130 rows each over the 90d retention) to use one row each.
+//
+// It never errored and never showed a wrong number, it just moved ~130x more bytes
+// out of the database than it needed, on the app's single hottest route. Bounding
+// it also makes the window agree with the one the bulk job uses, which is the
+// whole reason `CHANGE_REFERENCE_WINDOW_MS` is a shared constant.
+describe('GET /skins — 24h-change reference query', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinCount.mockResolvedValue(1)
+    skinFindMany.mockResolvedValue([row('ak-47-redline-field-tested', 9.99)])
+    priceHistoryFindMany.mockResolvedValue([])
+  })
+
+  it('bounds the reference window on the lower end, not just the upper', async () => {
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins?limit=50' })
+
+    expect(res.statusCode).toBe(200)
+    expect(priceHistoryFindMany).toHaveBeenCalledTimes(1)
+    const { timestamp } = priceHistoryFindMany.mock.calls[0][0].where
+    expect(timestamp.gte).toBeInstanceOf(Date)
+    expect(timestamp.lte).toBeInstanceOf(Date)
+  })
+
+  it('uses the same window width as the bulk job, so both agree on the reference', async () => {
+    const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
+    const app = await buildTestApp()
+
+    const before = Date.now()
+    await app.inject({ method: 'GET', url: '/skins?limit=50' })
+    const after = Date.now()
+
+    const { gte, lte } = priceHistoryFindMany.mock.calls[0][0].where.timestamp
+
+    // Both bounds derive from a Date.now() taken inside the handler, somewhere in
+    // [before, after] — so `after` is the only safe reference for a lower-bound
+    // assertion, exactly as in populatePrices.test.ts.
+    expect(after - lte.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000)
+    expect(before - lte.getTime()).toBeLessThanOrEqual(24 * 60 * 60 * 1000)
+    expect(lte.getTime() - gte.getTime()).toBe(CHANGE_REFERENCE_WINDOW_MS)
+  })
+
+  it('still falls back to the bulk-job column when the window holds no reference', async () => {
+    priceHistoryFindMany.mockResolvedValue([])
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins?limit=50' })
+
+    // row() seeds priceChange24h: 3.2 on the price relation — narrowing the window
+    // must not turn a known change into null.
+    expect(res.json().data[0].price.priceChange24h).toBe(3.2)
   })
 })

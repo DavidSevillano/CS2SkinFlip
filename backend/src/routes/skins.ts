@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
+import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import { env } from '../config/env'
 
 const priceService = new PriceService()
@@ -135,10 +136,19 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     // Always recompute priceChange24h live from PriceHistory (same logic as /skins/:id)
     // so values shown in search/home always match what the detail screen shows.
     // The DB-cached column from the bulk job is stale between runs; prices can move in the interim.
+    //
+    // The window is bounded on BOTH ends, and by the same constant the bulk job
+    // uses, for two reasons. Correctness: an unbounded `lte` and the job's window
+    // can resolve different reference rows for the same skin, which is the drift
+    // `CHANGE_REFERENCE_WINDOW_MS` exists to prevent. Cost: `distinct` can't be
+    // pushed down to Postgres under a timestamp `orderBy`, so Prisma materialises
+    // every matching row — unbounded, that is each skin's entire 90d retention
+    // (~130 rows) to use one, on the hottest route in the app.
     const skinIds = skins.map((s: any) => s.id as string)
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
     const oldPrices = await prisma.priceHistory.findMany({
-      where: { skinId: { in: skinIds }, timestamp: { lte: dayAgo } },
+      where: { skinId: { in: skinIds }, timestamp: { gte: windowStart, lte: dayAgo } },
       orderBy: { timestamp: 'desc' },
       distinct: ['skinId'],
       select: { skinId: true, price: true },

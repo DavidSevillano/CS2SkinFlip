@@ -8,21 +8,29 @@ import { fakeRedisStore } from '../test/fakeRedis'
 // Prisma materialised every row in-process — enough to exhaust a 512MB instance.
 // The query must stay bounded on BOTH ends.
 
-const { skinFindMany, priceHistoryFindMany, priceHistoryCreateMany, skinPriceUpsert } =
+const { skinFindMany, queryRaw, priceHistoryCreateMany, executeRawUnsafe } =
   vi.hoisted(() => ({
     skinFindMany: vi.fn(),
-    priceHistoryFindMany: vi.fn(),
+    queryRaw: vi.fn(),
     priceHistoryCreateMany: vi.fn(),
-    skinPriceUpsert: vi.fn(),
+    executeRawUnsafe: vi.fn(),
   }))
 
 vi.mock('../db/prisma', () => ({
   prisma: {
     skin: { findMany: skinFindMany },
-    priceHistory: { findMany: priceHistoryFindMany, createMany: priceHistoryCreateMany },
-    skinPrice: { upsert: skinPriceUpsert },
+    priceHistory: { createMany: priceHistoryCreateMany },
+    $queryRaw: queryRaw,
+    $executeRawUnsafe: executeRawUnsafe,
   },
 }))
+
+// `$queryRaw` is a tagged template: Prisma receives the literal fragments as the
+// first argument and the interpolated values as the rest. The window bounds are
+// therefore positional, not named — this pulls out the Date parameters in order.
+function queryRawDates(call: unknown[]): Date[] {
+  return call.slice(1).filter((v): v is Date => v instanceof Date)
+}
 
 const { redisDel, redisSet, redisGet, redisKeys } = vi.hoisted(() => ({
   redisDel: vi.fn(),
@@ -53,23 +61,22 @@ describe('populatePrices — 24h-change reference query', () => {
     vi.clearAllMocks()
     axiosGet.mockResolvedValue({ data: [] })
     skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
+    executeRawUnsafe.mockResolvedValue(1)
     redisDel.mockResolvedValue(undefined)
     redisKeys.mockResolvedValue([])
     redisSet.mockResolvedValue('OK')
     redisGet.mockResolvedValue(null)
   })
 
-  it('bounds the reference-price window on the lower end (has a gte), not just lte', async () => {
+  it('bounds the reference-price window on the lower end, not just the upper', async () => {
     await populatePrices(log)
 
-    expect(priceHistoryFindMany).toHaveBeenCalledTimes(1)
-    const where = priceHistoryFindMany.mock.calls[0][0].where
+    expect(queryRaw).toHaveBeenCalledTimes(1)
 
     // The lower bound is what prevents the whole retained table from loading.
-    expect(where.timestamp.gte).toBeInstanceOf(Date)
-    expect(where.timestamp.lte).toBeInstanceOf(Date)
+    expect(queryRawDates(queryRaw.mock.calls[0])).toHaveLength(2)
   })
 
   it('makes the window exactly CHANGE_REFERENCE_WINDOW_MS wide, ending ~24h ago', async () => {
@@ -77,7 +84,8 @@ describe('populatePrices — 24h-change reference query', () => {
     await populatePrices(log)
     const after = Date.now()
 
-    const { gte, lte } = priceHistoryFindMany.mock.calls[0][0].where.timestamp
+    // Interpolation order in the query is `>= windowStart AND <= dayAgo`.
+    const [gte, lte] = queryRawDates(queryRaw.mock.calls[0])
 
     // Both bounds derive from a Date.now() taken *inside* the call, which sits
     // somewhere in [before, after]. So `after` is the only safe reference for a
@@ -92,6 +100,17 @@ describe('populatePrices — 24h-change reference query', () => {
       24 * 60 * 60 * 1000 + CHANGE_REFERENCE_WINDOW_MS,
     )
   })
+
+  // Prisma's `distinct` cannot be pushed down to Postgres under a timestamp
+  // `orderBy`, so it fetches the whole window and dedupes in-process — ~4x the
+  // rows at the 6h cadence, every run. Dedup has to happen in the database.
+  it('dedupes per skin in the database rather than in the client', async () => {
+    await populatePrices(log)
+
+    const sql = queryRaw.mock.calls[0][0].join('?')
+    expect(sql).toContain('DISTINCT ON ("skinId")')
+    expect(sql).toContain('ORDER BY "skinId", "timestamp" DESC')
+  })
 })
 
 // The freshness marker is what turns the uptime pinger into a pipeline monitor,
@@ -104,12 +123,12 @@ describe('populatePrices — price freshness marker', () => {
     vi.clearAllMocks()
     axiosGet.mockResolvedValue({ data: [] })
     skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
     redisDel.mockResolvedValue(undefined)
     redisKeys.mockResolvedValue([])
     redisSet.mockResolvedValue('OK')
-    skinPriceUpsert.mockResolvedValue({})
+    executeRawUnsafe.mockResolvedValue(1)
   })
 
   it('does not mark the run successful when no marketplace returned a price', async () => {
@@ -179,7 +198,7 @@ describe('populatePrices — run summary', () => {
     vi.clearAllMocks()
     axiosGet.mockResolvedValue({ data: [] })
     skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
     redisDel.mockResolvedValue(undefined)
     redisKeys.mockResolvedValue([])
@@ -216,9 +235,9 @@ describe('populatePrices — top-movers cache', () => {
       return { data: [] }
     })
     skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 1 })
-    skinPriceUpsert.mockResolvedValue({})
+    executeRawUnsafe.mockResolvedValue(1)
   })
 
   it('leaves no cached top-movers list behind after a run', async () => {
@@ -228,5 +247,88 @@ describe('populatePrices — top-movers cache', () => {
     await populatePrices(log)
 
     expect([...fake.store.keys()].filter((key) => key.startsWith('top-movers:'))).toEqual([])
+  })
+})
+
+// The write path used to be one `prisma.skinPrice.upsert()` per skin — ~24k
+// sequential round trips per run, four runs a day. It was never slow enough to
+// notice and never wrong, it just moved enough protocol overhead to put the job
+// on course to exhaust Neon's monthly network transfer allowance by itself.
+// Nothing about the *result* changes when it regresses, so the round-trip count
+// is the only thing that can pin it.
+describe('populatePrices — bulk write path', () => {
+  const SKIN_COUNT = 1200
+
+  function catalog(n: number) {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `skin-${i}`,
+      marketHashName: `Weapon | Skin ${i} (Field-Tested)`,
+    }))
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinFindMany.mockResolvedValue(catalog(SKIN_COUNT))
+    queryRaw.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: SKIN_COUNT })
+    executeRawUnsafe.mockResolvedValue(1)
+    redisDel.mockResolvedValue(undefined)
+    redisKeys.mockResolvedValue([])
+    redisSet.mockResolvedValue('OK')
+    redisGet.mockResolvedValue(null)
+
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('market.csgo.com')) {
+        return {
+          data: catalog(SKIN_COUNT).map((s, i) => ({
+            market_hash_name: s.marketHashName,
+            price: String(10 + i),
+            volume: '5',
+          })),
+        }
+      }
+      return { data: [] }
+    })
+  })
+
+  it('batches the writes instead of issuing one statement per skin', async () => {
+    await populatePrices(log)
+
+    // 1200 rows at a 500-row batch = 3 statements. The point of the assertion is
+    // the upper bound: anything near SKIN_COUNT means the per-row write is back.
+    expect(executeRawUnsafe).toHaveBeenCalledTimes(3)
+  })
+
+  it('writes every priced skin exactly once across the batches', async () => {
+    await populatePrices(log)
+
+    const writtenSkinIds = executeRawUnsafe.mock.calls.flatMap((call) =>
+      call.slice(1).filter((v: unknown) => typeof v === 'string' && v.startsWith('skin-')),
+    )
+
+    expect(writtenSkinIds).toHaveLength(SKIN_COUNT)
+    expect(new Set(writtenSkinIds).size).toBe(SKIN_COUNT)
+  })
+
+  it('upserts on the skinId unique constraint rather than inserting duplicates', async () => {
+    await populatePrices(log)
+
+    const sql = executeRawUnsafe.mock.calls[0][0] as string
+    expect(sql).toContain('ON CONFLICT ("skinId") DO UPDATE')
+  })
+
+  // The job never computes volume24h. Naming it in the statement would blank it
+  // on every run for whatever else does.
+  it('leaves volume24h untouched', async () => {
+    await populatePrices(log)
+
+    const sql = executeRawUnsafe.mock.calls[0][0] as string
+    expect(sql).not.toContain('volume24h')
+  })
+
+  it('still reports the rows it wrote in the run summary', async () => {
+    const summary = await populatePrices(log)
+
+    expect(summary).toEqual({ updated: SKIN_COUNT, historyRows: SKIN_COUNT })
   })
 })
