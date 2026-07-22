@@ -262,9 +262,12 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
 
     // Para rangos agregados: agrupar por día UTC y emitir dos puntos, el de
     // precio mínimo y el de máximo, ordenados por timestamp. Funciona igual
-    // sobre la parte raw reciente (0–14d) que sobre la ya downsampleada
-    // (14–120d), por lo que 30d y 90d quedan homogéneos. `history` viene
-    // ascendente, así que la iteración del Map queda ascendente por día.
+    // sobre la parte raw reciente que sobre la ya downsampleada — donde sólo hay
+    // un punto al día, mínimo y máximo coinciden y se emite uno solo — por lo que
+    // 30d y 90d quedan homogéneos. Las fronteras exactas las fija
+    // `cleanupPriceHistory.ts`, que es quien manda; no las repitas aquí (este
+    // comentario decía 0–14d / 14–120d, y ambas cifras habían quedado obsoletas).
+    // `history` viene ascendente, así que la iteración del Map queda ascendente.
     type Point = { price: number; timestamp: string; source: string }
     const byDay = new Map<string, Point[]>()
     for (const h of history) {

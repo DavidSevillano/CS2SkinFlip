@@ -2,10 +2,24 @@ import { prisma } from '../db/prisma'
 import type { FastifyBaseLogger } from 'fastify'
 
 // Resolución decreciente:
-//   0–14 días  → raw (~4 pts/día, cada 6h)
-//   14–90 días → 1 pt/día (precio mínimo del día)
+//   0–7 días   → raw (~4 pts/día, cada 6h)
+//   7–90 días  → 1 pt/día (precio mínimo del día)
 //   >90 días   → borrado
-const RAW_RETENTION_DAYS = 14
+//
+// La franja raw era de 14 días y se bajó a 7 (2026-07-22) por presupuesto de
+// almacenamiento: el plan Free de Neon da 0.5 GB y la retención anterior proyectaba
+// ~494 MB en régimen estacionario — dentro del límite, pero con margen cero.
+//
+// 7 días cuesta casi nada porque nada renderiza la resolución raw más allá del
+// primer día: en `GET /skins/:id/price-history` sólo el rango `24h` usa
+// `aggregateDaily: false`; 7d/30d/90d agregan por día. Lo único que se pierde es
+// que los días 7–14 pasan de aportar mínimo y máximo diarios a un solo punto en
+// los gráficos de 30d/90d.
+//
+// El suelo es CHANGE_REFERENCE_WINDOW_MS: la referencia de cambio 24h mira a la
+// franja 24–48h, que tiene que seguir existiendo. A 7 días sobra de largo, pero
+// no bajes de 2 sin mirar `config/priceHistory.ts`.
+const RAW_RETENTION_DAYS = 7
 const DAILY_RETENTION_DAYS = 90
 
 // El job se invoca cada 6h; el downsample escanea toda la franja 14–90d, así que
