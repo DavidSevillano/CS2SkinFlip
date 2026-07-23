@@ -14,7 +14,7 @@ CS2SkinFlip/
 `docs/superpowers/plans/` and `docs/superpowers/specs/` contain design docs for both shipped and still-unimplemented features — a plan/spec file existing does **not** mean the feature is in the code. Verify against actual source before treating a plan doc as current behavior.
 
 - **"premium bundle priority alerts"** (per-alert-interval refresh for premium users) is speculative only — `isPremium` gates the alert limit in `routes/alerts.ts` and nothing else.
-- **"price history daily aggregation"** is **shipped**, not speculative: `jobs/cleanupPriceHistory.ts` does the in-place downsample and `GET /skins/:id/history?range=90d` serves it. The spec's retention numbers are stale (it describes 120d / 2 points per day); the code is the source of truth.
+- **"price history daily aggregation"** is **shipped**, not speculative: `jobs/cleanupPriceHistory.ts` does the in-place downsample and `GET /skins/:id/price-history?range=90d` serves it. The spec's retention numbers are stale (it describes 120d / 2 points per day); the code is the source of truth.
 
 ---
 
@@ -269,7 +269,7 @@ Required for Firebase (Analytics + FCM). Download from the Firebase console for 
 
 ### Network security
 
-`network_security_config.xml` sets `cleartextTrafficPermitted="false"` globally (system trust anchors only, no exceptions) — referenced via `android:networkSecurityConfig` in the manifest. `compileSdk`/`targetSdk` = 35, `minSdk` = 26.
+`network_security_config.xml` sets `cleartextTrafficPermitted="false"` globally (system trust anchors only, no exceptions) — referenced via `android:networkSecurityConfig` in the manifest. `compileSdk`/`targetSdk` = 36, `minSdk` = 26.
 
 ### Room database
 Uses `fallbackToDestructiveMigration()` — bump `version` in `AppDatabase.kt` whenever entities change. Only `watchlist` and `alerts` tables are persisted locally; skin data is always fetched from the backend.
