@@ -4,9 +4,10 @@ Price-tracking assistant for Counter-Strike 2 skins. Monorepo with an Android ap
 
 ```
 CS2SkinFlip/
-├── android/    ← Native Android app (Kotlin + Jetpack Compose)
-├── backend/    ← REST API (Node.js + Fastify + PostgreSQL + Prisma + Upstash Redis)
-└── web/        ← Static site generator (Kotlin Multiplatform) deployed to Cloudflare Pages — see web/README.md
+├── android/        ← Native Android app (Kotlin + Jetpack Compose)
+├── backend/        ← REST API (Node.js + Fastify + PostgreSQL + Prisma + Upstash Redis)
+├── web/            ← Static site generator (Kotlin Multiplatform) deployed to Cloudflare Pages — see web/README.md
+└── store-assets/   ← Play Store listing copy + generated screenshots (Puppeteer) — see store-assets/screenshots/README.md
 ```
 
 ---
@@ -39,7 +40,7 @@ Native CS2 skin price tracker with dark theme, multi-marketplace prices, watchli
 |--------|--------------|
 | Home | Top movers 24h, Rising/Falling tabs · pull-to-refresh |
 | Search | Filters: weapon, wear (FN/MW/FT/WW/BS), StatTrak, price range |
-| Skin Detail | Skinport / CS:GO Market / Waxpeer prices · 30d chart |
+| Skin Detail | Skinport / CS:GO Market / Waxpeer prices · price chart (7D / 30D / 3M) |
 | Portfolio | Real Steam inventory sync (public inventory endpoint) · P&L |
 | Watchlist | Price targets · swipe-to-delete · Room persistence |
 | Alerts | Freemium: 1 free alert / unlimited via one-time premium purchase (Play Billing) |
@@ -72,7 +73,9 @@ See root [`CLAUDE.md`](CLAUDE.md) for the full architecture writeup.
 
 ## Backend
 
-REST API for the CS2SkinFlip platform. No live marketplace calls at request time — a bulk price pipeline populates the DB every 2 hours and all reads hit Postgres.
+REST API for the CS2SkinFlip platform. No live marketplace calls at request time — a bulk price pipeline populates the DB every 6 hours and all reads hit Postgres.
+
+The refresh is **not** scheduled inside the API process: `.github/workflows/refresh-prices.yml` cron-triggers `POST /jobs/refresh-prices` at 00/06/12/18 UTC, which runs the price population → alert check → history cleanup behind a Redis lock.
 
 **Stack:** Node.js · Fastify · TypeScript · PostgreSQL + Prisma · Upstash Redis · Steam OAuth (OpenID 2.0)
 
@@ -84,7 +87,8 @@ npm install
 
 # 1. Configure environment
 cp .env.example .env
-# Fill in DATABASE_URL, UPSTASH credentials, JWT_SECRET, STEAM_API_KEY — see CLAUDE.md for the full variable list
+# Fill in DATABASE_URL, UPSTASH credentials, JWT_SECRET, STEAM_API_KEY, JOBS_SECRET
+# (and TRUST_PROXY in production) — see CLAUDE.md for the full variable list
 
 # 2. Setup database
 npm run db:push
@@ -97,15 +101,22 @@ npm run dev
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|--------------|
+| `GET` | `/health` | — | Liveness + price-pipeline freshness (`fresh` / `stale` / `unknown`) |
 | `GET` | `/auth/steam` | — | Initiate Steam login |
 | `GET` | `/auth/steam/callback` | — | Steam OAuth callback |
+| `GET` | `/auth/me` | JWT | Current user |
+| `POST` | `/auth/logout` | — | Clear the session cookie |
+| `DELETE` | `/auth/me` | JWT | Delete the account |
 | `PUT` | `/auth/me/fcm-token` | JWT | Save device FCM token |
-| `GET` | `/skins` | — | Search/list skins |
+| `GET` | `/skins` | — | Search/list skins (rate-limited tighter than the global limit) |
+| `GET` | `/skins/weapons` | — | Weapon list for the search filters |
 | `GET` | `/skins/top-movers` | — | Top 24h movers (`?direction=rising\|falling`) |
+| `GET` | `/skins/export` | — | Bulk export consumed by the `web/` SEO generator |
 | `GET` | `/skins/:id` | — | Skin detail |
-| `GET` | `/skins/:id/price-history` | — | Price history |
-| `GET` | `/prices/:skinId` | — | Single-skin price refresh |
-| `POST` | `/prices/batch` | — | Batch price refresh |
+| `GET` | `/skins/:id/price-history` | — | Price history (`?range=24h\|7d\|30d\|90d`, default `24h`) |
+| `GET` | `/prices/batch` | — | Batch price lookup |
+| `GET` | `/prices/:skinId` | — | Single-skin price lookup |
+| `POST` | `/prices/:skinId/refresh` | — | Force-refresh one skin's price |
 | `GET` | `/watchlist` | JWT | Watchlist items |
 | `POST` / `PUT` / `DELETE` | `/watchlist(/:id)` | JWT | Add / update targets / remove |
 | `GET` | `/alerts` | JWT | Price alerts |
@@ -114,6 +125,10 @@ npm run dev
 | `POST` | `/portfolio/sync` | JWT | Sync Steam inventory |
 | `DELETE` | `/portfolio/:id` | JWT | Remove item |
 | `POST` | `/billing/verify-purchase` | JWT | Verify a Google Play premium purchase |
+| `POST` | `/jobs/refresh-prices` | `X-Jobs-Secret` | Trigger the bulk price run (202 + `runId`) |
+| `GET` | `/jobs/refresh-prices/status` | `X-Jobs-Secret` | Status of the last/current run |
+
+Reads never hit a marketplace: `/skins*` and `/prices*` all serve from Postgres, which the 6h bulk job keeps fresh. The `/jobs` routes are only registered when `JOBS_SECRET` is set — without it nothing schedules a refresh and `/health` reports `stale` within 8h.
 
 Full endpoint notes, price pipeline details, caching, and schema are documented in root [`CLAUDE.md`](CLAUDE.md).
 
