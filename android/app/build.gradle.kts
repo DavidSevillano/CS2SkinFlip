@@ -16,14 +16,14 @@ val localProperties = Properties().apply {
 
 android {
     namespace = "com.burixer85.cs2skinflip"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.burixer85.cs2skinflip"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        targetSdk = 36
+        versionCode = 9
+        versionName = "1.1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -151,7 +151,7 @@ dependencies {
     implementation(libs.firebase.crashlytics)
 
     // Billing
-    implementation(libs.billing.ktx)
+    implementation(libs.billing)
 
     // Ads
     implementation(libs.play.services.ads)
