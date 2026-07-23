@@ -29,10 +29,14 @@
 
     <string name="go_premium_title">Перейти на Premium</string>
     <string name="premium_feature_unlimited_alerts">Неограниченные оповещения о цене</string>
+    <string name="premium_feature_no_ads">Без рекламы</string>
     <string name="premium_price_onetime">4,99 $ · разовый платёж, без подписки</string>
     <string name="premium_price_monthly">4,99 $/мес</string>
     <string name="maybe_later">Может быть позже</string>
     <string name="price_placeholder">0.00</string>
+    <string name="verifying_purchase">Проверка покупки…</string>
+    <string name="purchase_success_title">Теперь у вас Premium!</string>
+    <string name="purchase_success_message">Неограниченные оповещения о цене и без рекламы разблокированы. Наслаждайтесь!</string>
 
     <string name="home_subtitle">Аналитика рынка в реальном времени</string>
     <string name="home_top_movers_title">Лидеры движения · 24ч</string>

@@ -41,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -102,6 +103,8 @@ fun SettingsScreen(
     val marketplace by viewModel.marketplace.collectAsState()
     val deleteAccountError by viewModel.deleteAccountError.collectAsState()
     val purchaseError by viewModel.purchaseError.collectAsState()
+    val isVerifyingPurchase by viewModel.isVerifyingPurchase.collectAsState()
+    val showPurchaseSuccessDialog by viewModel.showPurchaseSuccessDialog.collectAsState()
 
     var showMarketplaceSheet by remember { mutableStateOf(false) }
     var showUpgradeDialog by remember { mutableStateOf(false) }
@@ -152,7 +155,9 @@ fun SettingsScreen(
                     icon = Icons.Default.Star,
                     iconTint = PremiumGold,
                     label = stringResource(R.string.settings_item_plan),
-                    subtitle = if (user.isPremium) {
+                    subtitle = if (isVerifyingPurchase) {
+                        stringResource(R.string.verifying_purchase)
+                    } else if (user.isPremium) {
                         user.premiumUntil?.let { raw ->
                             runCatching {
                                 val iso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
@@ -163,6 +168,7 @@ fun SettingsScreen(
                     } else stringResource(R.string.settings_plan_free_subtitle),
                     onClick = { if (user.isPremium == false) showUpgradeDialog = true },
                     showChevron = user.isPremium == false,
+                    isLoading = isVerifyingPurchase,
                 )
                 HorizontalDivider(color = DividerColor, modifier = Modifier.padding(horizontal = 16.dp))
                 SettingsItem(
@@ -303,6 +309,10 @@ fun SettingsScreen(
                 showUpgradeDialog = false
             },
         )
+    }
+
+    if (showPurchaseSuccessDialog) {
+        PurchaseSuccessDialog(onDismiss = viewModel::dismissPurchaseSuccessDialog)
     }
 
     if (showSignOutDialog) {
@@ -481,6 +491,7 @@ private fun PlanCard(isPremium: Boolean) {
                     Triple(stringResource(R.string.watchlist_title), true, true),
                     Triple(stringResource(R.string.settings_feature_one_free_alert), true, true),
                     Triple(stringResource(R.string.premium_feature_unlimited_alerts), isPremium, false),
+                    Triple(stringResource(R.string.premium_feature_no_ads), isPremium, false),
                 )
                 features.forEach { (text, available, alwaysFree) ->
                     val tag = if (available) "✓" else "✗"
@@ -517,11 +528,12 @@ private fun SettingsItem(
     onClick: () -> Unit,
     trailingIcon: ImageVector = Icons.Default.ChevronRight,
     showChevron: Boolean = true,
+    isLoading: Boolean = false,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = !isLoading, onClick = onClick)
             .background(Surface)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -542,7 +554,9 @@ private fun SettingsItem(
                 Text(subtitle, fontSize = 12.sp, color = TextSecondary)
             }
         }
-        if (showChevron) {
+        if (isLoading) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AccentOrange)
+        } else if (showChevron) {
             Icon(trailingIcon, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
         }
     }
@@ -642,6 +656,12 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.premium_feature_unlimited_alerts), color = TextPrimary, fontSize = 13.sp)
                 }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.premium_feature_no_ads), color = TextPrimary, fontSize = 13.sp)
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.premium_price_onetime),
@@ -661,6 +681,31 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.maybe_later), color = TextSecondary)
+            }
+        },
+    )
+}
+
+@Composable
+private fun PurchaseSuccessDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.purchase_success_title), fontWeight = FontWeight.Bold, color = TextPrimary)
+            }
+        },
+        text = { Text(stringResource(R.string.purchase_success_message), color = TextSecondary, fontSize = 14.sp) },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(stringResource(R.string.action_ok), color = Color.Black, fontWeight = FontWeight.Bold)
             }
         },
     )

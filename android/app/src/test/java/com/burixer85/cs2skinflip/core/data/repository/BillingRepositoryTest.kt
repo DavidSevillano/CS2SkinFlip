@@ -6,7 +6,12 @@ import com.burixer85.cs2skinflip.core.billing.BillingManager
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.MeResponseDto
 import com.burixer85.cs2skinflip.core.data.remote.VerifyPurchaseResponseDto
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -154,5 +159,38 @@ class BillingRepositoryTest {
         val result = repository.syncPendingPurchases()
 
         assertFalse(result)
+    }
+
+    @Test
+    fun `isVerifying is true while the backend call is in flight and false once it settles`() = runBlocking {
+        val backendApi = mock<CS2BackendApiService>()
+        val gate = CompletableDeferred<Unit>()
+        whenever(backendApi.verifyPurchase(org.mockito.kotlin.any())).thenAnswer {
+            runBlocking { gate.await() }
+            VerifyPurchaseResponseDto(isPremium = true, premiumUntil = null)
+        }
+        val repository = BillingRepository(mock(), backendApi, mock())
+        assertFalse(repository.isVerifying.value)
+
+        val pending = async(Dispatchers.IO) { repository.verify(purchase()) }
+        withTimeout(2000) {
+            while (!repository.isVerifying.value) delay(10)
+        }
+        assertTrue(repository.isVerifying.value)
+
+        gate.complete(Unit)
+        pending.await()
+
+        assertFalse(repository.isVerifying.value)
+    }
+
+    @Test
+    fun `isVerifying never turns true for a purchase that fails the early checks`() = runBlocking {
+        val backendApi = mock<CS2BackendApiService>()
+        val repository = BillingRepository(mock(), backendApi, mock())
+
+        repository.verify(purchase(products = listOf("some_other_sku")))
+
+        assertFalse(repository.isVerifying.value)
     }
 }

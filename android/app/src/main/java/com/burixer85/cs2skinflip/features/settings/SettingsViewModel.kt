@@ -76,14 +76,26 @@ class SettingsViewModel @Inject constructor(
                 if (unlocked) {
                     val refreshed = runCatching { backendApi.getMe() }.getOrNull()
                     if (refreshed != null) _accountState.value = AccountUiState.SignedIn(refreshed)
+                    _showPurchaseSuccessDialog.value = true
                 }
             }
         }
     }
 
+    private val _showPurchaseSuccessDialog = MutableStateFlow(false)
+    /** True right after a purchase has been verified and premium unlocked — shows a one-time confirmation. */
+    val showPurchaseSuccessDialog: StateFlow<Boolean> = _showPurchaseSuccessDialog
+
+    fun dismissPurchaseSuccessDialog() {
+        _showPurchaseSuccessDialog.value = false
+    }
+
     fun setMarketplace(m: DefaultMarketplace) {
         viewModelScope.launch { preferences.setMarketplace(m) }
     }
+
+    /** True while a just-completed Play Billing purchase is being verified against the backend. */
+    val isVerifyingPurchase: StateFlow<Boolean> = billingRepository.isVerifying
 
     private val _purchaseError = MutableStateFlow<String?>(null)
     val purchaseError: StateFlow<String?> = _purchaseError

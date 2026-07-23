@@ -180,4 +180,43 @@ class SettingsViewModelTest {
 
         verify(deps.backendApi, times(1)).getMe()
     }
+
+    @Test
+    fun `shows the purchase success dialog when a purchase update unlocks premium`() = runTest {
+        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        val deps = viewModel(purchaseUpdates = purchaseUpdates)
+        val purchase = mock<Purchase>()
+        whenever(deps.billingRepository.verify(purchase)).thenReturn(true)
+
+        assertFalse(deps.viewModel.showPurchaseSuccessDialog.value)
+        purchaseUpdates.tryEmit(listOf(purchase))
+
+        assertTrue(deps.viewModel.showPurchaseSuccessDialog.value)
+    }
+
+    @Test
+    fun `does not show the purchase success dialog when verification fails`() = runTest {
+        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        val deps = viewModel(purchaseUpdates = purchaseUpdates)
+        val purchase = mock<Purchase>()
+        whenever(deps.billingRepository.verify(purchase)).thenReturn(false)
+
+        purchaseUpdates.tryEmit(listOf(purchase))
+
+        assertFalse(deps.viewModel.showPurchaseSuccessDialog.value)
+    }
+
+    @Test
+    fun `dismissPurchaseSuccessDialog hides the dialog`() = runTest {
+        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        val deps = viewModel(purchaseUpdates = purchaseUpdates)
+        val purchase = mock<Purchase>()
+        whenever(deps.billingRepository.verify(purchase)).thenReturn(true)
+        purchaseUpdates.tryEmit(listOf(purchase))
+        assertTrue(deps.viewModel.showPurchaseSuccessDialog.value)
+
+        deps.viewModel.dismissPurchaseSuccessDialog()
+
+        assertFalse(deps.viewModel.showPurchaseSuccessDialog.value)
+    }
 }

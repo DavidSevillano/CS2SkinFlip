@@ -29,10 +29,14 @@
 
     <string name="go_premium_title">Zostań Premium</string>
     <string name="premium_feature_unlimited_alerts">Nieograniczone alerty cenowe</string>
+    <string name="premium_feature_no_ads">Bez reklam</string>
     <string name="premium_price_onetime">4,99 USD · płatność jednorazowa, bez subskrypcji</string>
     <string name="premium_price_monthly">4,99 USD/mies.</string>
     <string name="maybe_later">Może później</string>
     <string name="price_placeholder">0.00</string>
+    <string name="verifying_purchase">Weryfikowanie zakupu…</string>
+    <string name="purchase_success_title">Masz teraz Premium!</string>
+    <string name="purchase_success_message">Odblokowano nieograniczone alerty cenowe i brak reklam. Ciesz się!</string>
 
     <string name="home_subtitle">Analiza rynku na żywo</string>
     <string name="home_top_movers_title">Największe zmiany · 24h</string>
