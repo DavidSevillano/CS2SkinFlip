@@ -1,5 +1,5 @@
 [versions]
-agp = "8.3.2"
+agp = "8.9.1"
 kotlin = "1.9.23"
 coreKtx = "1.13.1"
 lifecycleRuntimeKtx = "2.7.0"
@@ -18,7 +18,7 @@ composeNavigation = "2.8.4"
 firebaseBom = "33.1.0"
 googleServices = "4.4.2"
 firebaseCrashlyticsPlugin = "3.0.2"
-billing = "7.1.1"
+billing = "8.0.0"
 playServicesAds = "23.3.0"
 umpSdk = "3.0.0"
 playReview = "2.0.2"
@@ -77,8 +77,8 @@ firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.r
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
 
-# Billing
-billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
+# Billing (core Java artifact — ktx extensions require Kotlin 2.x, which this project isn't on)
+billing = { group = "com.android.billingclient", name = "billing", version.ref = "billing" }
 
 # Ads
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }

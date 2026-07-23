@@ -7,12 +7,12 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.PendingPurchasesParams
+import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
-import com.android.billingclient.api.queryProductDetails
-import com.android.billingclient.api.queryPurchasesAsync
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -41,7 +41,11 @@ class BillingManager @Inject constructor(
                 _purchaseUpdates.tryEmit(purchases)
             }
         })
-        .enablePendingPurchases()
+        .enablePendingPurchases(
+            PendingPurchasesParams.newBuilder()
+                .enableOneTimeProducts()
+                .build()
+        )
         .build()
 
     private suspend fun ensureConnected(): Boolean {
@@ -65,7 +69,7 @@ class BillingManager @Inject constructor(
             .setProductType(BillingClient.ProductType.INAPP)
             .build()
         val queryParams = QueryProductDetailsParams.newBuilder().setProductList(listOf(product)).build()
-        val details = client.queryProductDetails(queryParams).productDetailsList?.firstOrNull() ?: return
+        val details = queryPremiumProductDetails(queryParams) ?: return
 
         val productParams = BillingFlowParams.ProductDetailsParams.newBuilder()
             .setProductDetails(details)
@@ -85,8 +89,31 @@ class BillingManager @Inject constructor(
     suspend fun queryOwnedPurchases(): List<Purchase> {
         if (!ensureConnected()) return emptyList()
         val params = QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build()
-        return client.queryPurchasesAsync(params).purchasesList
+        return suspendCancellableCoroutine { cont ->
+            client.queryPurchasesAsync(params) { result, purchases ->
+                if (cont.isActive) {
+                    cont.resume(
+                        if (result.responseCode == BillingClient.BillingResponseCode.OK) purchases else emptyList()
+                    )
+                }
+            }
+        }
     }
+
+    /** Coroutine bridge over the callback-based product-details query (core Billing API, no ktx). */
+    private suspend fun queryPremiumProductDetails(params: QueryProductDetailsParams): ProductDetails? =
+        suspendCancellableCoroutine { cont ->
+            client.queryProductDetailsAsync(params) { result, productDetailsResult ->
+                if (cont.isActive) {
+                    val details = if (result.responseCode == BillingClient.BillingResponseCode.OK) {
+                        productDetailsResult.productDetailsList.firstOrNull()
+                    } else {
+                        null
+                    }
+                    cont.resume(details)
+                }
+            }
+        }
 }
 
 /** Unwraps a (possibly wrapped) Context to find the underlying Activity, needed to launch the billing flow. */
