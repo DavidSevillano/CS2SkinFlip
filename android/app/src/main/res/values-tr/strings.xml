@@ -29,10 +29,14 @@
 
     <string name="go_premium_title">Premium ol</string>
     <string name="premium_feature_unlimited_alerts">Sınırsız fiyat uyarısı</string>
+    <string name="premium_feature_no_ads">Reklamsız</string>
     <string name="premium_price_onetime">4,99 $ · tek seferlik ödeme, abonelik yok</string>
     <string name="premium_price_monthly">4,99 $/ay</string>
     <string name="maybe_later">Belki sonra</string>
     <string name="price_placeholder">0.00</string>
+    <string name="verifying_purchase">Satın alma doğrulanıyor…</string>
+    <string name="purchase_success_title">Artık Premium\'sun!</string>
+    <string name="purchase_success_message">Sınırsız fiyat uyarısı ve reklamsız kullanım açıldı. Keyfini çıkar!</string>
 
     <string name="home_subtitle">Canlı piyasa analizi</string>
     <string name="home_top_movers_title">En Çok Hareketlenenler · 24s</string>

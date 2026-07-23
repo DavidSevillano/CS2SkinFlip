@@ -114,6 +114,8 @@ fun AlertsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val editState by viewModel.editState.collectAsState()
+    val isVerifyingPurchase by viewModel.isVerifyingPurchase.collectAsState()
+    val showPurchaseSuccessDialog by viewModel.showPurchaseSuccessDialog.collectAsState()
     var showCreateSheet by remember { mutableStateOf(false) }
 
     var showUpgradeDialog by remember { mutableStateOf(false) }
@@ -180,6 +182,7 @@ fun AlertsScreen(
                     FreeTierBanner(
                         used = s.alerts.size,
                         limit = s.freeLimit,
+                        isVerifying = isVerifyingPurchase,
                         onUpgrade = { showUpgradeDialog = true },
                     )
                 }
@@ -236,6 +239,10 @@ fun AlertsScreen(
                 showUpgradeDialog = false
             },
         )
+    }
+
+    if (showPurchaseSuccessDialog) {
+        PurchaseSuccessDialog(onDismiss = viewModel::dismissPurchaseSuccessDialog)
     }
 
     // ── Notification permission rationale ───────────────────────────────────────
@@ -477,7 +484,7 @@ private fun DiffBadge(current: Double, target: Double, type: AlertType) {
 // ─── States: paywall + not logged in ─────────────────────────────────────────
 
 @Composable
-private fun FreeTierBanner(used: Int, limit: Int, onUpgrade: () -> Unit) {
+private fun FreeTierBanner(used: Int, limit: Int, isVerifying: Boolean = false, onUpgrade: () -> Unit) {
     val atLimit = used >= limit
     Row(
         modifier = Modifier
@@ -487,7 +494,7 @@ private fun FreeTierBanner(used: Int, limit: Int, onUpgrade: () -> Unit) {
             .background(
                 if (atLimit) PremiumGold.copy(0.12f) else AccentOrange.copy(0.10f)
             )
-            .clickable(onClick = onUpgrade)
+            .clickable(enabled = !isVerifying, onClick = onUpgrade)
             .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -506,17 +513,25 @@ private fun FreeTierBanner(used: Int, limit: Int, onUpgrade: () -> Unit) {
                 color = TextPrimary,
             )
             Text(
-                stringResource(R.string.alerts_usage_summary, used, limit),
+                if (isVerifying) stringResource(R.string.verifying_purchase) else stringResource(R.string.alerts_usage_summary, used, limit),
                 fontSize = 11.sp,
                 color = TextSecondary,
             )
         }
-        Text(
-            stringResource(R.string.action_upgrade),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (atLimit) PremiumGold else AccentOrange,
-        )
+        if (isVerifying) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = if (atLimit) PremiumGold else AccentOrange,
+            )
+        } else {
+            Text(
+                stringResource(R.string.action_upgrade),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (atLimit) PremiumGold else AccentOrange,
+            )
+        }
     }
 }
 
@@ -588,6 +603,12 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.premium_feature_unlimited_alerts), color = TextPrimary, fontSize = 13.sp)
                 }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.premium_feature_no_ads), color = TextPrimary, fontSize = 13.sp)
+                }
                 Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.premium_price_onetime),
@@ -607,6 +628,31 @@ private fun UpgradeDialog(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
         dismissButton = {
             androidx.compose.material3.TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.maybe_later), color = TextSecondary)
+            }
+        },
+    )
+}
+
+@Composable
+private fun PurchaseSuccessDialog(onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Star, null, tint = PremiumGold, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.purchase_success_title), fontWeight = FontWeight.Bold, color = TextPrimary)
+            }
+        },
+        text = { Text(stringResource(R.string.purchase_success_message), color = TextSecondary, fontSize = 14.sp) },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = PremiumGold),
+                shape = RoundedCornerShape(10.dp),
+            ) {
+                Text(stringResource(R.string.action_ok), color = Color.Black, fontWeight = FontWeight.Bold)
             }
         },
     )

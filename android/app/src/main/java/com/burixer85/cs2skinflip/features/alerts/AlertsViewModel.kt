@@ -97,9 +97,23 @@ class AlertsViewModel @Inject constructor(
             billingRepository.purchaseUpdates.collect { purchases ->
                 var unlocked = false
                 purchases.forEach { if (billingRepository.verify(it)) unlocked = true }
-                if (unlocked) loadAlerts()
+                if (unlocked) {
+                    loadAlerts()
+                    _showPurchaseSuccessDialog.value = true
+                }
             }
         }
+    }
+
+    /** True while a just-completed Play Billing purchase is being verified against the backend. */
+    val isVerifyingPurchase: StateFlow<Boolean> = billingRepository.isVerifying
+
+    private val _showPurchaseSuccessDialog = MutableStateFlow(false)
+    /** True right after a purchase has been verified and premium unlocked — shows a one-time confirmation. */
+    val showPurchaseSuccessDialog: StateFlow<Boolean> = _showPurchaseSuccessDialog
+
+    fun dismissPurchaseSuccessDialog() {
+        _showPurchaseSuccessDialog.value = false
     }
 
     fun purchasePremium(activity: Activity) {

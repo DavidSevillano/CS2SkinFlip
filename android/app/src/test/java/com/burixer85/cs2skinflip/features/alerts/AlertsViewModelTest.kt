@@ -204,6 +204,45 @@ class AlertsViewModelTest {
         verify(h.alertRepository, times(1)).fetchAll()
     }
 
+    @Test
+    fun `shows the purchase success dialog when a purchase update unlocks premium`() = runTest {
+        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        val h = build(purchaseUpdates = purchaseUpdates)
+        val purchase = mock<Purchase>()
+        whenever(h.billingRepository.verify(purchase)).thenReturn(true)
+
+        assertFalse(h.viewModel.showPurchaseSuccessDialog.value)
+        purchaseUpdates.tryEmit(listOf(purchase))
+
+        assertTrue(h.viewModel.showPurchaseSuccessDialog.value)
+    }
+
+    @Test
+    fun `does not show the purchase success dialog when verification fails`() = runTest {
+        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        val h = build(purchaseUpdates = purchaseUpdates)
+        val purchase = mock<Purchase>()
+        whenever(h.billingRepository.verify(purchase)).thenReturn(false)
+
+        purchaseUpdates.tryEmit(listOf(purchase))
+
+        assertFalse(h.viewModel.showPurchaseSuccessDialog.value)
+    }
+
+    @Test
+    fun `dismissPurchaseSuccessDialog hides the dialog`() = runTest {
+        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        val h = build(purchaseUpdates = purchaseUpdates)
+        val purchase = mock<Purchase>()
+        whenever(h.billingRepository.verify(purchase)).thenReturn(true)
+        purchaseUpdates.tryEmit(listOf(purchase))
+        assertTrue(h.viewModel.showPurchaseSuccessDialog.value)
+
+        h.viewModel.dismissPurchaseSuccessDialog()
+
+        assertFalse(h.viewModel.showPurchaseSuccessDialog.value)
+    }
+
     // ─── loadAlerts error mapping ─────────────────────────────────────────────
 
     @Test

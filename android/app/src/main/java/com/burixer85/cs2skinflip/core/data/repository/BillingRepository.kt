@@ -6,7 +6,10 @@ import com.burixer85.cs2skinflip.core.billing.BillingManager
 import com.burixer85.cs2skinflip.core.billing.PREMIUM_PRODUCT_ID
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.VerifyPurchaseRequest
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +21,10 @@ class BillingRepository @Inject constructor(
 ) {
     /** Raw purchase results from Play Billing — collect and pass each purchase to [verify]. */
     val purchaseUpdates: SharedFlow<List<Purchase>> = billingManager.purchaseUpdates
+
+    private val _isVerifying = MutableStateFlow(false)
+    /** True while a purchase is being verified against the backend — lets the UI show a spinner instead of briefly looking like the purchase failed. */
+    val isVerifying: StateFlow<Boolean> = _isVerifying.asStateFlow()
 
     /**
      * Launches the Play Billing purchase sheet. Attaches the signed-in user's ID so the backend
@@ -34,9 +41,14 @@ class BillingRepository @Inject constructor(
     suspend fun verify(purchase: Purchase): Boolean {
         if (PREMIUM_PRODUCT_ID !in purchase.products) return false
         if (purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return false
-        val unlocked = runCatching {
-            backendApi.verifyPurchase(VerifyPurchaseRequest(purchase.purchaseToken)).isPremium
-        }.getOrDefault(false)
+        _isVerifying.value = true
+        val unlocked = try {
+            runCatching {
+                backendApi.verifyPurchase(VerifyPurchaseRequest(purchase.purchaseToken)).isPremium
+            }.getOrDefault(false)
+        } finally {
+            _isVerifying.value = false
+        }
         if (unlocked) premiumStatusRepository.refresh()
         return unlocked
     }
