@@ -132,13 +132,15 @@ The 6h cadence therefore lives in the workflow cron, mirrored by `REFRESH_INTERV
 Three marketplaces are fetched in parallel every 6h by the cron-triggered job (`populatePrices`), plus once on startup if `SkinPrice` is empty.
 **All endpoints are bulk and public — no API keys, no rate-limit concerns** (4 calls/day per marketplace):
 
-1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD`, ~24k items.
+1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD&tradable=1`, ~24.8k items. **`tradable` must stay `1`.** The flag selects between two different result sets rather than switching a filter off: measured 2026-07-24, `tradable=0` returns 10.9k priced items and `tradable=1` returns 24.8k. `0` is dominated by trade-locked listings, which are cheaper than the same skin you could actually flip, so it biased Skinport low and handed it `lowestPrice` more often than it deserved.
 2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `GET https://market.csgo.com/api/v2/prices/USD.json`, ~25k items.
 3. **Waxpeer** (`fetchWaxpeerPrices`) — `GET https://api.waxpeer.com/v1/prices?game=csgo`, ~20k items. `min` field is USD × 1000 (divide by 1000).
 
 **CSDeals and DMarket dropped** (2026-07): CSDeals' bulk endpoint only lists ~2.6k actively-stocked items (vs ~20-25k for the others), so it almost never matched anything outside the most common skins. DMarket's public bulk aggregator (`price-aggregator/v1/aggregated-prices`) was retired outright; its replacement requires signed API-key auth and per-title lookups, incompatible with the no-keys bulk design here.
 
-`calcLowestPrice()` takes the MIN of all non-null positive values across the three. `SkinPrice.lowestPrice` stores this and is the primary price shown in the Android app.
+`calcLowestPrice()` is **not** a plain MIN — a plain MIN trusts whichever marketplace is most wrong. When all three quote a skin, any quote further than `MAX_QUOTE_DEVIATION_FROM_MEDIAN` (4x) from the median of the three is discarded before the MIN is taken. With fewer than three quotes there is no majority to appeal to, so those rows keep the plain MIN and are instead refused by top movers. `SkinPrice.lowestPrice` stores the result and is the primary price shown in the Android app; the individual marketplace columns always record what each one actually said, rejected or not.
+
+Thresholds and the production measurements behind them live in `src/config/priceQuality.ts`. Re-derive them with `scripts/measure-price-quality.ts` rather than adjusting by feel.
 
 **No live calls anywhere.** The DB is the single source of truth. `GET /skins/:id`, `GET /prices/batch`, and the search/top-movers endpoints all read straight from `SkinPrice` — search responses already contain the marketplace prices and `lowestPrice` correct on first render. The Android `SkinRepository` is correspondingly simple: no `livePriceCache`, no batch refresh after list loads.
 
@@ -156,7 +158,9 @@ Supports partial updates: `isActive`, `targetPrice`, and `type`. When `targetPri
 
 ### Skin catalog (`populateSkins.ts`)
 
-Source: `ByMykel/CSGO-API` GitHub JSON. Each skin × wear combination = one DB row. StatTrak variants:
+Source: `ByMykel/CSGO-API` GitHub JSON — **the catalog only, no prices**. It used to also fetch Steam prices from `prices.csgotrader.app` and seed `SkinPrice` with them; removed 2026-07-24 for two independent reasons. The endpoint had stopped serving JSON (it answers 200 with the site's HTML, and the "N prices loaded" log was counting the character indices of that string, so it reported ~36 700 prices every run). And even working, seeding `SkinPrice` here broke the bootstrap: `app.ts` runs `populatePrices` only when `SkinPrice` is empty, so a seeded row made a brand-new database skip the marketplace fetch and serve Steam-derived prices until the first cron run hours later.
+
+Each skin × wear combination = one DB row. StatTrak variants:
 - Regular: `StatTrak™ {name} ({wear})`
 - Knives (`★`-prefix): `★ StatTrak™ {nameWithoutStar} ({wear})`
 
@@ -194,9 +198,34 @@ The uptime monitor is configured as a **keyword monitor on `fresh`** — only th
 
 All filters are combined as `AND` conditions. Wear is matched via `marketHashName ILIKE '%(${wear}%)'`. StatTrak via `ILIKE '%StatTrak%'`. Search uses `regexp_replace(lower(...), '[^a-z0-9]', '', 'g')` to strip punctuation before matching.
 
+`sort` defaults to `random`, and **any** filter present takes the random branch. It randomises by starting at a random offset within the already-counted `total`, not by loading every matching id to shuffle in memory — the latter made a broad search like `wear=Field-Tested` ship thousands of ids per request to return 50 of them, which was the single most expensive thing this API did against Neon's metered transfer. It also bought nothing, since `skip` was applied to a freshly shuffled array on every call and paging returned overlapping random slices rather than a stable sequence.
+
 ### Top movers quality filter (Rising/Falling)
 
 `PriceService.getTopMovers(direction, limit)` (`src/services/prices.ts`) takes `direction: 'rising' | 'falling'`, over-fetches `limit * 5` candidates ordered by `priceChange24h`, then discards rows without a real 24h-ago reference price or with an absolute move under $0.25, before truncating to `limit`. Route: `GET /skins/top-movers?direction=`. Cached in Redis per direction as `top-movers:{direction}:{limit}` (15 min TTL) — see [Caching](#caching-redis--upstash) for how those keys get invalidated.
+
+**Corroboration is the filter that matters, and it is the reason the home screen stopped showing nonsense.** A 24h change is only as trustworthy as the price it was computed from, and a price no second marketplace quotes cannot be checked against anything. Two rules, both from `config/priceQuality.ts`:
+
+- **At least two marketplaces must quote the skin**, enforced in SQL as an `OR` over the three column pairs. It lives in the query rather than the in-process filter chain because it disqualifies most of what sorts to the top, and rejected rows cost egress on a metered connection if they come back first. There is deliberately no `MIN_TOP_MOVER_QUOTES` constant: Prisma has no counting operator over sibling columns, so the pairs encode the rule structurally and an exported `2` would be a number nobody reads.
+- `MAX_TOP_MOVER_QUOTE_SPREAD` (3x) then drops rows whose quotes exist but disagree — the same skin at $373 and $2 762 has no meaningful price to rank.
+
+Measured before the change (2026-07-24): single-quote skins were 3.7% of the catalog but supplied **15 of the top 20 risers**, led by a Battle-Scarred `M4A4 | Bullet Rain` at $61 938 and +50 608%. After: the top riser is +182% and every entry carries at least two agreeing quotes. `scripts/preview-top-movers.ts` renders both lists against production.
+
+Note the reference prices in `PriceHistory` are historical, so changes computed against garbage written before this fix stay wrong until those points age past the 24–48h reference window — it self-heals within about two days of the first corrected run.
+
+### Storage budget (Neon free tier: 0.5 GB)
+
+`PriceHistory` is the only table that matters here — 332 MB of a 349 MB total when measured on 2026-07-24, against a 500 MB ceiling, and the database was only 20 days into a 90-day retention band.
+
+**Most of that was empty space, not data.** The bulk job writes 4 points per skin per day and `cleanupPriceHistory` deletes 3 of them once they age past the raw band. Half a million deletes a day leave half-empty pages: `VACUUM` marks the space reusable but never compacts, and new rows append to the end instead. Measured: 112.7 bytes of real tuple sitting in a 262-byte heap footprint, with indexes at ~3x their packed size (the `[skinId, timestamp]` index alone was 109 MB, the cuid text primary key another 67 MB).
+
+`scripts/compact-price-history.ts` runs `VACUUM (FULL, ANALYZE)`. First run took **2.3s and reclaimed 196 MB** (332 → 136 MB), no rows lost. It needs `DIRECT_DATABASE_URL` — `VACUUM` cannot run through a transaction-mode pooler — and takes an `ACCESS EXCLUSIVE` lock for the duration, so reads and writes to `PriceHistory` block while it runs.
+
+The churn regenerates the slack, so **this has to be re-run periodically**; watch for the total creeping back toward the ceiling. At the packed cost of ~231 bytes/row, steady state under the current 7d-raw + 90d-daily retention is ~347 MB for `PriceHistory` and ~364 MB overall, which fits — but only while the table stays compacted. Do not cut retention to solve a bloat problem: `?range=90d` is a shipped feature and the space is recoverable without touching it.
+
+If it becomes a recurring chore rather than a one-off, the structural fixes in order of value are: a `BigInt autoincrement` primary key instead of the cuid text one (the PK index is pure overhead — nothing looks a row up by `id` except the downsample's own `WHERE id IN`), dropping `source` (it is `'bulk'` in all 589 563 rows), and finally daily partitioning, where dropping a partition reclaims space with no bloat at all.
+
+`scripts/measure-neon-budget.ts` reports per-table sizes, the steady-state projection, and what a proposed change would cost.
 
 ### Logging
 
