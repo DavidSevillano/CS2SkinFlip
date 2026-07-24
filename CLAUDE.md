@@ -227,6 +227,16 @@ If it becomes a recurring chore rather than a one-off, the structural fixes in o
 
 `scripts/measure-neon-budget.ts` reports per-table sizes, the steady-state projection, and what a proposed change would cost.
 
+### Transfer budget (Neon free tier: 5 GB/cycle)
+
+Consumption sat at 4.1 GB with 11 days of the cycle left when checked on 2026-07-24, i.e. on course to breach. The bulk job's reads account for only ~180 MB/month of it, so the job is not the problem.
+
+The identified culprit was `GET /skins` loading every matching id to shuffle in memory — see [Filtering](#filtering-get-skins). Whether that was all of it is unproven: `pg_stat_statements` was not installed, so there was no per-statement attribution.
+
+**It is installed now** (`CREATE EXTENSION pg_stat_statements`, 2026-07-24). It records from that point forward only. `scripts/measure-egress-sources.ts` ranks statements by total rows returned, which is what transfer is actually made of — run it after a day of real traffic and the top entry names the next culprit.
+
+Do not read `pg_stat_user_tables.seq_tup_read` as egress. `Skin` and `SkinPrice` each show ~2 000 full scans and tens of millions of tuples read, but that is work inside Postgres: the search route's `regexp_replace` scan reads the whole 24k-row table to return 50 rows, and only the 50 cross the wire. High scan counts there are a compute signal (CU-hrs, currently 15 of 100), not a transfer one.
+
 ### Logging
 
 Pino, configured in `server.ts` from `LOG_LEVEL` (default `info`, so job output like `[PricePopulate] Done — X skins updated` is visible in Render's logs). `pino-pretty` is only attached when `NODE_ENV === 'development'`; production emits JSON.
