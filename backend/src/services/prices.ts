@@ -1,7 +1,26 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
+import { MAX_TOP_MOVER_QUOTE_SPREAD } from '../config/priceQuality'
 import type { AggregatedPrices } from '../types'
+
+/**
+ * How far apart the marketplaces are on the same skin, as a ratio of dearest to
+ * cheapest. 1 means they agree exactly; fewer than two quotes means the question
+ * doesn't apply, and Infinity keeps such a row out of anything that filters on
+ * agreement rather than letting it through on a technicality.
+ */
+function quoteSpread(prices: {
+  skinportPrice: number | null
+  csgoMarketPrice: number | null
+  waxpeerPrice: number | null
+}): number {
+  const quotes = [prices.skinportPrice, prices.csgoMarketPrice, prices.waxpeerPrice].filter(
+    (p): p is number => p !== null && p > 0,
+  )
+  if (quotes.length < 2) return Infinity
+  return Math.max(...quotes) / Math.min(...quotes)
+}
 
 // ─── Top-movers cache ────────────────────────────────────────────────────────
 // The key format and the invalidation glob are derived from one prefix on
@@ -76,12 +95,19 @@ export class PriceService {
    * for signal quality.
    *
    * Pure DB read — no external API calls. The bulk job keeps both `lowestPrice`
-   * and `priceChange24h` fresh every 2h, and `priceChange24h` is indexed for
+   * and `priceChange24h` fresh every 6h, and `priceChange24h` is indexed for
    * fast sorting. We then refine the values from the more accurate `PriceHistory`
    * table to handle prices that moved between bulk runs, and drop rows that
    * don't clear a minimum price ($1) and minimum absolute 24h change ($0.25) —
    * below those thresholds the "movement" is almost always marketplace spread
    * noise rather than a real, flippable price move.
+   *
+   * The dominant filter, though, is corroboration. A 24h change is only as
+   * trustworthy as the price it was computed from, and a price no second
+   * marketplace quotes cannot be checked against anything. Measured 2026-07-24:
+   * single-quote skins are 3.7% of the catalog but produced 15 of the top 20
+   * risers, led by a Battle-Scarred M4A4 | Bullet Rain at $61 938 and +50 608%.
+   * See `config/priceQuality.ts`.
    */
   async getTopMovers(
     direction: 'rising' | 'falling' = 'rising',
@@ -97,9 +123,24 @@ export class PriceService {
     // `limit` because the quality filter below can discard rows (e.g. no
     // PriceHistory entry from ~24h ago, or the move is too small in absolute
     // terms) and we don't want to under-fill the final list.
+    //
+    // The MIN_TOP_MOVER_QUOTES rule is expressed in SQL rather than alongside
+    // the others below because it disqualified most of what used to reach the
+    // top of the candidate batch: filtering it in-process would mean paging
+    // through mostly-rejected rows, and every one of them crosses the wire on a
+    // metered connection. Enumerating the pairs is the honest way to say "at
+    // least two of these three are non-null" — Prisma has no counting operator
+    // over sibling columns, and a raw query here would give up the typed
+    // include on `price`.
+    const atLeastTwoQuotes = [
+      { skinportPrice: { not: null }, csgoMarketPrice: { not: null } },
+      { skinportPrice: { not: null }, waxpeerPrice: { not: null } },
+      { csgoMarketPrice: { not: null }, waxpeerPrice: { not: null } },
+    ]
+
     const skins = await prisma.skin.findMany({
       include: { price: true },
-      where: { price: { lowestPrice: { gte: 1 } } },
+      where: { price: { lowestPrice: { gte: 1 }, OR: atLeastTwoQuotes } },
       orderBy: [
         { price: { priceChange24h: { sort: sortOrder, nulls: 'last' } } },
         { price: { lowestPrice: 'desc' } },
@@ -143,6 +184,11 @@ export class PriceService {
       // Quality filter: need a real 24h-ago reference price and a meaningful
       // absolute move. Without `_prev` we can't tell noise from a real move.
       .filter((s) => s._prev !== null && s.lowestPrice !== null && Math.abs(s.lowestPrice - s._prev) >= 0.25)
+      // Corroboration, part two. The SQL above guaranteed a second quote exists;
+      // this asks whether the quotes actually agree. They routinely don't: the
+      // same skin listed at $373 and $2 762 across two marketplaces has no
+      // meaningful "price", so its 24h change is not a fact worth ranking.
+      .filter((s) => quoteSpread(s) <= MAX_TOP_MOVER_QUOTE_SPREAD)
       .sort((a, b) => {
         const diff =
           direction === 'falling'

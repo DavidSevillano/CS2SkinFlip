@@ -5,6 +5,7 @@ import { promisify } from 'util'
 import { prisma } from '../db/prisma'
 import { redis } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
+import { MAX_QUOTE_DEVIATION_FROM_MEDIAN } from '../config/priceQuality'
 import { invalidateTopMoversCache } from '../services/prices'
 import type { FastifyBaseLogger } from 'fastify'
 
@@ -40,10 +41,18 @@ async function fetchSkinportPrices(log: FastifyBaseLogger): Promise<Map<string, 
   try {
     // Skinport requires Brotli compression — fetch as arraybuffer and decompress manually
     // because axios/Node http doesn't auto-decompress Brotli.
+    // `tradable: 1`, not 0. The two are different result sets rather than a
+    // filter and its absence: measured 2026-07-24, tradable=0 returns 10 937
+    // priced items and tradable=1 returns 24 853. The former is dominated by
+    // trade-locked listings, which are systematically cheaper than the same
+    // skin you could actually flip, so it was biasing Skinport low and handing
+    // it the `lowestPrice` more often than it deserved. Only 18 catalog skins
+    // gain a price from the switch — the extra names are stickers, cases and
+    // agents, which this catalog does not hold — so it costs ~1 MB of storage.
     const { data } = await axios.get<Buffer>(
       'https://api.skinport.com/v1/items',
       {
-        params: { app_id: 730, currency: 'USD', tradable: 0 },
+        params: { app_id: 730, currency: 'USD', tradable: 1 },
         timeout: 30000,
         headers: { 'Accept-Encoding': 'br' },
         responseType: 'arraybuffer',
@@ -135,9 +144,33 @@ async function fetchWaxpeerPrices(log: FastifyBaseLogger): Promise<Map<string, n
 
 // ─── Merge & persist ─────────────────────────────────────────────────────────
 
+/**
+ * The cheapest price we are willing to believe, which is not the same as the
+ * cheapest price we were quoted.
+ *
+ * A plain MIN trusts whichever marketplace is most wrong. When all three quote
+ * the skin the median is the majority opinion, so a quote far from it is an
+ * outlier rather than a bargain, and dropping it costs nothing real — see
+ * `config/priceQuality.ts` for the measured distribution behind the threshold.
+ *
+ * With fewer than three quotes there is no majority to appeal to: two numbers
+ * that disagree cannot say which of them is lying. Those rows keep the plain
+ * MIN and are held to a stricter standard by the readers that care — top movers
+ * refuses them outright rather than pretending the price is verified.
+ */
 function calcLowestPrice(...prices: (number | null | undefined)[]): number | null {
   const valid = prices.filter((p): p is number => p != null && p > 0)
-  return valid.length > 0 ? Math.min(...valid) : null
+  if (valid.length === 0) return null
+  if (valid.length < 3) return Math.min(...valid)
+
+  const median = [...valid].sort((a, b) => a - b)[1]
+  // The median is trivially within any factor of itself, so this never empties.
+  const corroborated = valid.filter(
+    (p) =>
+      p <= median * MAX_QUOTE_DEVIATION_FROM_MEDIAN &&
+      p >= median / MAX_QUOTE_DEVIATION_FROM_MEDIAN,
+  )
+  return Math.min(...corroborated)
 }
 
 interface SkinPriceRow {
