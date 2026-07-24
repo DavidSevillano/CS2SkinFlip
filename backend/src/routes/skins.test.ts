@@ -1,17 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Fastify from 'fastify'
 
-const { skinFindMany, skinCount, priceHistoryFindMany } = vi.hoisted(() => ({
+const { skinFindMany, skinCount, queryRaw } = vi.hoisted(() => ({
   skinFindMany: vi.fn(),
   skinCount: vi.fn(),
-  priceHistoryFindMany: vi.fn(),
+  queryRaw: vi.fn(),
 }))
 vi.mock('../db/prisma', () => ({
   prisma: {
     skin: { findMany: skinFindMany, count: skinCount },
-    priceHistory: { findMany: priceHistoryFindMany },
+    $queryRaw: queryRaw,
   },
 }))
+
+// `$queryRaw` is a tagged template: the literal fragments arrive first and the
+// interpolated values after, so the window bounds are positional rather than
+// named. In query order: windowStart (gte) then dayAgo (lte).
+function queryRawDates(call: unknown[]): Date[] {
+  return call.slice(1).filter((v): v is Date => v instanceof Date)
+}
 
 // `skins.ts` imports `env`, whose module body calls process.exit(1) when the
 // real env vars are absent (they are, under Vitest). Stub the two fields it reads.
@@ -144,7 +151,7 @@ describe('GET /skins — 24h-change reference query', () => {
     vi.clearAllMocks()
     skinCount.mockResolvedValue(1)
     skinFindMany.mockResolvedValue([row('ak-47-redline-field-tested', 9.99)])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
   })
 
   it('bounds the reference window on the lower end, not just the upper', async () => {
@@ -153,10 +160,10 @@ describe('GET /skins — 24h-change reference query', () => {
     const res = await app.inject({ method: 'GET', url: '/skins?limit=50' })
 
     expect(res.statusCode).toBe(200)
-    expect(priceHistoryFindMany).toHaveBeenCalledTimes(1)
-    const { timestamp } = priceHistoryFindMany.mock.calls[0][0].where
-    expect(timestamp.gte).toBeInstanceOf(Date)
-    expect(timestamp.lte).toBeInstanceOf(Date)
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+    const [gte, lte] = queryRawDates(queryRaw.mock.calls[0])
+    expect(gte).toBeInstanceOf(Date)
+    expect(lte).toBeInstanceOf(Date)
   })
 
   it('uses the same window width as the bulk job, so both agree on the reference', async () => {
@@ -167,7 +174,7 @@ describe('GET /skins — 24h-change reference query', () => {
     await app.inject({ method: 'GET', url: '/skins?limit=50' })
     const after = Date.now()
 
-    const { gte, lte } = priceHistoryFindMany.mock.calls[0][0].where.timestamp
+    const [gte, lte] = queryRawDates(queryRaw.mock.calls[0])
 
     // Both bounds derive from a Date.now() taken inside the handler, somewhere in
     // [before, after] — so `after` is the only safe reference for a lower-bound
@@ -178,7 +185,7 @@ describe('GET /skins — 24h-change reference query', () => {
   })
 
   it('still falls back to the bulk-job column when the window holds no reference', async () => {
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
     const app = await buildTestApp()
 
     const res = await app.inject({ method: 'GET', url: '/skins?limit=50' })
@@ -198,7 +205,7 @@ describe('GET /skins — price-sorted pagination', () => {
     vi.clearAllMocks()
     skinCount.mockResolvedValue(500)
     skinFindMany.mockResolvedValue([row('skin-a', 120), row('skin-b', 80)])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
   })
 
   it('returns results on the third page', async () => {
