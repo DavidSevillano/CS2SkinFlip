@@ -28,6 +28,81 @@ const DAILY_RETENTION_DAYS = 90
 const MIN_INTERVAL_MS = 24 * 60 * 60 * 1000
 let lastRunAt = 0
 
+// ─── Vigilancia de espacio ───────────────────────────────────────────────────
+// Este job es la causa del problema que vigila. Borra 3 de cada 4 puntos al
+// pasar la franja raw — medio millón de borrados al día — y eso deja páginas a
+// medias que VACUUM marca reutilizables pero nunca compacta, mientras las filas
+// nuevas se añaden al final. Medido 2026-07-24: la tabla ocupaba 332 MB de un
+// techo de 500 y `VACUUM FULL` la dejó en 136 MB sin perder una sola fila.
+//
+// El hinchado vuelve, así que hay que repetirlo. Sin este aviso eso depende de
+// que alguien se acuerde, y el fallo cuando el disco se agota no dice "haz
+// mantenimiento": dice que las escrituras fallan.
+//
+// Coste real por fila con la tabla compactada, incluidos índices (medido, no
+// estimado). Proyectar con este número una tabla hinchada subestima por 2,5x —
+// es el error que ya llevó dos veces a la conclusión equivocada de que el
+// problema era la retención.
+const PACKED_BYTES_PER_ROW = 231
+
+// A 1,6x sobra margen para la variación normal entre compactaciones y aún avisa
+// mucho antes del techo: a este tamaño de tabla son unos 200 MB de holgura
+// recuperable, semanas antes de que importe.
+const BLOAT_WARN_RATIO = 1.6
+
+const STORAGE_CEILING_BYTES = 500 * 1024 * 1024
+const STORAGE_WARN_RATIO = 0.8
+
+/**
+ * Informa del tamaño de `PriceHistory` y avisa cuando toca compactar.
+ *
+ * No compacta por su cuenta: `VACUUM FULL` bloquea la tabla y necesita
+ * `DIRECT_DATABASE_URL`, que Render no define. Ejecuta
+ * `scripts/compact-price-history.ts` cuando esto avise.
+ */
+async function reportStorage(log: FastifyBaseLogger) {
+  try {
+    const [row] = await prisma.$queryRaw<Array<{ bytes: bigint; rows: bigint; dbBytes: bigint }>>`
+      SELECT pg_total_relation_size('"PriceHistory"')      AS bytes,
+             (SELECT COUNT(*) FROM "PriceHistory")::bigint AS rows,
+             pg_database_size(current_database())          AS "dbBytes"
+    `
+    const bytes = Number(row.bytes)
+    const rows = Number(row.rows)
+    const dbBytes = Number(row.dbBytes)
+    if (rows === 0) return
+
+    const bytesPerRow = bytes / rows
+    const bloat = bytesPerRow / PACKED_BYTES_PER_ROW
+    const mb = (n: number) => (n / 1024 / 1024).toFixed(1)
+
+    log.info(
+      `[PriceHistoryCleanup] PriceHistory ${mb(bytes)} MB / ${rows} rows ` +
+        `(${bytesPerRow.toFixed(0)} B/row, ${bloat.toFixed(2)}x packed) — database ${mb(dbBytes)} MB`,
+    )
+
+    if (bloat >= BLOAT_WARN_RATIO) {
+      log.warn(
+        `[PriceHistoryCleanup] PriceHistory is ${bloat.toFixed(2)}x its packed size — ` +
+          `~${mb(bytes - rows * PACKED_BYTES_PER_ROW)} MB is reclaimable slack. ` +
+          `Run scripts/compact-price-history.ts (VACUUM FULL; locks the table, needs DIRECT_DATABASE_URL).`,
+      )
+    }
+
+    if (dbBytes >= STORAGE_CEILING_BYTES * STORAGE_WARN_RATIO) {
+      log.error(
+        `[PriceHistoryCleanup] Database is ${mb(dbBytes)} MB of a ${mb(STORAGE_CEILING_BYTES)} MB ` +
+          `free-tier ceiling. Writes start failing at the limit — compact first, and if that is ` +
+          `not enough the retention bands in this file are the next lever.`,
+      )
+    }
+  } catch (err) {
+    // Vigilar el espacio no puede ser el motivo de que la limpieza falle: para
+    // cuando esto importe, los borrados de arriba ya se han hecho.
+    log.warn({ err }, '[PriceHistoryCleanup] Could not read storage size')
+  }
+}
+
 export async function cleanupPriceHistory(log: FastifyBaseLogger) {
   const now = Date.now()
   if (now - lastRunAt < MIN_INTERVAL_MS) {
@@ -66,4 +141,8 @@ export async function cleanupPriceHistory(log: FastifyBaseLogger) {
     `[PriceHistoryCleanup] Hard-deleted ${hardDeleted} rows (>${DAILY_RETENTION_DAYS}d), ` +
     `downsampled away ${downsampled} rows (${RAW_RETENTION_DAYS}–${DAILY_RETENTION_DAYS}d, kept daily min)`,
   )
+
+  // Después de los borrados, que es cuando el hinchado que deja este job es
+  // máximo y la medida más representativa.
+  await reportStorage(log)
 }
