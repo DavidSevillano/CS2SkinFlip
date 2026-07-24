@@ -35,6 +35,8 @@ const { PriceService, invalidateTopMoversCache } = await import('./prices')
 
 const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
 
+const { MIN_TOP_MOVER_PRICE } = await import('../config/priceQuality')
+
 describe('PriceService.getTopMovers — 24h-change reference query', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -164,6 +166,69 @@ describe('PriceService.getTopMovers — corroboration', () => {
   })
 })
 
+// Percentage alone rewards cheap skins for nothing: a $1.20 item moving $0.57
+// is +90% and outranks a $336 knife moving $216. Both numbers are correct; only
+// one of them is a trade anybody can make.
+describe('PriceService.getTopMovers — movement worth acting on', () => {
+  const skin = (id: string, lowestPrice: number, second: number) => ({
+    id,
+    marketHashName: `Skin ${id} (Field-Tested)`,
+    name: `Skin ${id}`,
+    iconUrl: `http://img/${id}.png`,
+    price: {
+      lowestPrice,
+      skinportPrice: lowestPrice,
+      csgoMarketPrice: second,
+      waxpeerPrice: null,
+      updatedAt: new Date(),
+    },
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    redisGet.mockResolvedValue(null)
+    redisSet.mockResolvedValue('OK')
+  })
+
+  it('makes the database apply the price floor', async () => {
+    skinFindMany.mockResolvedValue([])
+    priceHistoryFindMany.mockResolvedValue([])
+
+    await new PriceService().getTopMovers('rising', 20)
+
+    expect(skinFindMany.mock.calls[0][0].where.price.lowestPrice).toEqual({
+      gte: MIN_TOP_MOVER_PRICE,
+    })
+  })
+
+  it('drops a dramatic percentage that is worth pennies', async () => {
+    // +90% on a $1.20 skin. It led the list on percentage alone; the whole move
+    // is $0.57, which no marketplace makes tradeable after fees.
+    skinFindMany.mockResolvedValue([
+      skin('pennies', 1.2, 1.22),
+      skin('real', 336, 340),
+    ])
+    priceHistoryFindMany.mockResolvedValue([
+      { skinId: 'pennies', price: 0.63 },
+      { skinId: 'real', price: 119 },
+    ])
+
+    const movers = await new PriceService().getTopMovers('rising', 20)
+
+    expect(movers.map((m) => m.skinId)).toEqual(['real'])
+  })
+
+  it('keeps a modest percentage that moved real money', async () => {
+    // +12% is unremarkable next to +90%, but it is $60 rather than $0.57.
+    skinFindMany.mockResolvedValue([skin('chunky', 560, 575)])
+    priceHistoryFindMany.mockResolvedValue([{ skinId: 'chunky', price: 500 }])
+
+    const movers = await new PriceService().getTopMovers('rising', 20)
+
+    expect(movers.map((m) => m.skinId)).toEqual(['chunky'])
+  })
+})
+
 describe('top-movers cache invalidation', () => {
   let fake: ReturnType<typeof fakeRedisStore>
 
@@ -185,9 +250,10 @@ describe('top-movers cache invalidation', () => {
         price: { lowestPrice: 10, skinportPrice: 10, csgoMarketPrice: 11, waxpeerPrice: null, updatedAt: new Date() },
       },
     ])
-    // A reference price far enough from `lowestPrice` to clear the $0.25
-    // quality filter, so the writer actually has something to cache.
-    priceHistoryFindMany.mockResolvedValue([{ skinId: 'skin-1', price: 8 }])
+    // A reference price far enough from `lowestPrice` to clear the minimum
+    // absolute move comfortably, so the writer actually has something to cache
+    // and this test fails for cache reasons rather than threshold ones.
+    priceHistoryFindMany.mockResolvedValue([{ skinId: 'skin-1', price: 4 }])
   })
 
   it('removes every key the writer produced, whatever shape they are', async () => {
