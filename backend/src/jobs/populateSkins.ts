@@ -5,8 +5,20 @@ import type { FastifyBaseLogger } from 'fastify'
 
 const BYMYKEL_SKINS_URL =
   'https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins.json'
-const CSGOTRADER_PRICES_URL =
-  'https://prices.csgotrader.app/latest/prices.json'
+
+// This import used to also fetch Steam prices from prices.csgotrader.app and
+// seed SkinPrice with them. Removed 2026-07-24 for two independent reasons:
+//
+//  1. The endpoint has stopped serving JSON — it answers 200 with the site's
+//     HTML. The failure was invisible: `.catch(() => null)` swallowed nothing
+//     (there was no error), and the "N prices loaded" log counted the character
+//     indices of the HTML string, so it reported ~36 700 prices every run.
+//
+//  2. Even working, seeding SkinPrice here broke the bootstrap. `app.ts` runs
+//     populatePrices only when SkinPrice is empty; a seeded row made it
+//     non-empty, so a brand-new database would skip the marketplace fetch
+//     entirely and serve Steam-derived prices until the first cron run hours
+//     later. populatePrices writes better data immediately afterwards anyway.
 
 interface BymykelSkin {
   id: string
@@ -17,12 +29,6 @@ interface BymykelSkin {
   souvenir: boolean
   wears: Array<{ id: string; name: string }>
   image: string
-}
-
-interface CSGOTraderPrices {
-  [marketHashName: string]: {
-    steam?: { last_24h?: number; last_7d?: number; last_30d?: number }
-  }
 }
 
 function slugify(str: string): string {
@@ -44,15 +50,10 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
 
   log.info('[PopulateSkins] Fetching full CS2 skin catalog...')
 
-  const [skinsRes, pricesRes] = await Promise.all([
-    axios.get<BymykelSkin[]>(BYMYKEL_SKINS_URL, { timeout: 30000 }),
-    axios.get<CSGOTraderPrices>(CSGOTRADER_PRICES_URL, { timeout: 30000 }).catch(() => null),
-  ])
-
+  const skinsRes = await axios.get<BymykelSkin[]>(BYMYKEL_SKINS_URL, { timeout: 30000 })
   const allSkins: BymykelSkin[] = skinsRes.data
-  const prices: CSGOTraderPrices = pricesRes?.data ?? {}
 
-  log.info(`[PopulateSkins] ${allSkins.length} skins from catalog, ${Object.keys(prices).length} prices loaded`)
+  log.info(`[PopulateSkins] ${allSkins.length} skins from catalog`)
 
   // Build one DB record per skin × wear combination
   const records: Array<{
@@ -61,7 +62,6 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
     weapon: string
     rarity: string
     iconUrl: string
-    price: number | null
   }> = []
 
   for (const skin of allSkins) {
@@ -74,14 +74,7 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
       const marketHashName = `${baseName} (${wear.name})`
       const id = slugify(marketHashName)
 
-      const priceData = prices[marketHashName]
-      const price =
-        priceData?.steam?.last_24h ??
-        priceData?.steam?.last_7d ??
-        priceData?.steam?.last_30d ??
-        null
-
-      records.push({ id, marketHashName, weapon: skin.weapon.name, rarity: skin.rarity.name, iconUrl: skin.image, price })
+      records.push({ id, marketHashName, weapon: skin.weapon.name, rarity: skin.rarity.name, iconUrl: skin.image })
 
       // Also create StatTrak variant if available
       if (skin.stattrak) {
@@ -90,14 +83,12 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
           : `StatTrak™ ${baseName}`               // "StatTrak™ AK-47 | Redline"
         const stattrakHashName = `${stattrakBase} (${wear.name})`
         const stattrakId = slugify(stattrakHashName)
-        const stattrakPrice = prices[stattrakHashName]
         records.push({
           id: stattrakId,
           marketHashName: stattrakHashName,
           weapon: skin.weapon.name,
           rarity: skin.rarity.name,
           iconUrl: skin.image,
-          price: stattrakPrice?.steam?.last_24h ?? stattrakPrice?.steam?.last_7d ?? stattrakPrice?.steam?.last_30d ?? null,
         })
       }
     }
@@ -127,14 +118,6 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
               iconUrl: r.iconUrl,
             },
           })
-
-          if (r.price !== null) {
-            await prisma.skinPrice.upsert({
-              where: { skinId: r.id },
-              update: { lowestPrice: r.price, updatedAt: new Date() },
-              create: { skinId: r.id, lowestPrice: r.price },
-            })
-          }
 
           imported++
         } catch {
