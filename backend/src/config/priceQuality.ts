@@ -41,6 +41,27 @@ export const MAX_QUOTE_DEVIATION_FROM_MEDIAN = 4
 // nonsense from the home screen.
 
 /**
+ * Cheapest skin, and smallest absolute 24h move, that top movers will rank.
+ *
+ * Ranking by percentage rewards cheap skins for nothing: a $1.20 item moving
+ * $0.57 is +90% and outranks a $336 knife moving $216 at +182%. Six of the top
+ * twenty risers were sub-$5 skins whose entire "movement" was under a dollar —
+ * correct numbers answering a question nobody asked, since no marketplace makes
+ * a $0.39 move tradeable after fees.
+ *
+ * Measured 2026-07-24 with `scripts/measure-mover-thresholds.ts`, which sweeps
+ * the grid and checks the list still fills. Every combination tried filled
+ * 20/20 — the catalog is far larger than the list, so starvation is not the
+ * constraint and the choice is purely about who the screen is for. At $5/$2 the
+ * cheapest entry moves from $1.20 to $7.78 and the median from $34.55 to
+ * $92.10, while an $7.78 R8 Revolver still qualifies. The next step up
+ * ($10/$5) pushes the cheapest entry to $29.79, which stops being noise removal
+ * and starts excluding everything a user with little capital can act on.
+ */
+export const MIN_TOP_MOVER_PRICE = 5
+export const MIN_TOP_MOVER_ABS_MOVE = 2
+
+/**
  * Top movers rejects a skin whose available quotes disagree by more than this
  * factor, whatever its 24h change says.
  *

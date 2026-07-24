@@ -1,7 +1,11 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
-import { MAX_TOP_MOVER_QUOTE_SPREAD } from '../config/priceQuality'
+import {
+  MAX_TOP_MOVER_QUOTE_SPREAD,
+  MIN_TOP_MOVER_ABS_MOVE,
+  MIN_TOP_MOVER_PRICE,
+} from '../config/priceQuality'
 import type { AggregatedPrices } from '../types'
 
 /**
@@ -140,7 +144,7 @@ export class PriceService {
 
     const skins = await prisma.skin.findMany({
       include: { price: true },
-      where: { price: { lowestPrice: { gte: 1 }, OR: atLeastTwoQuotes } },
+      where: { price: { lowestPrice: { gte: MIN_TOP_MOVER_PRICE }, OR: atLeastTwoQuotes } },
       orderBy: [
         { price: { priceChange24h: { sort: sortOrder, nulls: 'last' } } },
         { price: { lowestPrice: 'desc' } },
@@ -181,9 +185,16 @@ export class PriceService {
           _prev: prev,
         }
       })
-      // Quality filter: need a real 24h-ago reference price and a meaningful
-      // absolute move. Without `_prev` we can't tell noise from a real move.
-      .filter((s) => s._prev !== null && s.lowestPrice !== null && Math.abs(s.lowestPrice - s._prev) >= 0.25)
+      // Quality filter: need a real 24h-ago reference price and a move big
+      // enough to be worth acting on. Without `_prev` we can't tell noise from
+      // a real move; below MIN_TOP_MOVER_ABS_MOVE there is nothing to act on
+      // even when the percentage is dramatic.
+      .filter(
+        (s) =>
+          s._prev !== null &&
+          s.lowestPrice !== null &&
+          Math.abs(s.lowestPrice - s._prev) >= MIN_TOP_MOVER_ABS_MOVE,
+      )
       // Corroboration, part two. The SQL above guaranteed a second quote exists;
       // this asks whether the quotes actually agree. They routinely don't: the
       // same skin listed at $373 and $2 762 across two marketplaces has no

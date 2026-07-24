@@ -211,7 +211,11 @@ All filters are combined as `AND` conditions. Wear is matched via `marketHashNam
 
 Measured before the change (2026-07-24): single-quote skins were 3.7% of the catalog but supplied **15 of the top 20 risers**, led by a Battle-Scarred `M4A4 | Bullet Rain` at $61 938 and +50 608%. After: the top riser is +182% and every entry carries at least two agreeing quotes. `scripts/preview-top-movers.ts` renders both lists against production.
 
-Note the reference prices in `PriceHistory` are historical, so changes computed against garbage written before this fix stay wrong until those points age past the 24–48h reference window — it self-heals within about two days of the first corrected run.
+Note the reference prices in `PriceHistory` are historical, so changes computed against garbage written before this fix stay wrong until those points age past the 24–48h reference window — it self-heals within about two days of the first corrected run. It does **not** heal completely: the corroboration rules test a skin's *current* quotes, and a skin that had one quote yesterday and two today still gets a 24h change computed against an uncorroborated reference. `PriceHistory` stores no quote count, so nothing downstream can tell.
+
+**Movement worth acting on.** `MIN_TOP_MOVER_PRICE` ($5) and `MIN_TOP_MOVER_ABS_MOVE` ($2) exist because percentage alone rewards cheap skins for nothing — a $1.20 item moving $0.57 is +90% and outranked a $336 knife moving $216. Six of the top twenty risers were sub-$5 skins whose whole move was under a dollar. `scripts/measure-mover-thresholds.ts` sweeps the grid: every combination tried still fills 20/20, because the catalog dwarfs the list, so this is purely a question of who the screen is for, not of starving it. At $5/$2 the cheapest entry goes from $1.20 to $7.78 and the median from $34.55 to $92.10, while a $7.78 R8 Revolver still qualifies; $10/$5 would push the cheapest to $29.79 and start excluding what a small-capital user can act on.
+
+The Android card (`SkinCardCompact`) still shows only the percentage. Showing the dollar move alongside it needs a Play Store release to reach anyone, which is why the filtering was done backend-side first — it ships on the next deploy.
 
 ### Storage budget (Neon free tier: 0.5 GB)
 
