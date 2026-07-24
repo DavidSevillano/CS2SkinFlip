@@ -101,10 +101,23 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
         take: limit,
       })
     } else if (sort === 'random') {
-      const allIds = await prisma.skin.findMany({ where, select: { id: true } })
-      const shuffled = allIds.sort(() => Math.random() - 0.5).slice(skip, skip + limit)
-      const ids = shuffled.map((s) => s.id)
-      skins = await prisma.skin.findMany({ where: { id: { in: ids } }, include: { price: true } })
+      // Randomise by starting at a random offset, not by pulling every matching
+      // id across the wire to shuffle in memory. `sort` defaults to 'random' and
+      // any filter at all takes this branch, so the old version made a broad
+      // search — `wear=Field-Tested`, say — ship thousands of ids per request to
+      // return `limit` of them. On a metered connection that is the single most
+      // expensive thing this API did, and it bought nothing: `skip` was applied
+      // to a freshly shuffled array on every call, so paging returned
+      // overlapping random slices rather than a stable sequence.
+      //
+      // `total` is already counted above, so choosing the window is free.
+      const offset = total > limit ? Math.floor(Math.random() * (total - limit + 1)) : 0
+      skins = await prisma.skin.findMany({
+        where,
+        include: { price: true },
+        skip: offset,
+        take: limit,
+      })
     } else if (sort === 'price_asc' || sort === 'price_desc') {
       // Use DB lowestPrice (kept fresh by 2h bulk job) for price-sorted results.
       // Live CSFloat lookups happen in the batch endpoint after Android receives the list.
