@@ -188,3 +188,46 @@ describe('GET /skins — 24h-change reference query', () => {
     expect(res.json().data[0].price.priceChange24h).toBe(3.2)
   })
 })
+
+// Price-sorted search used to fetch `limit * 2` candidates and then slice at the
+// requested offset, so page 3 sliced [100, 150) out of a 100-element array. Every
+// page from the third on came back empty, which a client reads as "no more
+// results" rather than as a bug.
+describe('GET /skins — price-sorted pagination', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinCount.mockResolvedValue(500)
+    skinFindMany.mockResolvedValue([row('skin-a', 120), row('skin-b', 80)])
+    priceHistoryFindMany.mockResolvedValue([])
+  })
+
+  it('returns results on the third page', async () => {
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins?sort=price_desc&page=3&limit=50' })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toHaveLength(2)
+  })
+
+  it('pushes the offset down to the database instead of slicing in memory', async () => {
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=price_desc&page=3&limit=50' })
+
+    const args = skinFindMany.mock.calls[0][0]
+    expect(args.skip).toBe(100)
+    expect(args.take).toBe(50)
+  })
+
+  it('asks the database to do the ordering', async () => {
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=price_asc&limit=50' })
+
+    // The in-memory re-sort this replaced was a no-op over an already-ordered
+    // set, and its `?? 0` null handling could never fire: rows with a null
+    // lowestPrice are excluded by the where clause whenever this sort is active.
+    expect(skinFindMany.mock.calls[0][0].orderBy).toEqual({ price: { lowestPrice: 'asc' } })
+  })
+})
