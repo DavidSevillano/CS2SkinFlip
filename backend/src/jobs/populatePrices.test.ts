@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { brotliCompressSync } from 'zlib'
 import { fakeRedisStore } from '../test/fakeRedis'
 
 // Regression guard for the Render OOM (2026-07): populatePrices used to load the
@@ -330,5 +331,122 @@ describe('populatePrices — bulk write path', () => {
     const summary = await populatePrices(log)
 
     expect(summary).toEqual({ updated: SKIN_COUNT, historyRows: SKIN_COUNT })
+  })
+})
+
+// A price is only as good as the number of independent parties quoting it. The
+// pipeline used to take a plain MIN across the three marketplaces, which means
+// trusting whichever one was most wrong: a single seller parking a $2 skin at
+// $61 938 set the price, the 24h change, and the top of the home screen.
+describe('populatePrices — outlier rejection across marketplaces', () => {
+  const NAME = 'AK-47 | Redline (Field-Tested)'
+
+  /** Wire the three bulk endpoints to quote one skin at the given prices. */
+  function quoteOneSkin(quotes: {
+    skinport?: number
+    csgoMarket?: number
+    waxpeer?: number
+  }) {
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('skinport')) {
+        const items =
+          quotes.skinport === undefined
+            ? []
+            : [{ market_hash_name: NAME, min_price: quotes.skinport, suggested_price: null }]
+        // Skinport is fetched as an undecompressed Brotli arraybuffer.
+        return { data: brotliCompressSync(Buffer.from(JSON.stringify(items), 'utf8')) }
+      }
+      if (url.includes('market.csgo.com')) {
+        return {
+          data:
+            quotes.csgoMarket === undefined
+              ? []
+              : [{ market_hash_name: NAME, price: String(quotes.csgoMarket), volume: '1' }],
+        }
+      }
+      if (url.includes('waxpeer')) {
+        return {
+          data: {
+            success: true,
+            // Waxpeer reports USD x 1000.
+            items:
+              quotes.waxpeer === undefined ? [] : [{ name: NAME, min: quotes.waxpeer * 1000 }],
+          },
+        }
+      }
+      return { data: [] }
+    })
+  }
+
+  /** The `lowestPrice` bind parameter of the single written row. */
+  function writtenLowestPrice(): number {
+    expect(executeRawUnsafe).toHaveBeenCalledTimes(1)
+    // Column order: id, skinId, skinport, csgo, waxpeer, lowestPrice, change, updatedAt.
+    return executeRawUnsafe.mock.calls[0][6] as number
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: NAME }])
+    queryRaw.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 1 })
+    executeRawUnsafe.mockResolvedValue(1)
+    redisDel.mockResolvedValue(undefined)
+    redisKeys.mockResolvedValue([])
+    redisSet.mockResolvedValue('OK')
+    redisGet.mockResolvedValue(null)
+  })
+
+  it('asks Skinport for tradable listings, not trade-locked ones', async () => {
+    quoteOneSkin({ skinport: 10 })
+    await populatePrices(log)
+
+    const skinportCall = axiosGet.mock.calls.find((c) => String(c[0]).includes('skinport'))
+    expect(skinportCall?.[1]?.params?.tradable).toBe(1)
+  })
+
+  it('drops a quote far above the median of three', async () => {
+    // Two marketplaces agree around $100; the third is 19x the median.
+    quoteOneSkin({ skinport: 100, csgoMarket: 105, waxpeer: 2000 })
+    await populatePrices(log)
+
+    expect(writtenLowestPrice()).toBe(100)
+  })
+
+  it('drops a quote far below the median of three', async () => {
+    // The dangerous direction: a plain MIN would publish $0.03 as the price of a
+    // $100 skin, and the next run would report it as a +300 000% riser.
+    quoteOneSkin({ skinport: 0.03, csgoMarket: 100, waxpeer: 105 })
+    await populatePrices(log)
+
+    expect(writtenLowestPrice()).toBe(100)
+  })
+
+  it('keeps a spread that is merely wide, not absurd', async () => {
+    // 2x off the median is ordinary wear/pattern dispersion, not a lie.
+    quoteOneSkin({ skinport: 50, csgoMarket: 100, waxpeer: 105 })
+    await populatePrices(log)
+
+    expect(writtenLowestPrice()).toBe(50)
+  })
+
+  it('takes the plain minimum when only two marketplaces quote', async () => {
+    // No majority exists, so nothing identifies which of the pair is lying.
+    // Rejecting one arbitrarily would be guessing; top movers refuses the row
+    // instead, and the detail screen shows it with both prices visible.
+    quoteOneSkin({ skinport: 10, waxpeer: 2000 })
+    await populatePrices(log)
+
+    expect(writtenLowestPrice()).toBe(10)
+  })
+
+  it('still writes the individual marketplace prices it was quoted', async () => {
+    // Rejection changes which price is called "lowest"; it must not silently
+    // erase what each marketplace actually said, which the detail screen shows.
+    quoteOneSkin({ skinport: 100, csgoMarket: 105, waxpeer: 2000 })
+    await populatePrices(log)
+
+    const [, , , skinport, csgo, waxpeer] = executeRawUnsafe.mock.calls[0]
+    expect({ skinport, csgo, waxpeer }).toEqual({ skinport: 100, csgo: 105, waxpeer: 2000 })
   })
 })

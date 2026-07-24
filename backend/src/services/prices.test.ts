@@ -45,7 +45,8 @@ describe('PriceService.getTopMovers — 24h-change reference query', () => {
         marketHashName: 'AK-47 | Redline (Field-Tested)',
         name: 'AK-47 | Redline',
         iconUrl: 'http://img/1.png',
-        price: { lowestPrice: 10, skinportPrice: 10, csgoMarketPrice: null, waxpeerPrice: null, updatedAt: new Date() },
+        // Two agreeing quotes: the minimum a skin needs to be eligible at all.
+        price: { lowestPrice: 10, skinportPrice: 10, csgoMarketPrice: 11, waxpeerPrice: null, updatedAt: new Date() },
       },
     ])
     priceHistoryFindMany.mockResolvedValue([])
@@ -73,6 +74,96 @@ describe('PriceService.getTopMovers — 24h-change reference query', () => {
   })
 })
 
+// The home screen's Rising tab was led by a Battle-Scarred M4A4 | Bullet Rain at
+// $61 938, up 50 608%, on the word of one marketplace. Measured 2026-07-24:
+// skins with a single quote are 3.7% of the catalog and supplied 15 of the top
+// 20 risers. A 24h change is only as trustworthy as the price underneath it.
+describe('PriceService.getTopMovers — corroboration', () => {
+  const priced = (over: Record<string, unknown> = {}) => ({
+    lowestPrice: 10,
+    skinportPrice: 10,
+    csgoMarketPrice: 11,
+    waxpeerPrice: null,
+    updatedAt: new Date(),
+    ...over,
+  })
+
+  const skin = (id: string, price: Record<string, unknown>) => ({
+    id,
+    marketHashName: `Skin ${id} (Field-Tested)`,
+    name: `Skin ${id}`,
+    iconUrl: `http://img/${id}.png`,
+    price,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    redisGet.mockResolvedValue(null)
+    redisSet.mockResolvedValue('OK')
+  })
+
+  it('asks the database for skins quoted by at least two marketplaces', async () => {
+    skinFindMany.mockResolvedValue([])
+    priceHistoryFindMany.mockResolvedValue([])
+
+    await new PriceService().getTopMovers('rising', 20)
+
+    // Pushed down to SQL rather than filtered in-process: it disqualifies most
+    // of what used to sort to the top, and rejected rows still cost egress on a
+    // metered connection if they come back first.
+    const { OR } = skinFindMany.mock.calls[0][0].where.price
+    expect(OR).toEqual([
+      { skinportPrice: { not: null }, csgoMarketPrice: { not: null } },
+      { skinportPrice: { not: null }, waxpeerPrice: { not: null } },
+      { csgoMarketPrice: { not: null }, waxpeerPrice: { not: null } },
+    ])
+  })
+
+  it('drops a skin whose two quotes disagree wildly', async () => {
+    // Real shape from production: ★ StatTrak™ Talon Knife | Stained, quoted at
+    // $373 and $2 762, sitting in the Falling tab at -86.5%.
+    skinFindMany.mockResolvedValue([
+      skin('liar', priced({ lowestPrice: 373, skinportPrice: 373, csgoMarketPrice: 2762 })),
+      skin('honest', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 104 })),
+    ])
+    priceHistoryFindMany.mockResolvedValue([
+      { skinId: 'liar', price: 2762 },
+      { skinId: 'honest', price: 80 },
+    ])
+
+    const movers = await new PriceService().getTopMovers('rising', 20)
+
+    expect(movers.map((m) => m.skinId)).toEqual(['honest'])
+  })
+
+  it('keeps a skin whose quotes merely differ by a normal spread', async () => {
+    // p90 of real cross-marketplace disagreement is 1.5x — that is a market,
+    // not an error, and filtering it out would empty the list.
+    skinFindMany.mockResolvedValue([
+      skin('wide', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 150 })),
+    ])
+    priceHistoryFindMany.mockResolvedValue([{ skinId: 'wide', price: 80 }])
+
+    const movers = await new PriceService().getTopMovers('rising', 20)
+
+    expect(movers.map((m) => m.skinId)).toEqual(['wide'])
+  })
+
+  it('drops a row that reaches it with only one usable quote', async () => {
+    // Belt and braces: the SQL filter is the gate, but a null price column can
+    // still arrive (a marketplace dropping to null between write and read), and
+    // an unverifiable price must not rank on the strength of a technicality.
+    skinFindMany.mockResolvedValue([
+      skin('alone', priced({ lowestPrice: 500, skinportPrice: 500, csgoMarketPrice: null })),
+    ])
+    priceHistoryFindMany.mockResolvedValue([{ skinId: 'alone', price: 1 }])
+
+    const movers = await new PriceService().getTopMovers('rising', 20)
+
+    expect(movers).toEqual([])
+  })
+})
+
 describe('top-movers cache invalidation', () => {
   let fake: ReturnType<typeof fakeRedisStore>
 
@@ -90,7 +181,8 @@ describe('top-movers cache invalidation', () => {
         marketHashName: 'AK-47 | Redline (Field-Tested)',
         name: 'AK-47 | Redline',
         iconUrl: 'http://img/1.png',
-        price: { lowestPrice: 10, skinportPrice: 10, csgoMarketPrice: null, waxpeerPrice: null, updatedAt: new Date() },
+        // Two agreeing quotes: the minimum a skin needs to be eligible at all.
+        price: { lowestPrice: 10, skinportPrice: 10, csgoMarketPrice: 11, waxpeerPrice: null, updatedAt: new Date() },
       },
     ])
     // A reference price far enough from `lowestPrice` to clear the $0.25
