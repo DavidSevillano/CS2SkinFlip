@@ -241,6 +241,8 @@ The identified culprit was `GET /skins` loading every matching id to shuffle in 
 
 **It is installed now** (`CREATE EXTENSION pg_stat_statements`, 2026-07-24). It records from that point forward only. `scripts/measure-egress-sources.ts` ranks statements by total rows returned, which is what transfer is actually made of — run it after a day of real traffic and the top entry names the next culprit.
 
+Its first hour already found one: the 24h-change reference lookup in `getTopMovers` and `GET /skins` was returning **392 rows per call to produce ~100 values**, selecting every column — dragging a 25-char cuid `id` and a `source` that is `'bulk'` in all 589 563 rows across the wire for nothing. Both now use raw `DISTINCT ON` pushed to Postgres, the same fix `populatePrices` already had: Prisma's `distinct` cannot be pushed down under a timestamp `orderBy`, so it fetches every matching row and dedupes in-process. Measured 4.0x fewer rows (400 → 100 for 100 candidate skins) with identical reference prices. **If you add a third caller of this window, use the raw form** — the Prisma one looks equivalent and quietly costs 4x.
+
 Do not read `pg_stat_user_tables.seq_tup_read` as egress. `Skin` and `SkinPrice` each show ~2 000 full scans and tens of millions of tuples read, but that is work inside Postgres: the search route's `regexp_replace` scan reads the whole 24k-row table to return 50 rows, and only the 50 cross the wire. High scan counts there are a compute signal (CU-hrs, currently 15 of 100), not a transfer one.
 
 ### Logging

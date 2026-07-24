@@ -8,17 +8,24 @@ import { fakeRedisStore } from '../test/fakeRedis'
 // it never OOMed, but the window must stay bounded on the lower end too so the
 // query can't degrade into scanning the whole retained table.
 
-const { skinFindMany, priceHistoryFindMany } = vi.hoisted(() => ({
+const { skinFindMany, queryRaw } = vi.hoisted(() => ({
   skinFindMany: vi.fn(),
-  priceHistoryFindMany: vi.fn(),
+  queryRaw: vi.fn(),
 }))
 
 vi.mock('../db/prisma', () => ({
   prisma: {
     skin: { findMany: skinFindMany },
-    priceHistory: { findMany: priceHistoryFindMany },
+    $queryRaw: queryRaw,
   },
 }))
+
+// `$queryRaw` is a tagged template: Prisma gets the literal fragments first and
+// the interpolated values after. The window bounds are therefore positional.
+// In query order they are windowStart (gte) then dayAgo (lte).
+function queryRawDates(call: unknown[]): Date[] {
+  return call.slice(1).filter((v): v is Date => v instanceof Date)
+}
 
 const { redisGet, redisSet, redisDel, redisKeys } = vi.hoisted(() => ({
   redisGet: vi.fn(),
@@ -51,7 +58,7 @@ describe('PriceService.getTopMovers — 24h-change reference query', () => {
         price: { lowestPrice: 10, skinportPrice: 10, csgoMarketPrice: 11, waxpeerPrice: null, updatedAt: new Date() },
       },
     ])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
   })
 
   it('bounds the reference-price window on the lower end (has a gte), not just lte', async () => {
@@ -59,8 +66,8 @@ describe('PriceService.getTopMovers — 24h-change reference query', () => {
     await new PriceService().getTopMovers('rising', 20)
     const after = Date.now()
 
-    expect(priceHistoryFindMany).toHaveBeenCalledTimes(1)
-    const { gte, lte } = priceHistoryFindMany.mock.calls[0][0].where.timestamp
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+    const [gte, lte] = queryRawDates(queryRaw.mock.calls[0])
 
     expect(gte).toBeInstanceOf(Date)
     expect(lte).toBeInstanceOf(Date)
@@ -106,7 +113,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
 
   it('asks the database for skins quoted by at least two marketplaces', async () => {
     skinFindMany.mockResolvedValue([])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
 
     await new PriceService().getTopMovers('rising', 20)
 
@@ -128,7 +135,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
       skin('liar', priced({ lowestPrice: 373, skinportPrice: 373, csgoMarketPrice: 2762 })),
       skin('honest', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 104 })),
     ])
-    priceHistoryFindMany.mockResolvedValue([
+    queryRaw.mockResolvedValue([
       { skinId: 'liar', price: 2762 },
       { skinId: 'honest', price: 80 },
     ])
@@ -144,7 +151,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
     skinFindMany.mockResolvedValue([
       skin('wide', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 150 })),
     ])
-    priceHistoryFindMany.mockResolvedValue([{ skinId: 'wide', price: 80 }])
+    queryRaw.mockResolvedValue([{ skinId: 'wide', price: 80 }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -158,7 +165,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
     skinFindMany.mockResolvedValue([
       skin('alone', priced({ lowestPrice: 500, skinportPrice: 500, csgoMarketPrice: null })),
     ])
-    priceHistoryFindMany.mockResolvedValue([{ skinId: 'alone', price: 1 }])
+    queryRaw.mockResolvedValue([{ skinId: 'alone', price: 1 }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -192,7 +199,7 @@ describe('PriceService.getTopMovers — movement worth acting on', () => {
 
   it('makes the database apply the price floor', async () => {
     skinFindMany.mockResolvedValue([])
-    priceHistoryFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
 
     await new PriceService().getTopMovers('rising', 20)
 
@@ -208,7 +215,7 @@ describe('PriceService.getTopMovers — movement worth acting on', () => {
       skin('pennies', 1.2, 1.22),
       skin('real', 336, 340),
     ])
-    priceHistoryFindMany.mockResolvedValue([
+    queryRaw.mockResolvedValue([
       { skinId: 'pennies', price: 0.63 },
       { skinId: 'real', price: 119 },
     ])
@@ -221,7 +228,7 @@ describe('PriceService.getTopMovers — movement worth acting on', () => {
   it('keeps a modest percentage that moved real money', async () => {
     // +12% is unremarkable next to +90%, but it is $60 rather than $0.57.
     skinFindMany.mockResolvedValue([skin('chunky', 560, 575)])
-    priceHistoryFindMany.mockResolvedValue([{ skinId: 'chunky', price: 500 }])
+    queryRaw.mockResolvedValue([{ skinId: 'chunky', price: 500 }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -253,7 +260,7 @@ describe('top-movers cache invalidation', () => {
     // A reference price far enough from `lowestPrice` to clear the minimum
     // absolute move comfortably, so the writer actually has something to cache
     // and this test fails for cache reasons rather than threshold ones.
-    priceHistoryFindMany.mockResolvedValue([{ skinId: 'skin-1', price: 4 }])
+    queryRaw.mockResolvedValue([{ skinId: 'skin-1', price: 4 }])
   })
 
   it('removes every key the writer produced, whatever shape they are', async () => {

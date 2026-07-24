@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
@@ -155,11 +156,27 @@ export class PriceService {
     const skinIds = skins.map((s) => s.id)
     const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
-    const histories = await prisma.priceHistory.findMany({
-      where: { skinId: { in: skinIds }, timestamp: { gte: windowStart, lte: dayAgo } },
-      orderBy: { timestamp: 'desc' },
-      distinct: ['skinId'],
-    })
+
+    // Raw `DISTINCT ON` rather than Prisma's `distinct`, which it cannot push
+    // down to Postgres under a timestamp `orderBy` — it fetches every matching
+    // row and dedupes in-process. Same fix, same reason, as populatePrices.
+    //
+    // Measured with pg_stat_statements 2026-07-24: this was the app's heaviest
+    // query by rows returned, at 392 per call to produce ~100 values, and it
+    // selected every column — dragging a 25-char cuid `id` and a `source` that
+    // is the string 'bulk' in all 589 563 rows across the wire for nothing. On
+    // a metered connection at 82% of its allowance that is worth the raw SQL.
+    const histories =
+      skinIds.length === 0
+        ? []
+        : await prisma.$queryRaw<Array<{ skinId: string; price: number }>>`
+            SELECT DISTINCT ON ("skinId") "skinId", "price"
+            FROM "PriceHistory"
+            WHERE "skinId" IN (${Prisma.join(skinIds)})
+              AND "timestamp" >= ${windowStart}
+              AND "timestamp" <= ${dayAgo}
+            ORDER BY "skinId", "timestamp" DESC
+          `
     const historyMap = new Map(histories.map((h) => [h.skinId, h.price]))
 
     const topMovers = skins
