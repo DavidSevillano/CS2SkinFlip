@@ -119,28 +119,22 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
         take: limit,
       })
     } else if (sort === 'price_asc' || sort === 'price_desc') {
-      // Use DB lowestPrice (kept fresh by 2h bulk job) for price-sorted results.
-      // Live CSFloat lookups happen in the batch endpoint after Android receives the list.
-      const candidates = await prisma.skin.findMany({
+      // Sorted on the DB's lowestPrice, which the 6h bulk job keeps fresh.
+      //
+      // This used to fetch `limit * 2` candidates, re-sort them in memory, then
+      // slice at `skip` — so page 3 sliced [100, 150) out of a 100-element array
+      // and every page from there on came back empty, reading to the client as
+      // "no more results". The re-sort was a no-op besides: the database had
+      // already ordered by the same column, and the `?? 0` null handling it
+      // carried could never fire because the condition above excludes rows with
+      // a null lowestPrice whenever this sort is active.
+      skins = await prisma.skin.findMany({
         where,
         include: { price: true },
         orderBy: { price: { lowestPrice: sort === 'price_asc' ? 'asc' : 'desc' } },
-        take: limit * 2,
+        skip,
+        take: limit,
       })
-
-      const withFreshPrices = candidates.map(skin => ({
-        skin,
-        lowestPrice: skin.price?.lowestPrice ?? 0,
-      }))
-
-      // Sort by fresh lowest price
-      const asc = sort === 'price_asc'
-      withFreshPrices.sort((a, b) => {
-        return asc ? a.lowestPrice - b.lowestPrice : b.lowestPrice - a.lowestPrice
-      })
-
-      // Apply pagination
-      skins = withFreshPrices.slice(skip, skip + limit).map(r => r.skin)
     } else {
       // sort === 'name'
       skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy: { name: 'asc' } })
