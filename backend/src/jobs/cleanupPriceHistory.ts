@@ -67,7 +67,7 @@ const STORAGE_WARN_RATIO = 0.8
  *
  * No compacta el heap por su cuenta: eso sigue siendo `VACUUM FULL` a mano
  * (`scripts/compact-price-history.ts`), que bloquea la tabla y necesita
- * `DIRECT_DATABASE_URL`, que Render no define.
+ * `DIRECT_DATABASE_URL`, que hay que configurar en el dashboard de Render.
  */
 async function reportStorage(log: FastifyBaseLogger) {
   try {
