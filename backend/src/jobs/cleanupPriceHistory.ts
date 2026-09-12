@@ -1,5 +1,6 @@
 import { prisma } from '../db/prisma'
 import type { FastifyBaseLogger } from 'fastify'
+import { reindexPriceHistory } from './reindexPriceHistory'
 
 // Resolución decreciente:
 //   0–7 días   → raw (~4 pts/día, cada 6h)
@@ -35,9 +36,15 @@ let lastRunAt = 0
 // nuevas se añaden al final. Medido 2026-07-24: la tabla ocupaba 332 MB de un
 // techo de 500 y `VACUUM FULL` la dejó en 136 MB sin perder una sola fila.
 //
-// El hinchado vuelve, así que hay que repetirlo. Sin este aviso eso depende de
-// que alguien se acuerde, y el fallo cuando el disco se agota no dice "haz
-// mantenimiento": dice que las escrituras fallan.
+// El hinchado vuelve, así que hay que repetirlo — y ahora el propio job lo
+// hace: al pasar el umbral de abajo dispara `reindexPriceHistory`, que
+// reconstruye los índices online con `REINDEX INDEX CONCURRENTLY`. Antes esto
+// solo avisaba y dependía de que alguien se acordara de correr el script de
+// compactación a mano; ese aviso llevaba semanas sonando sin que nadie lo
+// leyera, que es como la base llegó a su techo. `REINDEX` solo reconstruye
+// índices, no el heap: `scripts/compact-price-history.ts` (VACUUM FULL) sigue
+// siendo necesario a mano para ese lado, ya que bloquea la tabla y necesita
+// `DIRECT_DATABASE_URL`.
 //
 // Coste real por fila con la tabla compactada, incluidos índices (medido, no
 // estimado). Proyectar con este número una tabla hinchada subestima por 2,5x —
@@ -45,20 +52,22 @@ let lastRunAt = 0
 // problema era la retención.
 const PACKED_BYTES_PER_ROW = 231
 
-// A 1,6x sobra margen para la variación normal entre compactaciones y aún avisa
-// mucho antes del techo: a este tamaño de tabla son unos 200 MB de holgura
-// recuperable, semanas antes de que importe.
-const BLOAT_WARN_RATIO = 1.6
+// A 1,35x el reindexado sale barato y sobra margen: por debajo de esto el
+// hinchado no acerca la base al techo, y como REINDEX CONCURRENTLY no bloquea,
+// no hay razón para dejar que se acumule más. Cuanto antes se recorte, menos
+// espacio transitorio hace falta para recortarlo — y el tope de cluster de Neon
+// (512 MB) es duro.
+const REINDEX_BLOAT_RATIO = 1.35
 
 const STORAGE_CEILING_BYTES = 500 * 1024 * 1024
 const STORAGE_WARN_RATIO = 0.8
 
 /**
- * Informa del tamaño de `PriceHistory` y avisa cuando toca compactar.
+ * Informa del tamaño de `PriceHistory` y reindexa cuando toca.
  *
- * No compacta por su cuenta: `VACUUM FULL` bloquea la tabla y necesita
- * `DIRECT_DATABASE_URL`, que Render no define. Ejecuta
- * `scripts/compact-price-history.ts` cuando esto avise.
+ * No compacta el heap por su cuenta: eso sigue siendo `VACUUM FULL` a mano
+ * (`scripts/compact-price-history.ts`), que bloquea la tabla y necesita
+ * `DIRECT_DATABASE_URL`, que Render no define.
  */
 async function reportStorage(log: FastifyBaseLogger) {
   try {
@@ -81,12 +90,12 @@ async function reportStorage(log: FastifyBaseLogger) {
         `(${bytesPerRow.toFixed(0)} B/row, ${bloat.toFixed(2)}x packed) — database ${mb(dbBytes)} MB`,
     )
 
-    if (bloat >= BLOAT_WARN_RATIO) {
-      log.warn(
+    if (bloat >= REINDEX_BLOAT_RATIO) {
+      log.info(
         `[PriceHistoryCleanup] PriceHistory is ${bloat.toFixed(2)}x its packed size — ` +
-          `~${mb(bytes - rows * PACKED_BYTES_PER_ROW)} MB is reclaimable slack. ` +
-          `Run scripts/compact-price-history.ts (VACUUM FULL; locks the table, needs DIRECT_DATABASE_URL).`,
+          `~${mb(bytes - rows * PACKED_BYTES_PER_ROW)} MB of reclaimable slack. Reindexing.`,
       )
+      await reindexPriceHistory(log)
     }
 
     if (dbBytes >= STORAGE_CEILING_BYTES * STORAGE_WARN_RATIO) {

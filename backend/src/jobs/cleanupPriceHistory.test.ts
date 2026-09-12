@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// This job is the cause of the problem it now watches for. It deletes three of
+// This job is the cause of the problem it watches for. It deletes three of
 // every four history points once they age past the raw band — half a million
 // deletes a day — which leaves half-empty pages that VACUUM marks reusable but
 // never compacts. Measured 2026-07-24: the table sat at 332 MB of a 500 MB
 // ceiling and VACUUM FULL returned it to 136 MB.
 //
-// The warning is the whole point of that arrangement: compaction is manual, and
-// the failure mode when the disk runs out is not "do maintenance", it is writes
-// failing. A warning that never fires would be worse than none, so it is pinned
-// from both sides.
+// Past a bloat threshold the job now reindexes automatically instead of just
+// warning — a warning nobody read is what let the table reach that ceiling in
+// the first place. The free-tier ceiling itself is a separate, harder problem
+// that reindexing does not fix, so that branch still only warns.
 
 const { executeRaw, queryRaw } = vi.hoisted(() => ({
   executeRaw: vi.fn(),
@@ -19,6 +19,9 @@ const { executeRaw, queryRaw } = vi.hoisted(() => ({
 vi.mock('../db/prisma', () => ({
   prisma: { $executeRaw: executeRaw, $queryRaw: queryRaw },
 }))
+
+const { reindex } = vi.hoisted(() => ({ reindex: vi.fn() }))
+vi.mock('./reindexPriceHistory', () => ({ reindexPriceHistory: reindex }))
 
 function makeLog() {
   return { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any
@@ -48,19 +51,7 @@ describe('cleanupPriceHistory — storage watch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     executeRaw.mockResolvedValue(0)
-  })
-
-  it('warns that compaction is due when the table exceeds its packed size', async () => {
-    // 500k rows in 200 MB is 400 B/row against a packed 231 — about 1.7x.
-    queryRaw.mockResolvedValue(storage({ bytes: 200 * MB, rows: 500_000, dbBytes: 250 * MB }))
-    const log = makeLog()
-
-    await (await freshJob())(log)
-
-    expect(mentioned(log.warn, 'packed size')).toBe(true)
-    expect(mentioned(log.warn, 'compact-price-history')).toBe(true)
-    // Bloat is recoverable maintenance; only the ceiling itself is an error.
-    expect(log.error).not.toHaveBeenCalled()
+    reindex.mockResolvedValue(true)
   })
 
   it('stays quiet on a freshly compacted table', async () => {
@@ -108,5 +99,41 @@ describe('cleanupPriceHistory — storage watch', () => {
     await job(log)
 
     expect(executeRaw).not.toHaveBeenCalled()
+  })
+})
+
+describe('cleanupPriceHistory — automatic reindex', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    executeRaw.mockResolvedValue(0)
+    reindex.mockResolvedValue(true)
+  })
+
+  it('reindexes once the table crosses the bloat threshold', async () => {
+    // 500k rows in 200 MB is 400 B/row against a packed 231 — about 1.7x.
+    queryRaw.mockResolvedValue(storage({ bytes: 200 * MB, rows: 500_000, dbBytes: 250 * MB }))
+
+    await (await freshJob())(makeLog())
+
+    expect(reindex).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a freshly packed table alone', async () => {
+    // 231 B/row exactly — the measured packed cost.
+    queryRaw.mockResolvedValue(storage({ bytes: 110 * MB, rows: 500_000, dbBytes: 150 * MB }))
+
+    await (await freshJob())(makeLog())
+
+    expect(reindex).not.toHaveBeenCalled()
+  })
+
+  it('does not let a failed reindex break the cleanup', async () => {
+    // The deletes ran before this. Losing the maintenance must not lose them.
+    queryRaw.mockResolvedValue(storage({ bytes: 200 * MB, rows: 500_000, dbBytes: 250 * MB }))
+    reindex.mockRejectedValue(new Error('connection reset'))
+
+    await expect((await freshJob())(makeLog())).resolves.toBeUndefined()
+
+    expect(executeRaw).toHaveBeenCalledTimes(2)
   })
 })
