@@ -9,6 +9,11 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default('0.0.0.0'),
   DATABASE_URL: z.string({ required_error: 'DATABASE_URL is required' }),
+  // Mismo host que DATABASE_URL pero sin `-pooler`. Lo usan `prisma migrate` /
+  // `db push` / `db pull`, y ahora también el reindexado automático: REINDEX
+  // CONCURRENTLY no puede ir por un pooler en modo transacción. Opcional: sin
+  // ella el job degrada a avisar por log, que es como se comportaba antes.
+  DIRECT_DATABASE_URL: z.string().optional(),
   UPSTASH_REDIS_REST_URL: z.string({ required_error: 'UPSTASH_REDIS_REST_URL is required' }),
   UPSTASH_REDIS_REST_TOKEN: z.string({ required_error: 'UPSTASH_REDIS_REST_TOKEN is required' }),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
