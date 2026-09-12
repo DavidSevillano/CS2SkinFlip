@@ -90,20 +90,25 @@ async function reportStorage(log: FastifyBaseLogger) {
         `(${bytesPerRow.toFixed(0)} B/row, ${bloat.toFixed(2)}x packed) — database ${mb(dbBytes)} MB`,
     )
 
-    if (bloat >= REINDEX_BLOAT_RATIO) {
-      log.info(
-        `[PriceHistoryCleanup] PriceHistory is ${bloat.toFixed(2)}x its packed size — ` +
-          `~${mb(bytes - rows * PACKED_BYTES_PER_ROW)} MB of reclaimable slack. Reindexing.`,
-      )
-      await reindexPriceHistory(log)
-    }
-
+    // El aviso del techo va ANTES del reindexado, no después. Es la señal más
+    // importante que emite este job — a partir del límite fallan las escrituras
+    // — y si el reindexado lanzara, el `catch` de abajo se lo tragaría y la
+    // alarma no llegaría a sonar. Quedarse sin espacio no lo arregla reindexar,
+    // así que tampoco depende de que el reindexado salga bien.
     if (dbBytes >= STORAGE_CEILING_BYTES * STORAGE_WARN_RATIO) {
       log.error(
         `[PriceHistoryCleanup] Database is ${mb(dbBytes)} MB of a ${mb(STORAGE_CEILING_BYTES)} MB ` +
           `free-tier ceiling. Writes start failing at the limit — compact first, and if that is ` +
           `not enough the retention bands in this file are the next lever.`,
       )
+    }
+
+    if (bloat >= REINDEX_BLOAT_RATIO) {
+      log.info(
+        `[PriceHistoryCleanup] PriceHistory is ${bloat.toFixed(2)}x its packed size — ` +
+          `~${mb(bytes - rows * PACKED_BYTES_PER_ROW)} MB of reclaimable slack. Reindexing.`,
+      )
+      await reindexPriceHistory(log)
     }
   } catch (err) {
     // Vigilar el espacio no puede ser el motivo de que la limpieza falle: para

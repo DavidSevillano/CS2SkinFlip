@@ -136,4 +136,18 @@ describe('cleanupPriceHistory — automatic reindex', () => {
 
     expect(executeRaw).toHaveBeenCalledTimes(2)
   })
+
+  it('still raises the ceiling alarm when the reindex blows up', async () => {
+    // Both conditions at once: bloated enough to reindex, and past 80% of the
+    // ceiling. Running out of space is the one thing here that stops writes, and
+    // reindexing does not fix it — so the alarm must not be reachable only via a
+    // successful reindex. Ordering, not luck, is what guarantees that.
+    queryRaw.mockResolvedValue(storage({ bytes: 200 * MB, rows: 500_000, dbBytes: 450 * MB }))
+    reindex.mockRejectedValue(new Error('connection reset'))
+    const log = makeLog()
+
+    await (await freshJob())(log)
+
+    expect(mentioned(log.error, 'free-tier ceiling')).toBe(true)
+  })
 })
