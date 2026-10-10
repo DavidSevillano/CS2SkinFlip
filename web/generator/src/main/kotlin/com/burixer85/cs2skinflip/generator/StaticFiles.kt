@@ -41,6 +41,13 @@ fun renderRobots(siteUrl: String): String = """
 """.trimIndent() + "\n"
 
 /**
+ * AdMob app verification. AdMob crawls `app-ads.txt` at the root of the developer website set
+ * on the Play Store listing, so this site's domain must be that website. The publisher ID is
+ * the AdMob account's, not a secret — it ships in every ad request.
+ */
+fun renderAppAds(): String = "google.com, pub-7056913970910850, DIRECT, f08c47fec0942fa0\n"
+
+/**
  * Android App Links verification. Until the release keystore's SHA-256 is supplied the
  * fingerprint is a placeholder and App Links stay unverified — the site still works.
  */

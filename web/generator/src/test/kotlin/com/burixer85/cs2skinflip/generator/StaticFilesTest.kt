@@ -70,6 +70,16 @@ class RobotsTest {
     }
 }
 
+class AppAdsTest {
+    @Test
+    fun declaresTheAdMobPublisherAsDirect() {
+        assertEquals(
+            "google.com, pub-7056913970910850, DIRECT, f08c47fec0942fa0\n",
+            renderAppAds(),
+        )
+    }
+}
+
 class AssetLinksTest {
     @Test
     fun declaresThePackageNameAndFingerprint() {

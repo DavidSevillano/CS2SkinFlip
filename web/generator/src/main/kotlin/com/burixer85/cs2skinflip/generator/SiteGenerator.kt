@@ -95,6 +95,7 @@ class SiteGenerator(
         write(File(out, "privacy/index.html"), renderPrivacyPage(config.siteUrl))
         write(File(out, "sitemap.xml"), renderSitemap(config.siteUrl, pages))
         write(File(out, "robots.txt"), renderRobots(config.siteUrl))
+        write(File(out, "app-ads.txt"), renderAppAds())
         write(File(out, ".well-known/assetlinks.json"), renderAssetLinks(config.assetLinksFingerprint))
         write(File(out, "googledd68cd1a8247c6cd.html"), "google-site-verification: googledd68cd1a8247c6cd.html\n")
 
