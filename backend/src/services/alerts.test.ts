@@ -1,24 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { alertFindMany, alertUpdate, skinFindUnique, userFindUnique } = vi.hoisted(() => ({
-  alertFindMany: vi.fn(),
-  alertUpdate: vi.fn(),
-  skinFindUnique: vi.fn(),
-  userFindUnique: vi.fn(),
+const { queryRaw, alertUpdateMany, userUpdateMany } = vi.hoisted(() => ({
+  queryRaw: vi.fn(),
+  alertUpdateMany: vi.fn(),
+  userUpdateMany: vi.fn(),
 }))
 
 vi.mock('../db/prisma', () => ({
   prisma: {
-    alert: { findMany: alertFindMany, update: alertUpdate },
-    skin: { findUnique: skinFindUnique },
-    user: { findUnique: userFindUnique },
-  },
-}))
-
-const { getPricesForSkin } = vi.hoisted(() => ({ getPricesForSkin: vi.fn() }))
-vi.mock('./prices', () => ({
-  PriceService: class {
-    getPricesForSkin = getPricesForSkin
+    $queryRaw: queryRaw,
+    alert: { updateMany: alertUpdateMany },
+    user: { updateMany: userUpdateMany },
   },
 }))
 
@@ -27,84 +19,117 @@ vi.mock('./fcm', () => ({ sendAlertNotification }))
 
 const { AlertService } = await import('./alerts')
 
+/** One armed alert as the JOIN returns it: alert + skin + current quotes + user. */
+function armed(over: Record<string, unknown> = {}) {
+  return {
+    id: 'alert-1',
+    userId: 'user-1',
+    skinId: 'skin-1',
+    type: 'BUY_BELOW',
+    targetPrice: 50,
+    skinName: 'AK-47 | Redline',
+    lowestPrice: 45,
+    skinportPrice: 45,
+    csgoMarketPrice: 46,
+    waxpeerPrice: null,
+    fcmToken: 'device-token',
+    locale: 'es',
+    ...over,
+  }
+}
+
 describe('AlertService.checkAllWithResult', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    alertUpdateMany.mockResolvedValue({ count: 1 })
+    userUpdateMany.mockResolvedValue({ count: 1 })
+    sendAlertNotification.mockResolvedValue('sent')
   })
 
-  it('sends an FCM push notification when a BUY_BELOW alert triggers and the user has a token', async () => {
-    alertFindMany.mockResolvedValue([
-      {
-        id: 'alert-1',
-        userId: 'user-1',
-        skinId: 'skin-1',
-        type: 'BUY_BELOW',
-        targetPrice: 50,
-        isActive: true,
-        isTriggered: false,
-      },
-    ])
-    skinFindUnique.mockResolvedValue({ id: 'skin-1', name: 'AK-47 | Redline', marketHashName: 'AK-47 | Redline (Field-Tested)' })
-    getPricesForSkin.mockResolvedValue({ lowestPrice: 45 })
-    userFindUnique.mockResolvedValue({ fcmToken: 'device-token-123' })
-    alertUpdate.mockResolvedValue({})
+  // It used to cost a skin lookup, a price lookup (Redis + two queries), a user
+  // lookup and an update per alert, all sequential.
+  it('reads every armed alert with its price and owner in a single query', async () => {
+    queryRaw.mockResolvedValue([armed(), armed({ id: 'alert-2', targetPrice: 10 })])
+
+    await new AlertService().checkAllWithResult()
+
+    expect(queryRaw).toHaveBeenCalledTimes(1)
+  })
+
+  it('triggers a crossed alert, marks it in one update and notifies in the user\'s language', async () => {
+    queryRaw.mockResolvedValue([armed()])
 
     const triggered = await new AlertService().checkAllWithResult()
 
-    expect(triggered).toHaveLength(1)
-    expect(triggered[0]).toMatchObject({ alertId: 'alert-1', skinId: 'skin-1', currentPrice: 45 })
-
-    expect(alertUpdate).toHaveBeenCalledWith({
-      where: { id: 'alert-1' },
+    expect(triggered).toEqual([
+      expect.objectContaining({ alertId: 'alert-1', skinId: 'skin-1', currentPrice: 45 }),
+    ])
+    expect(alertUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: ['alert-1'] }, isTriggered: false },
       data: { isTriggered: true, triggeredAt: expect.any(Date), isActive: false },
     })
-
-    expect(sendAlertNotification).toHaveBeenCalledTimes(1)
-    expect(sendAlertNotification).toHaveBeenCalledWith('device-token-123', 'AK-47 | Redline', 'BUY_BELOW', 50, 45, 'skin-1')
+    expect(sendAlertNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ token: 'device-token', locale: 'es', type: 'BUY_BELOW', currentPrice: 45 }),
+    )
   })
 
-  it('does not send a notification when the user has no registered FCM token', async () => {
-    alertFindMany.mockResolvedValue([
-      {
-        id: 'alert-2',
-        userId: 'user-2',
-        skinId: 'skin-2',
-        type: 'SELL_ABOVE',
-        targetPrice: 100,
-        isActive: true,
-        isTriggered: false,
-      },
-    ])
-    skinFindUnique.mockResolvedValue({ id: 'skin-2', name: 'M4A4 | Howl', marketHashName: 'M4A4 | Howl (Factory New)' })
-    getPricesForSkin.mockResolvedValue({ lowestPrice: 120 })
-    userFindUnique.mockResolvedValue({ fcmToken: null })
-    alertUpdate.mockResolvedValue({})
+  it('handles SELL_ABOVE', async () => {
+    queryRaw.mockResolvedValue([armed({ type: 'SELL_ABOVE', targetPrice: 40 })])
+
+    expect(await new AlertService().checkAllWithResult()).toHaveLength(1)
+  })
+
+  it('leaves an alert whose target has not been crossed', async () => {
+    queryRaw.mockResolvedValue([armed({ targetPrice: 40 })])
+
+    expect(await new AlertService().checkAllWithResult()).toEqual([])
+    expect(alertUpdateMany).not.toHaveBeenCalled()
+    expect(sendAlertNotification).not.toHaveBeenCalled()
+  })
+
+  // A price only one marketplace quotes is one listing nobody can check; firing
+  // on it is how a single absurd ask woke users up for nothing.
+  it('does not fire on a price only one marketplace quotes', async () => {
+    queryRaw.mockResolvedValue([armed({ skinportPrice: 45, csgoMarketPrice: null, waxpeerPrice: null })])
+
+    expect(await new AlertService().checkAllWithResult()).toEqual([])
+  })
+
+  it('does not fire when the marketplaces disagree wildly', async () => {
+    queryRaw.mockResolvedValue([armed({ skinportPrice: 45, csgoMarketPrice: 400 })])
+
+    expect(await new AlertService().checkAllWithResult()).toEqual([])
+  })
+
+  it('still marks the alert triggered when the user has no device token', async () => {
+    queryRaw.mockResolvedValue([armed({ fcmToken: null })])
 
     const triggered = await new AlertService().checkAllWithResult()
 
     expect(triggered).toHaveLength(1)
+    expect(alertUpdateMany).toHaveBeenCalled()
     expect(sendAlertNotification).not.toHaveBeenCalled()
   })
 
-  it('does not trigger or notify when the price has not crossed the target', async () => {
-    alertFindMany.mockResolvedValue([
-      {
-        id: 'alert-3',
-        userId: 'user-3',
-        skinId: 'skin-3',
-        type: 'BUY_BELOW',
-        targetPrice: 50,
-        isActive: true,
-        isTriggered: false,
-      },
-    ])
-    skinFindUnique.mockResolvedValue({ id: 'skin-3', name: 'AWP | Asiimov', marketHashName: 'AWP | Asiimov (Field-Tested)' })
-    getPricesForSkin.mockResolvedValue({ lowestPrice: 60 })
+  // An uninstalled app leaves its token behind; every later alert would retry it.
+  it('forgets a device token FCM reports as dead', async () => {
+    queryRaw.mockResolvedValue([armed()])
+    sendAlertNotification.mockResolvedValue('invalid-token')
 
-    const triggered = await new AlertService().checkAllWithResult()
+    await new AlertService().checkAllWithResult()
 
-    expect(triggered).toHaveLength(0)
-    expect(alertUpdate).not.toHaveBeenCalled()
-    expect(sendAlertNotification).not.toHaveBeenCalled()
+    expect(userUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'user-1', fcmToken: 'device-token' },
+      data: { fcmToken: null },
+    })
+  })
+
+  it('keeps the token on a transient failure', async () => {
+    queryRaw.mockResolvedValue([armed()])
+    sendAlertNotification.mockResolvedValue('failed')
+
+    await new AlertService().checkAllWithResult()
+
+    expect(userUpdateMany).not.toHaveBeenCalled()
   })
 })

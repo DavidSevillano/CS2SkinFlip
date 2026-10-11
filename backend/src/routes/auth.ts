@@ -14,6 +14,7 @@ import {
   VERIFIER_PATTERN,
   challengeFor,
 } from '../config/auth'
+import { normalizeLocale } from '../services/alertMessages'
 
 interface PendingLogin {
   userId: string
@@ -221,13 +222,21 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
   /** Store or refresh the FCM device token for push notifications */
   app.put('/auth/me/fcm-token', { onRequest: [authenticate] }, async (request, reply) => {
-    const body = z.object({ token: z.string().min(1) }).safeParse(request.body)
+    // `locale` is the app language, for writing alert notifications in it. App
+    // versions that predate it send none; that leaves the stored one alone.
+    const body = z.object({
+      token: z.string().min(1),
+      locale: z.string().max(35).optional(),
+    }).safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: 'token is required' })
 
     const { userId } = request.user
     await prisma.user.update({
       where: { id: userId },
-      data: { fcmToken: body.data.token },
+      data: {
+        fcmToken: body.data.token,
+        ...(body.data.locale !== undefined && { locale: normalizeLocale(body.data.locale) }),
+      },
     })
     return { ok: true }
   })

@@ -1,6 +1,6 @@
 import { prisma } from '../db/prisma'
-import { PriceService } from './prices'
 import { sendAlertNotification } from './fcm'
+import { isCorroborated } from './quotes'
 
 export interface TriggeredAlert {
   alertId: string
@@ -11,63 +11,91 @@ export interface TriggeredAlert {
   currentPrice: number
 }
 
-export class AlertService {
-  private prices = new PriceService()
+interface ArmedAlertRow {
+  id: string
+  userId: string
+  skinId: string
+  type: 'BUY_BELOW' | 'SELL_ABOVE'
+  targetPrice: number
+  skinName: string
+  lowestPrice: number
+  skinportPrice: number | null
+  csgoMarketPrice: number | null
+  waxpeerPrice: number | null
+  fcmToken: string | null
+  locale: string | null
+}
 
-  /** Check all active alerts and mark triggered ones. Returns triggered list. */
+export class AlertService {
+  /**
+   * Checks every armed alert against the prices the bulk job just wrote, marks
+   * the crossed ones triggered and notifies their owners. Returns what fired.
+   *
+   * Reads straight from SkinPrice in one query: this runs right after
+   * populatePrices, so there is nothing fresher to look up per alert.
+   */
   async checkAllWithResult(): Promise<TriggeredAlert[]> {
-    const active = await prisma.alert.findMany({
-      where: { isActive: true, isTriggered: false },
+    const rows = await prisma.$queryRaw<ArmedAlertRow[]>`
+      SELECT a."id", a."userId", a."skinId", a."type"::text AS "type", a."targetPrice",
+             s."name" AS "skinName",
+             sp."lowestPrice", sp."skinportPrice", sp."csgoMarketPrice", sp."waxpeerPrice",
+             u."fcmToken", u."locale"
+      FROM "Alert" a
+      JOIN "Skin" s ON s."id" = a."skinId"
+      JOIN "SkinPrice" sp ON sp."skinId" = a."skinId"
+      JOIN "User" u ON u."id" = a."userId"
+      WHERE a."isActive" = true AND a."isTriggered" = false AND sp."lowestPrice" IS NOT NULL
+    `
+
+    // Only a corroborated price may fire an alert: one marketplace's lone ask
+    // can be anything, and a false alert is worse than a late one.
+    const crossed = rows.filter((r) =>
+      isCorroborated(r) &&
+      ((r.type === 'BUY_BELOW' && r.lowestPrice <= r.targetPrice) ||
+       (r.type === 'SELL_ABOVE' && r.lowestPrice >= r.targetPrice)),
+    )
+    if (crossed.length === 0) return []
+
+    await prisma.alert.updateMany({
+      where: { id: { in: crossed.map((r) => r.id) }, isTriggered: false },
+      data: { isTriggered: true, triggeredAt: new Date(), isActive: false },
     })
 
-    const triggered: TriggeredAlert[] = []
+    const results = await Promise.all(
+      crossed
+        .filter((r) => r.fcmToken)
+        .map(async (r) => ({
+          row: r,
+          result: await sendAlertNotification({
+            token: r.fcmToken!,
+            locale: r.locale,
+            skinName: r.skinName,
+            type: r.type,
+            targetPrice: r.targetPrice,
+            currentPrice: r.lowestPrice,
+            skinId: r.skinId,
+          }),
+        })),
+    )
 
-    for (const alert of active) {
-      const skin = await prisma.skin.findUnique({ where: { id: alert.skinId } })
-      if (!skin) continue
-
-      const prices = await this.prices.getPricesForSkin(alert.skinId, skin.marketHashName)
-      const current = prices.lowestPrice
-      if (current === null) continue
-
-      const isTriggered =
-        (alert.type === 'BUY_BELOW'  && current <= alert.targetPrice) ||
-        (alert.type === 'SELL_ABOVE' && current >= alert.targetPrice)
-
-      if (isTriggered) {
-        await prisma.alert.update({
-          where: { id: alert.id },
-          data: { isTriggered: true, triggeredAt: new Date(), isActive: false },
-        })
-        triggered.push({
-          alertId: alert.id,
-          skinId: alert.skinId,
-          skinName: skin.name,
-          type: alert.type,
-          targetPrice: alert.targetPrice,
-          currentPrice: current,
-        })
-
-        // Send FCM push notification if user has a registered device token
-        const user = await prisma.user.findUnique({
-          where: { id: alert.userId },
-          select: { fcmToken: true },
-        })
-        if (user?.fcmToken) {
-          await sendAlertNotification(
-            user.fcmToken,
-            skin.name,
-            alert.type,
-            alert.targetPrice,
-            current,
-            alert.skinId,
-          )
-        }
-        // TODO: send email via Resend / SendGrid
-      }
+    // A token FCM reports as dead belongs to an uninstalled app; every later
+    // alert would retry it. Matching on the token too leaves a fresh one the
+    // app registered in the meantime alone.
+    for (const { row } of results.filter((x) => x.result === 'invalid-token')) {
+      await prisma.user.updateMany({
+        where: { id: row.userId, fcmToken: row.fcmToken },
+        data: { fcmToken: null },
+      })
     }
 
-    return triggered
+    return crossed.map((r) => ({
+      alertId: r.id,
+      skinId: r.skinId,
+      skinName: r.skinName,
+      type: r.type,
+      targetPrice: r.targetPrice,
+      currentPrice: r.lowestPrice,
+    }))
   }
 
   /** Fire-and-forget wrapper used by the scheduled job. */

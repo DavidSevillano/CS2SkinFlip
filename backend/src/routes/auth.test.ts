@@ -3,13 +3,14 @@ import Fastify from 'fastify'
 import fastifyJwt from '@fastify/jwt'
 import fastifyCookie from '@fastify/cookie'
 
-const { userDelete, userFindUnique, userUpsert } = vi.hoisted(() => ({
+const { userDelete, userFindUnique, userUpsert, userUpdate } = vi.hoisted(() => ({
   userDelete: vi.fn(),
   userFindUnique: vi.fn(),
   userUpsert: vi.fn(),
+  userUpdate: vi.fn(),
 }))
 vi.mock('../db/prisma', () => ({
-  prisma: { user: { delete: userDelete, findUnique: userFindUnique, upsert: userUpsert } },
+  prisma: { user: { delete: userDelete, findUnique: userFindUnique, upsert: userUpsert, update: userUpdate } },
 }))
 
 const { axiosPost, axiosGet } = vi.hoisted(() => ({ axiosPost: vi.fn(), axiosGet: vi.fn() }))
@@ -303,5 +304,43 @@ describe('DELETE /auth/me', () => {
     expect(res.json()).toEqual({ success: true })
     expect(userDelete).toHaveBeenCalledWith({ where: { id: 'user-1' } })
     expect(res.headers['set-cookie']).toMatch(/token=;/)
+  })
+})
+
+describe('PUT /auth/me/fcm-token', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    userUpdate.mockResolvedValue({ id: 'user-1' })
+  })
+
+  async function putToken(body: object) {
+    const app = await buildTestApp()
+    const token = app.jwt.sign({ userId: 'user-1' })
+    return app.inject({
+      method: 'PUT',
+      url: '/auth/me/fcm-token',
+      headers: { authorization: `Bearer ${token}` },
+      payload: body,
+    })
+  }
+
+  it('stores the app language with the token, normalised', async () => {
+    const res = await putToken({ token: 'device-token', locale: 'es-ES' })
+
+    expect(res.statusCode).toBe(200)
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { fcmToken: 'device-token', locale: 'es' },
+    })
+  })
+
+  // Older app versions send only the token; that must not wipe a known language.
+  it('leaves the stored language alone when none is sent', async () => {
+    await putToken({ token: 'device-token' })
+
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { fcmToken: 'device-token' },
+    })
   })
 })

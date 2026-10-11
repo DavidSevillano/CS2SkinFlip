@@ -1,30 +1,9 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
 import { fetchReferencePrices, percentChange } from './priceReference'
-import {
-  MAX_TOP_MOVER_QUOTE_SPREAD,
-  MIN_TOP_MOVER_ABS_MOVE,
-  MIN_TOP_MOVER_PRICE,
-} from '../config/priceQuality'
+import { MIN_TOP_MOVER_ABS_MOVE, MIN_TOP_MOVER_PRICE } from '../config/priceQuality'
+import { isCorroborated } from './quotes'
 import type { AggregatedPrices } from '../types'
-
-/**
- * How far apart the marketplaces are on the same skin, as a ratio of dearest to
- * cheapest. 1 means they agree exactly; fewer than two quotes means the question
- * doesn't apply, and Infinity keeps such a row out of anything that filters on
- * agreement rather than letting it through on a technicality.
- */
-function quoteSpread(prices: {
-  skinportPrice: number | null
-  csgoMarketPrice: number | null
-  waxpeerPrice: number | null
-}): number {
-  const quotes = [prices.skinportPrice, prices.csgoMarketPrice, prices.waxpeerPrice].filter(
-    (p): p is number => p !== null && p > 0,
-  )
-  if (quotes.length < 2) return Infinity
-  return Math.max(...quotes) / Math.min(...quotes)
-}
 
 // ─── Top-movers cache ────────────────────────────────────────────────────────
 // The key format and the invalidation glob are derived from one prefix on
@@ -201,7 +180,7 @@ export class PriceService {
       // this asks whether the quotes actually agree. They routinely don't: the
       // same skin listed at $373 and $2 762 across two marketplaces has no
       // meaningful "price", so its 24h change is not a fact worth ranking.
-      .filter((s) => quoteSpread(s) <= MAX_TOP_MOVER_QUOTE_SPREAD)
+      .filter((s) => isCorroborated(s))
       .sort((a, b) => {
         const diff =
           direction === 'falling'

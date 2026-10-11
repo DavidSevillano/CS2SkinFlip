@@ -165,9 +165,11 @@ Thresholds and the production measurements behind them live in `src/config/price
 
 ### Alert notifications (FCM)
 
-`src/services/fcm.ts` lazily initialises the Firebase Admin SDK from `FCM_SERVICE_ACCOUNT_PATH`. `sendAlertNotification()` sends a data-only FCM message (no `notification` key) so the Android app builds the notification in-process and can attach the `skinId` for tap navigation.
+`src/services/fcm.ts` lazily initialises the Firebase Admin SDK from `FCM_SERVICE_ACCOUNT_PATH`. `sendAlertNotification()` sends a `notification` payload plus `data.skinId` — not data-only, because app versions in the field return early from `onMessageReceived` without one. It returns `invalid-token` when FCM says the device token is gone.
 
-The alert-check job (`src/services/alerts.ts`) fetches the user's `fcmToken` from the DB after triggering an alert and calls `sendAlertNotification` if a token exists.
+The alert check (`src/services/alerts.ts`) runs right after `populatePrices` and reads every armed alert with its skin, current quotes and owner in **one** JOIN, then marks the crossed ones in one `updateMany`. **An alert only fires on a corroborated price** (`isCorroborated`, `services/quotes.ts`: ≥2 marketplaces within `MAX_TOP_MOVER_QUOTE_SPREAD`) — the same rule top movers ranks on. A dead token is cleared from `User.fcmToken`.
+
+Notification text is written in `User.locale` (`services/alertMessages.ts`, the app's six locales). The app sends it with the token on `PUT /auth/me/fcm-token`; versions that predate it send none, keep whatever is stored, and get English.
 
 ### Alert updates (`PUT /alerts/:id`)
 
@@ -209,7 +211,7 @@ The uptime monitor is configured as a **keyword monitor on `fresh`** — only th
 
 `SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `waxpeerPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
 
-`User`: Steam OAuth only — `steamId` is required and unique. Has `fcmToken String?` for FCM push notifications. (Email/password auth was removed in favor of Steam-only sign-in.)
+`User`: Steam OAuth only — `steamId` is required and unique. Has `fcmToken String?` for FCM push notifications and `locale String?` for their language. (Email/password auth was removed in favor of Steam-only sign-in.)
 
 ### Filtering (`GET /skins`)
 

@@ -1,5 +1,6 @@
 import { env } from '../config/env'
 import fs from 'fs'
+import { alertNotificationText } from './alertMessages'
 
 // Lazy-initialise Firebase Admin so it only loads when FCM_SERVICE_ACCOUNT_PATH is set
 let messaging: import('firebase-admin/messaging').Messaging | null = null
@@ -25,32 +26,44 @@ async function getMessaging() {
   }
 }
 
-/**
- * Send a push notification to a specific device via its FCM token.
- * Silently skips if FCM is not configured.
- */
-export async function sendAlertNotification(
-  fcmToken: string,
-  skinName: string,
-  type: string,
-  targetPrice: number,
-  currentPrice: number,
-  skinId: string,
-): Promise<void> {
-  const m = await getMessaging()
-  if (!m) return
+/** `invalid-token`: FCM says the device token is gone — the caller should forget it. */
+export type SendResult = 'sent' | 'invalid-token' | 'failed' | 'disabled'
 
-  const isBuyBelow = type === 'BUY_BELOW'
-  const title = `Price Alert: ${skinName}`
-  const body = isBuyBelow
-    ? `Price dropped to $${currentPrice.toFixed(2)} — below your $${targetPrice.toFixed(2)} target!`
-    : `Price rose to $${currentPrice.toFixed(2)} — above your $${targetPrice.toFixed(2)} target!`
+// FCM error codes meaning the token will never work again (app uninstalled,
+// data cleared, token rotated). Anything else may be transient.
+const DEAD_TOKEN_CODES = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+])
+
+export interface AlertNotification {
+  token: string
+  locale: string | null
+  skinName: string
+  type: 'BUY_BELOW' | 'SELL_ABOVE'
+  targetPrice: number
+  currentPrice: number
+  skinId: string
+}
+
+/**
+ * Sends a triggered alert to one device, in the user's language.
+ *
+ * Carries a `notification` payload, not data-only: app versions in the field
+ * only display messages that have one (onMessageReceived returns early without
+ * it), and with the app in the background the system shows it directly.
+ */
+export async function sendAlertNotification(n: AlertNotification): Promise<SendResult> {
+  const m = await getMessaging()
+  if (!m) return 'disabled'
+
+  const { title, body } = alertNotificationText(n.locale, n.type, n.skinName, n.targetPrice, n.currentPrice)
 
   try {
     await m.send({
-      token: fcmToken,
+      token: n.token,
       notification: { title, body },
-      data: { skinId, type },
+      data: { skinId: n.skinId, type: n.type },
       android: {
         priority: 'high',
         notification: { channelId: 'price_alerts' },
@@ -61,7 +74,11 @@ export async function sendAlertNotification(
         },
       },
     })
+    return 'sent'
   } catch (e) {
+    const code = (e as { code?: string })?.code
+    if (code && DEAD_TOKEN_CODES.has(code)) return 'invalid-token'
     console.warn('[FCM] Failed to send notification:', e)
+    return 'failed'
   }
 }
