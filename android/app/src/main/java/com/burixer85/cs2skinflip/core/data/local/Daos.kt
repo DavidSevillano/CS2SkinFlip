@@ -29,20 +29,3 @@ interface WatchlistDao {
     suspend fun deleteById(id: Long)
 }
 
-@Dao
-interface AlertDao {
-    @Query("SELECT * FROM alerts ORDER BY createdAt DESC")
-    fun getAll(): Flow<List<AlertEntity>>
-
-    @Query("SELECT COUNT(*) FROM alerts WHERE isActive = 1")
-    suspend fun countActive(): Int
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(alert: AlertEntity): Long
-
-    @Update
-    suspend fun update(alert: AlertEntity)
-
-    @Query("DELETE FROM alerts WHERE id = :id")
-    suspend fun deleteById(id: Long)
-}

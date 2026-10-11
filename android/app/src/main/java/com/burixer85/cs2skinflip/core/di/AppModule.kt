@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.burixer85.cs2skinflip.BuildConfig
-import com.burixer85.cs2skinflip.core.data.local.AlertDao
 import com.burixer85.cs2skinflip.core.data.local.AppDatabase
 import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
 import com.burixer85.cs2skinflip.core.auth.AuthInterceptor
@@ -45,14 +44,11 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext ctx: Context): AppDatabase =
         Room.databaseBuilder(ctx, AppDatabase::class.java, "cs2skinflip.db")
-            .fallbackToDestructiveMigration()
+            .addMigrations(*AppDatabase.MIGRATIONS)
             .build()
 
     @Provides
     fun provideWatchlistDao(db: AppDatabase): WatchlistDao = db.watchlistDao()
-
-    @Provides
-    fun provideAlertDao(db: AppDatabase): AlertDao = db.alertDao()
 
     @Provides
     @Singleton

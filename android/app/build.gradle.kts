@@ -94,6 +94,11 @@ android {
     }
 }
 
+// Room writes each schema version here (committed), for checking migrations against.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

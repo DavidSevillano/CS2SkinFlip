@@ -17,17 +17,3 @@ data class WatchlistEntity(
     val addedAt: Long
 )
 
-@Entity(tableName = "alerts")
-data class AlertEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val skinId: String,
-    val skinName: String,
-    val skinImageUrl: String,
-    val type: String,          // AlertType.name
-    val targetPrice: Double,
-    val currentPrice: Double,
-    val isActive: Boolean,
-    val isTriggered: Boolean,
-    val createdAt: Long,
-    val triggeredAt: Long?
-)
