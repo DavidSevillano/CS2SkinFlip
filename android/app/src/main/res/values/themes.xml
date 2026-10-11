@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base app theme – Compose handles the full theme; this is for the splash/activity window -->
+    <!--
+      Base app theme – Compose handles the full theme; this is for the splash/activity window.
+
+      No statusBarColor/navigationBarColor here: both are deprecated and ignored outright on
+      API 35+, where the bars are always transparent and the app draws behind them. The bar
+      appearance is set at runtime by enableEdgeToEdge() in MainActivity instead.
+    -->
     <style name="Theme.CS2SkinFlip" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">#0D1117</item>
-        <item name="android:statusBarColor">#0D1117</item>
-        <item name="android:navigationBarColor">#0D1117</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

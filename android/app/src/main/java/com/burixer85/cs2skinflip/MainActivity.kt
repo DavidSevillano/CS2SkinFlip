@@ -2,8 +2,10 @@ package com.burixer85.cs2skinflip
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,7 +57,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Pinned to dark: the default SystemBarStyle.auto picks the bar icon colour from the
+        // system's night mode, but this app is dark-only, so on a device set to light mode it
+        // would draw dark icons over our dark background and make them unreadable.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         val openedFromAlertNotification = handleNotificationIntent(intent)
 
         adsManager.initialize(this)
