@@ -5,12 +5,14 @@ import { PriceService } from '../services/prices'
 import { change24h, fetchReferencePrices } from '../services/priceReference'
 import { env } from '../config/env'
 import { requireSecretHeader } from '../middleware/requireSecretHeader'
+import { WEAPON_CATEGORIES, WEAPON_CATEGORY_KEYS } from '../config/weaponCategories'
 
 const priceService = new PriceService()
 
 const searchQuerySchema = z.object({
   q: z.string().optional(),
   weapon: z.string().optional(),
+  category: z.enum(WEAPON_CATEGORY_KEYS).optional(),
   rarity: z.string().optional(),
   wear: z.string().optional(),
   statTrak: z.coerce.boolean().optional(),
@@ -18,7 +20,7 @@ const searchQuerySchema = z.object({
   maxPrice: z.coerce.number().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(200).default(50),
-  sort: z.enum(['name', 'price_asc', 'price_desc', 'random']).default('random'),
+  sort: z.enum(['name', 'price_asc', 'price_desc', 'popular', 'random']).default('random'),
 })
 
 
@@ -41,9 +43,9 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'Invalid query parameters', details: params.error.flatten() })
     }
 
-    const { q, weapon, rarity, wear, statTrak, minPrice, maxPrice, page, limit, sort } = params.data
+    const { q, weapon, category, rarity, wear, statTrak, minPrice, maxPrice, page, limit, sort } = params.data
     const skip = (page - 1) * limit
-    const hasQuery = !!(q || weapon || rarity || wear || statTrak)
+    const hasQuery = !!(q || weapon || category || rarity || wear || statTrak)
 
     // Build all filters as AND conditions to avoid field-merging conflicts
     const conditions: any[] = []
@@ -67,6 +69,7 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       }
     }
     if (weapon) conditions.push({ weapon: { equals: weapon, mode: 'insensitive' } })
+    if (category) conditions.push({ weapon: { in: [...WEAPON_CATEGORIES[category]] } })
     if (rarity) conditions.push({ rarity: { equals: rarity, mode: 'insensitive' } })
     // wear is stored as "(Field-Tested)" suffix in marketHashName
     if (wear) conditions.push({ marketHashName: { contains: `(${wear})`, mode: 'insensitive' } })
@@ -133,6 +136,18 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
         where,
         include: { price: true },
         orderBy: { price: { lowestPrice: sort === 'price_asc' ? 'asc' : 'desc' } },
+        skip,
+        take: limit,
+      })
+    } else if (sort === 'popular') {
+      // Most CS:GO Market listings first (`volume24h`, the only liquidity signal
+      // we have): the skins that actually trade, where a price-descending browse
+      // opened on one-listing knives at $40k+. Skins it doesn't list go last;
+      // `id` breaks ties so paging is stable.
+      skins = await prisma.skin.findMany({
+        where,
+        include: { price: true },
+        orderBy: [{ price: { volume24h: { sort: 'desc', nulls: 'last' } } }, { id: 'asc' }],
         skip,
         take: limit,
       })

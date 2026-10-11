@@ -309,3 +309,40 @@ describe('GET /skins — price-sorted pagination', () => {
     expect(skinFindMany.mock.calls[0][0].orderBy).toEqual({ price: { lowestPrice: 'asc' } })
   })
 })
+
+describe('GET /skins — popular sort and category', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinCount.mockResolvedValue(500)
+    skinFindMany.mockResolvedValue([row('skin-a', 120)])
+    queryRaw.mockResolvedValue([])
+  })
+
+  // Price-descending opened the screen on one-listing knives at $40k+.
+  it('orders by CS:GO Market listings, unlisted skins last, with a stable tie-break', async () => {
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=popular&page=2&limit=20' })
+
+    const args = skinFindMany.mock.calls[0][0]
+    expect(args.orderBy).toEqual([{ price: { volume24h: { sort: 'desc', nulls: 'last' } } }, { id: 'asc' }])
+    expect(args.skip).toBe(20)
+  })
+
+  it('filters a category by its weapons', async () => {
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=popular&category=gloves' })
+
+    const { where } = skinFindMany.mock.calls[0][0]
+    expect(where.AND).toContainEqual({ weapon: { in: expect.arrayContaining(['Sport Gloves', 'Hand Wraps']) } })
+  })
+
+  it('rejects an unknown category', async () => {
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins?category=lasers' })
+
+    expect(res.statusCode).toBe(400)
+  })
+})
