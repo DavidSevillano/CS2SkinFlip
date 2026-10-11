@@ -347,7 +347,7 @@ Required for Firebase (Analytics + FCM). Download from the Firebase console for 
 `network_security_config.xml` sets `cleartextTrafficPermitted="false"` globally (system trust anchors only, no exceptions) — referenced via `android:networkSecurityConfig` in the manifest. `compileSdk`/`targetSdk` = 36, `minSdk` = 26.
 
 ### Room database
-Uses `fallbackToDestructiveMigration()` — bump `version` in `AppDatabase.kt` whenever entities change. Only `watchlist` and `alerts` tables are persisted locally; skin data is always fetched from the backend.
+**No destructive fallback.** Changing an entity means bumping `version` in `AppDatabase.kt` **and** adding a `Migration` to `AppDatabase.MIGRATIONS` — without one, opening the database throws instead of silently wiping the user's watchlist, which is what `fallbackToDestructiveMigration()` used to do. Schemas are exported to `app/schemas/` (committed) so a migration can be checked against the exact schema it starts from. Only the `watchlist` table is persisted locally (v2 dropped the never-read `alerts` table); skin data is always fetched from the backend.
 
 ## Architecture
 
@@ -365,7 +365,6 @@ core/
     remote/     — Retrofit interfaces + DTOs + mappers (CS2BackendApiService, SteamApiService)
     local/      — Room database, Entities, DAOs
     repository  — SkinRepository, WatchlistRepository, AlertRepository, PortfolioRepository
-    mock/       — MockData fallback used when backend is unreachable
   network/      — NetworkMonitor (connectivity StateFlow backing the app-wide offline banner)
   preferences/  — AppLanguage, LocaleHelper (in-app language override)
   review/       — ReviewFlowManager, PlayReviewLauncher (Play in-app review prompt)
@@ -384,7 +383,7 @@ navigation/     — AppNavigation (NavHost + bottom bar), Screen sealed class
 
 - **`Skin`** is the central domain model. `lowestMarketPrice` first uses `lowestPrice` (pre-computed by the backend), falling back to `min(skinportPrice, csgoMarketPrice, waxpeerPrice)`.
 - **`CS2BackendApiService`** is the main remote source. DTOs are mapped to `Skin` via `BackendSkinDto.toDomain()` and `TopMoverDto.toDomain()`. Mappers live in the same file as the DTOs.
-- **`SkinRepository`** always falls back to `MockData` if the network call fails. It is a thin pass-through — backend responses already contain final prices (no client-side batch refresh, no `livePriceCache`).
+- **`SkinRepository`** is a thin pass-through — backend responses already contain final prices (no client-side batch refresh, no `livePriceCache`).
 - **Pagination** in `SearchViewModel` uses `currentPage` + `SearchUiState.Success.isLoadingMore` to prevent duplicate page fetches.
 
 ### DI (AppModule)

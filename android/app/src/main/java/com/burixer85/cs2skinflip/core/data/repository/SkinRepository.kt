@@ -1,6 +1,5 @@
 package com.burixer85.cs2skinflip.core.data.repository
 
-import com.burixer85.cs2skinflip.core.data.mock.MockData
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
@@ -29,35 +28,6 @@ class SkinRepository @Inject constructor(
 
     fun getTrendingSkins(direction: String = "rising"): Flow<List<Skin>> = flow {
         emit(backendApi.getTopMovers(direction).map { it.toDomain() })
-    }
-
-    fun searchSkins(
-        query: String,
-        weapon: String? = null,
-        rarity: SkinRarity? = null,
-        wear: SkinWear? = null,
-        statTrakOnly: Boolean = false
-    ): Flow<List<Skin>> = flow {
-        val hasFilters = query.isNotBlank() || weapon != null || rarity != null || wear != null || statTrakOnly
-        val remote = runCatching {
-            backendApi.searchSkins(
-                query = query.ifBlank { null },
-                weapon = weapon,
-                rarity = rarity?.apiValue,
-                sort = if (hasFilters) "name" else "random"
-            ).data.map { it.toDomain() }
-        }.getOrElse {
-            var results = MockData.searchSkins(query)
-            if (weapon != null) results = results.filter { it.weapon == weapon }
-            if (rarity != null) results = results.filter { it.rarity == rarity }
-            results
-        }
-
-        val filtered = remote
-            .let { list -> if (wear != null) list.filter { it.wear == wear } else list }
-            .let { list -> if (statTrakOnly) list.filter { it.isStatTrak } else list }
-
-        emit(filtered)
     }
 
     /** Paginated search — returns (skins, hasMore, total) */
