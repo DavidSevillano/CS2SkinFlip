@@ -53,6 +53,10 @@ vi.mock('../redis/client', () => ({
 const { axiosGet } = vi.hoisted(() => ({ axiosGet: vi.fn() }))
 vi.mock('axios', () => ({ default: { get: axiosGet } }))
 
+// The daily catalog sync rides populatePrices; keep it offline and spyable.
+const { syncSkinCatalogIfDue } = vi.hoisted(() => ({ syncSkinCatalogIfDue: vi.fn() }))
+vi.mock('./populateSkins', () => ({ SOUVENIR_PREFIX: 'Souvenir ', syncSkinCatalogIfDue }))
+
 const { populatePrices, getPriceHealth, PRICE_RUN_TIMESTAMP_KEY, MARKETPLACE_HEALTH_KEY } = await import('./populatePrices')
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any
@@ -341,6 +345,61 @@ describe('populatePrices — bulk write path', () => {
     const summary = await populatePrices(log)
 
     expect(summary).toEqual({ updated: SKIN_COUNT, historyRows: SKIN_COUNT })
+  })
+})
+
+describe('populatePrices — catalog and souvenirs', () => {
+  const SOUVENIR = 'Souvenir AWP | Dragon Lore (Factory New)'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinFindMany.mockResolvedValue([
+      { id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' },
+      { id: 'souvenir-1', marketHashName: SOUVENIR },
+    ])
+    queryRaw.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 1 })
+    executeRawUnsafe.mockResolvedValue(1)
+    redisKeys.mockResolvedValue([])
+    redisSet.mockResolvedValue('OK')
+    redisGet.mockResolvedValue(null)
+    syncSkinCatalogIfDue.mockResolvedValue(null)
+    axiosGet.mockImplementation(async (url: string) =>
+      url.includes('market.csgo.com')
+        ? {
+            data: [
+              { market_hash_name: 'AK-47 | Redline (Field-Tested)', price: '10', volume: '5' },
+              { market_hash_name: SOUVENIR, price: '90000', volume: '2' },
+            ],
+          }
+        : { data: [] },
+    )
+  })
+
+  // Run before the catalog is read, so a skin added today is priced today.
+  it('syncs the catalog before reading it, telling it what the marketplaces list', async () => {
+    await populatePrices(log)
+
+    expect(syncSkinCatalogIfDue.mock.invocationCallOrder[0]).toBeLessThan(skinFindMany.mock.invocationCallOrder[0])
+    const isListed = syncSkinCatalogIfDue.mock.calls[0][1] as (name: string) => boolean
+    expect(isListed(SOUVENIR)).toBe(true)
+    expect(isListed('Souvenir P250 | Sand Dune (Factory New)')).toBe(false)
+  })
+
+  it('still prices the catalog when the catalog sync fails', async () => {
+    syncSkinCatalogIfDue.mockRejectedValue(new Error('GitHub down'))
+
+    expect((await populatePrices(log)).updated).toBe(2)
+  })
+
+  // Charting souvenirs would cost ~65 MB of the 512 MB cap.
+  it('prices souvenirs but writes no history for them', async () => {
+    const summary = await populatePrices(log)
+
+    expect(summary).toEqual({ updated: 2, historyRows: 1 })
+    expect(priceHistoryCreateMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ skinId: 'skin-1' })],
+    })
   })
 })
 

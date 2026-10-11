@@ -17,9 +17,13 @@ import java.io.File
 fun selectPages(skins: List<Skin>, maxPages: Int): List<Skin> =
     skins.sortedByDescending { it.lowestPrice ?: 0.0 }.take(maxPages)
 
-/** Ids of the pages that earn a price-history table. Assumes [skins] is already value-sorted. */
+/**
+ * Ids of the pages that earn a price-history table. Assumes [skins] is already value-sorted.
+ * Souvenirs are skipped: the backend records no history for them, and the most expensive
+ * ones would spend the request budget on empty answers.
+ */
 fun historyTargets(skins: List<Skin>, topN: Int): List<String> =
-    skins.take(topN).map { it.id }
+    skins.filterNot { it.marketHashName.startsWith("Souvenir ") }.take(topN).map { it.id }
 
 /**
  * "You might also like" siblings for a skin page. Takes the first [limit] same-weapon skins in

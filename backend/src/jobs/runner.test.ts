@@ -10,9 +10,6 @@ vi.mock('../redis/client', () => ({ redis: { set: redisSet, get: redisGet, del: 
 const { populatePrices } = vi.hoisted(() => ({ populatePrices: vi.fn() }))
 vi.mock('./populatePrices', () => ({ populatePrices }))
 
-const { syncSkinCatalogIfDue } = vi.hoisted(() => ({ syncSkinCatalogIfDue: vi.fn() }))
-vi.mock('./populateSkins', () => ({ syncSkinCatalogIfDue }))
-
 const { cleanupPriceHistory } = vi.hoisted(() => ({ cleanupPriceHistory: vi.fn() }))
 vi.mock('./cleanupPriceHistory', () => ({ cleanupPriceHistory }))
 
@@ -45,7 +42,6 @@ describe('runRefreshPrices', () => {
     checkAll.mockResolvedValue(undefined)
     cleanupPriceHistory.mockResolvedValue(undefined)
     revokeVoidedPurchases.mockResolvedValue(null)
-    syncSkinCatalogIfDue.mockResolvedValue(null)
   })
 
   it('takes the lock with NX and a TTL so a crashed run self-heals', async () => {
@@ -101,23 +97,6 @@ describe('runRefreshPrices', () => {
 
     await vi.waitFor(() => expect(lastStatus().state).toBe('ok'))
     expect(log.error).toHaveBeenCalled()
-  })
-
-  it('adds new catalog skins before fetching prices', async () => {
-    await runRefreshPrices(log)
-
-    await vi.waitFor(() => expect(lastStatus().state).toBe('ok'))
-    expect(syncSkinCatalogIfDue.mock.invocationCallOrder[0])
-      .toBeLessThan(populatePrices.mock.invocationCallOrder[0])
-  })
-
-  it('still refreshes prices when the catalog sync fails', async () => {
-    syncSkinCatalogIfDue.mockRejectedValue(new Error('GitHub down'))
-
-    await runRefreshPrices(log)
-
-    await vi.waitFor(() => expect(lastStatus().state).toBe('ok'))
-    expect(populatePrices).toHaveBeenCalled()
   })
 
   it('captures a thrown error into the status and still releases the lock', async () => {

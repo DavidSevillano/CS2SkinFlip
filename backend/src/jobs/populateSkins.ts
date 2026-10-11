@@ -50,8 +50,18 @@ interface SkinRecord {
   iconUrl: string
 }
 
-/** One record per skin × wear, plus its StatTrak twin where the skin has one. */
-export function catalogRecords(allSkins: BymykelSkin[]): SkinRecord[] {
+export const SOUVENIR_PREFIX = 'Souvenir '
+
+/**
+ * One record per skin × wear, plus its StatTrak twin where the skin has one,
+ * plus its Souvenir twin where [isListed] says a marketplace quotes it.
+ *
+ * Souvenirs need the check because the catalog only says a skin has a souvenir
+ * version, not in which wears: of 6 825 souvenir skin × wear combinations it
+ * implies, marketplaces quoted 2 527 (2026-10-11). The rest would be rows with
+ * no price, padding every search. Without [isListed], no souvenirs.
+ */
+export function catalogRecords(allSkins: BymykelSkin[], isListed?: (marketHashName: string) => boolean): SkinRecord[] {
   const records: SkinRecord[] = []
 
   for (const skin of allSkins) {
@@ -86,6 +96,20 @@ export function catalogRecords(allSkins: BymykelSkin[]): SkinRecord[] {
           iconUrl: skin.image,
         })
       }
+
+      if (skin.souvenir && isListed) {
+        const souvenirHashName = `${SOUVENIR_PREFIX}${marketHashName}`
+        if (isListed(souvenirHashName)) {
+          records.push({
+            id: slugify(souvenirHashName),
+            name: souvenirHashName,
+            marketHashName: souvenirHashName,
+            weapon: skin.weapon.name,
+            rarity: skin.rarity.name,
+            iconUrl: skin.image,
+          })
+        }
+      }
     }
   }
 
@@ -101,9 +125,12 @@ const INSERT_BATCH_SIZE = 1000
  * id or marketHashName already present costs no write, and createMany returns
  * only a count, so nothing is read back across Neon's metered transfer.
  */
-export async function syncSkinCatalog(log: FastifyBaseLogger): Promise<{ inserted: number }> {
+export async function syncSkinCatalog(
+  log: FastifyBaseLogger,
+  isListed?: (marketHashName: string) => boolean,
+): Promise<{ inserted: number }> {
   const skinsRes = await axios.get<BymykelSkin[]>(BYMYKEL_SKINS_URL, { timeout: 30000 })
-  const records = catalogRecords(skinsRes.data)
+  const records = catalogRecords(skinsRes.data, isListed)
 
   let inserted = 0
   for (let i = 0; i < records.length; i += INSERT_BATCH_SIZE) {
@@ -125,20 +152,28 @@ export const CATALOG_SYNCED_AT_KEY = 'pipeline:catalog:syncedAt'
 const CATALOG_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 /**
- * Runs [syncSkinCatalog] at most once a day, from the 6h price job — before the
- * price fetch, so a new skin is priced in the same run. Returns null when skipped.
+ * Runs [syncSkinCatalog] at most once a day. Called by populatePrices between
+ * fetching the marketplaces and pricing the catalog, so a new skin is priced in
+ * the same run and [isListed] can answer from the feeds just fetched.
+ * Returns null when skipped.
  */
-export async function syncSkinCatalogIfDue(log: FastifyBaseLogger): Promise<{ inserted: number } | null> {
+export async function syncSkinCatalogIfDue(
+  log: FastifyBaseLogger,
+  isListed?: (marketHashName: string) => boolean,
+): Promise<{ inserted: number } | null> {
   const raw = await redis.get(CATALOG_SYNCED_AT_KEY)
   const last = Number(raw)
   if (raw !== null && Number.isFinite(last) && Date.now() - last < CATALOG_SYNC_INTERVAL_MS) return null
 
-  const result = await syncSkinCatalog(log)
+  const result = await syncSkinCatalog(log, isListed)
   await redis.set(CATALOG_SYNCED_AT_KEY, Date.now())
   return result
 }
 
-/** Bootstrap import for an empty database. Routine additions come from [syncSkinCatalogIfDue]. */
+/**
+ * Bootstrap import for an empty database. Routine additions, souvenirs among
+ * them, come from [syncSkinCatalogIfDue].
+ */
 export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
   const existing = await prisma.skin.count()
   // Threshold accounts for base skins (~9114) + StatTrak variants (~4500)

@@ -7,6 +7,7 @@ import { redis } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import { MAX_QUOTE_DEVIATION_FROM_MEDIAN } from '../config/priceQuality'
 import { invalidateSkinPriceCache, invalidateTopMoversCache } from '../services/prices'
+import { SOUVENIR_PREFIX, syncSkinCatalogIfDue } from './populateSkins'
 import type { FastifyBaseLogger } from 'fastify'
 
 const brotliDecompress = promisify(zlib.brotliDecompress)
@@ -191,6 +192,7 @@ interface SkinPriceRow {
   lowestPrice: number
   priceChange24h: number | null
   volume: number | null
+  trackHistory: boolean
 }
 
 // 500 rows x 9 columns = 4500 bind parameters, comfortably under Postgres' 65535
@@ -392,6 +394,19 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
     )
   }
 
+  // Here rather than in the runner: a souvenir enters the catalog only once a
+  // marketplace quotes it, and these maps are what says so. Before the catalog
+  // read below, so a skin added today is priced in this run. A catalog failure
+  // only delays new skins; it must not cost the price refresh.
+  try {
+    await syncSkinCatalogIfDue(
+      log,
+      (name) => skinportMap.has(name) || csgoMarketMap.has(name) || waxpeerMap.has(name),
+    )
+  } catch (err) {
+    log.error({ err }, '[PricePopulate] Catalog sync failed')
+  }
+
   // Only read when needed: ~13k rows of four columns, once per outage run.
   const previous = new Map<string, PreviousQuotes>()
   if (carried.length > 0) {
@@ -448,7 +463,10 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
       ? ((lowestPrice - oldPrice) / oldPrice) * 100
       : null
 
-    return [{ skinId: skin.id, skinport, csgo, waxpeer, lowestPrice, priceChange24h, volume }]
+    // Souvenirs are priced but not charted: their history would cost ~65 MB of
+    // the 512 MB cap at steady state (2 527 skins × ~111 points × 231 B).
+    const trackHistory = !name.startsWith(SOUVENIR_PREFIX)
+    return [{ skinId: skin.id, skinport, csgo, waxpeer, lowestPrice, priceChange24h, volume, trackHistory }]
   })
 
   const updated = await writeSkinPrices(rows)
@@ -456,7 +474,9 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
   // Save a price history point for every priced skin on every run. Derived from
   // the same `rows` the upsert used rather than re-deriving from the marketplace
   // maps, so the history point can't disagree with the price just written.
-  const historyRows = rows.map((r) => ({ skinId: r.skinId, price: r.lowestPrice, source: 'bulk' }))
+  const historyRows = rows
+    .filter((r) => r.trackHistory)
+    .map((r) => ({ skinId: r.skinId, price: r.lowestPrice, source: 'bulk' }))
 
   if (historyRows.length > 0) {
     await prisma.priceHistory.createMany({ data: historyRows })

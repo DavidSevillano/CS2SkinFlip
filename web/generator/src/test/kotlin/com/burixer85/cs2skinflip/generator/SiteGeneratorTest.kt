@@ -8,9 +8,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-private fun skin(id: String, lowest: Double?, weapon: String = "AK-47") = Skin(
+private fun skin(id: String, lowest: Double?, weapon: String = "AK-47", marketHashName: String = "$id hash") = Skin(
     id = id,
-    marketHashName = "$id hash",
+    marketHashName = marketHashName,
     weapon = weapon,
     rarity = "Classified",
     iconUrl = "https://cdn.example.com/$id.png",
@@ -54,6 +54,16 @@ class HistoryTargetsTest {
     @Test
     fun picksOnlyTheTopNIds() {
         val skins = listOf(skin("a", 10.0), skin("b", 5.0), skin("c", 1.0))
+        assertEquals(listOf("a", "b"), historyTargets(skins, topN = 2))
+    }
+
+    @Test
+    fun skipsSouvenirsWhichHaveNoHistory() {
+        val skins = listOf(
+            skin("dlore", 90_000.0, marketHashName = "Souvenir AWP | Dragon Lore (Factory New)"),
+            skin("a", 10.0),
+            skin("b", 5.0),
+        )
         assertEquals(listOf("a", "b"), historyTargets(skins, topN = 2))
     }
 

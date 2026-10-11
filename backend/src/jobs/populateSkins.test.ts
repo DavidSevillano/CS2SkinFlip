@@ -49,6 +49,29 @@ describe('catalogRecords', () => {
   })
 })
 
+describe('catalogRecords — souvenirs', () => {
+  const withSouvenir = catalogSkin({ stattrak: false, souvenir: true, wears: [{ id: 'fn', name: 'Factory New' }, { id: 'ft', name: 'Field-Tested' }] })
+
+  // The catalog says a souvenir version exists, not in which wears.
+  it('adds a souvenir only in the wears a marketplace quotes', () => {
+    const names = catalogRecords([withSouvenir] as any, (n) => n === 'Souvenir AK-47 | Redline (Field-Tested)')
+      .map((r) => r.marketHashName)
+
+    expect(names).toEqual([
+      'AK-47 | Redline (Factory New)',
+      'AK-47 | Redline (Field-Tested)',
+      'Souvenir AK-47 | Redline (Field-Tested)',
+    ])
+  })
+
+  it('adds no souvenirs when nothing says which are listed', () => {
+    expect(catalogRecords([withSouvenir] as any).map((r) => r.marketHashName)).toEqual([
+      'AK-47 | Redline (Factory New)',
+      'AK-47 | Redline (Field-Tested)',
+    ])
+  })
+})
+
 describe('syncSkinCatalog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
