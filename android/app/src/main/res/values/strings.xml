@@ -16,6 +16,8 @@
     <string name="action_back">Back</string>
     <string name="action_save">Save</string>
     <string name="action_delete">Delete</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_close">Close</string>
     <string name="action_remove">Remove</string>
     <string name="action_clear_all">Clear all</string>
     <string name="action_upgrade">Upgrade</string>

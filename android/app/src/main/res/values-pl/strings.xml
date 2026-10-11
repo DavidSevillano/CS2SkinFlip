@@ -11,6 +11,8 @@
     <string name="action_back">Wstecz</string>
     <string name="action_save">Zapisz</string>
     <string name="action_delete">Usuń</string>
+    <string name="action_edit">Edytuj</string>
+    <string name="action_close">Zamknij</string>
     <string name="action_remove">Usuń</string>
     <string name="action_clear_all">Wyczyść wszystko</string>
     <string name="action_upgrade">Ulepsz</string>

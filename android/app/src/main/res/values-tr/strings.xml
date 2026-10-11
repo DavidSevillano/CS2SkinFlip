@@ -11,6 +11,8 @@
     <string name="action_back">Geri</string>
     <string name="action_save">Kaydet</string>
     <string name="action_delete">Sil</string>
+    <string name="action_edit">Düzenle</string>
+    <string name="action_close">Kapat</string>
     <string name="action_remove">Kaldır</string>
     <string name="action_clear_all">Tümünü temizle</string>
     <string name="action_upgrade">Yükselt</string>

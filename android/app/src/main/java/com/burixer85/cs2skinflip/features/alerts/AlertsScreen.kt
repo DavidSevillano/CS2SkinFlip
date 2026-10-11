@@ -46,6 +46,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -116,6 +119,7 @@ fun AlertsScreen(
     val editState by viewModel.editState.collectAsState()
     val isVerifyingPurchase by viewModel.isVerifyingPurchase.collectAsState()
     val showPurchaseSuccessDialog by viewModel.showPurchaseSuccessDialog.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     var showCreateSheet by remember { mutableStateOf(false) }
 
     var showUpgradeDialog by remember { mutableStateOf(false) }
@@ -138,6 +142,11 @@ fun AlertsScreen(
             showNotificationPermissionDialog = true
         }
     }
+
+    // An alert can fire while this screen sits in memory (tab switch, app in the
+    // background, tapping its notification); without this it kept showing the
+    // alert as active, at the old price, until the app restarted.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
     Box(Modifier.fillMaxSize().background(Background)) {
         Column(Modifier.fillMaxSize()) {
@@ -193,17 +202,23 @@ fun AlertsScreen(
                 is AlertsUiState.Loading -> SkinListSkeleton(Modifier.fillMaxSize())
                 is AlertsUiState.Error -> ErrorState(stringResource(state.messageRes), modifier = Modifier.fillMaxSize())
                 is AlertsUiState.NotLoggedIn -> NotLoggedInView(onSignInClick = onSignInClick)
-                is AlertsUiState.Success -> AlertsList(
-                    alerts = state.alerts,
-                    onToggle = viewModel::toggleAlert,
-                    onDelete = { viewModel.deleteAlert(it) },
-                    onEdit = { viewModel.startEdit(it) },
-                    onSkinClick = onSkinClick,
-                    onAddFirst = {
-                        if (state.atFreeLimit) showUpgradeDialog = true
-                        else openCreateAlertSheet()
-                    },
-                )
+                is AlertsUiState.Success -> PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    AlertsList(
+                        alerts = state.alerts,
+                        onToggle = viewModel::toggleAlert,
+                        onDelete = { viewModel.deleteAlert(it) },
+                        onEdit = { viewModel.startEdit(it) },
+                        onSkinClick = onSkinClick,
+                        onAddFirst = {
+                            if (state.atFreeLimit) showUpgradeDialog = true
+                            else openCreateAlertSheet()
+                        },
+                    )
+                }
             }
         }
 
@@ -439,10 +454,10 @@ private fun AlertRow(alert: Alert, onToggle: () -> Unit, onDelete: () -> Unit, o
             Spacer(Modifier.width(8.dp))
 
             IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Edit, "Edit", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Edit, stringResource(R.string.action_edit), tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Default.Delete, "Delete", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                Icon(Icons.Default.Delete, stringResource(R.string.action_delete), tint = TextSecondary, modifier = Modifier.size(18.dp))
             }
 
             Switch(
@@ -726,7 +741,7 @@ private fun CreateAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) 
             ) {
                 Text(stringResource(R.string.alerts_new_title), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "Close", tint = TextSecondary)
+                    Icon(Icons.Default.Close, stringResource(R.string.action_close), tint = TextSecondary)
                 }
             }
 
@@ -902,7 +917,7 @@ private fun EditAlertSheet(viewModel: AlertsViewModel, onDismiss: () -> Unit) {
             ) {
                 Text(stringResource(R.string.alerts_edit_title), fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, "Close", tint = TextSecondary)
+                    Icon(Icons.Default.Close, stringResource(R.string.action_close), tint = TextSecondary)
                 }
             }
 

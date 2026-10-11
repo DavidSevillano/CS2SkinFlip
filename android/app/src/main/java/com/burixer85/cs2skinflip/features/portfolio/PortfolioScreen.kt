@@ -309,7 +309,7 @@ private fun PortfolioItemRow(
             )
         }
         IconButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Default.Delete, "Delete", tint = TextSecondary, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Delete, stringResource(R.string.action_delete), tint = TextSecondary, modifier = Modifier.size(18.dp))
         }
     }
 

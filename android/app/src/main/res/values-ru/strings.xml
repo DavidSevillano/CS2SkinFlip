@@ -11,6 +11,8 @@
     <string name="action_back">Назад</string>
     <string name="action_save">Сохранить</string>
     <string name="action_delete">Удалить</string>
+    <string name="action_edit">Изменить</string>
+    <string name="action_close">Закрыть</string>
     <string name="action_remove">Убрать</string>
     <string name="action_clear_all">Очистить всё</string>
     <string name="action_upgrade">Улучшить</string>

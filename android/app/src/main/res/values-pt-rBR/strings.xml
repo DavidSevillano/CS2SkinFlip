@@ -11,6 +11,8 @@
     <string name="action_back">Voltar</string>
     <string name="action_save">Salvar</string>
     <string name="action_delete">Excluir</string>
+    <string name="action_edit">Editar</string>
+    <string name="action_close">Fechar</string>
     <string name="action_remove">Remover</string>
     <string name="action_clear_all">Limpar tudo</string>
     <string name="action_upgrade">Fazer upgrade</string>

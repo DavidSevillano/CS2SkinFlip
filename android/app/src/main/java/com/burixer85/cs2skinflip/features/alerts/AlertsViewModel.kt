@@ -138,6 +138,32 @@ class AlertsViewModel @Inject constructor(
         }
     }
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
+    /**
+     * Reloads in place, without the skeleton. No-op until the first load has
+     * succeeded, so resuming the screen doesn't double up the initial fetch.
+     */
+    fun refresh() {
+        if (_uiState.value !is AlertsUiState.Success || _isRefreshing.value) return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                runCatching { alertRepository.fetchAll() }
+                    .onSuccess { state ->
+                        _uiState.value = AlertsUiState.Success(
+                            alerts = state.alerts,
+                            isPremium = state.isPremium,
+                            freeLimit = state.freeLimit,
+                        )
+                    }
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
     fun toggleAlert(alert: Alert) {
         viewModelScope.launch {
             runCatching { alertRepository.setActive(alert.id, !alert.isActive) }
