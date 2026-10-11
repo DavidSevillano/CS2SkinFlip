@@ -92,6 +92,7 @@
     <string name="marketplace_skinport">Skinport</string>
     <string name="marketplace_waxpeer">Waxpeer</string>
     <string name="marketplace_csgo_market">CS:GO Market</string>
+    <string name="marketplace_csfloat">CSFloat</string>
     <string name="marketplace_lowest">Her zaman en ucuz</string>
 
     <string name="skindetail_error_title">Hata</string>
@@ -101,6 +102,7 @@
     <string name="skindetail_price_history">Fiyat geçmişi</string>
     <string name="skindetail_price_history_unavailable">Fiyat geçmişi henüz kullanılamıyor</string>
     <string name="skindetail_lowest_badge">EN DÜŞÜK</string>
+    <string name="skindetail_preferred_badge">TERCİH</string>
     <string name="cd_open_browser">Tarayıcıda aç</string>
     <string name="skindetail_not_listed">Listelenmedi</string>
     <string name="skindetail_not_enough_data">Yeterli veri yok</string>

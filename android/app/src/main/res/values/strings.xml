@@ -101,6 +101,7 @@
     <string name="marketplace_skinport">Skinport</string>
     <string name="marketplace_waxpeer">Waxpeer</string>
     <string name="marketplace_csgo_market">CS:GO Market</string>
+    <string name="marketplace_csfloat">CSFloat</string>
     <string name="marketplace_lowest">Always cheapest</string>
 
     <!-- Skin detail -->
@@ -111,6 +112,7 @@
     <string name="skindetail_price_history">Price History</string>
     <string name="skindetail_price_history_unavailable">Price history not yet available</string>
     <string name="skindetail_lowest_badge">LOWEST</string>
+    <string name="skindetail_preferred_badge">PREFERRED</string>
     <string name="cd_open_browser">Open in browser</string>
     <string name="skindetail_not_listed">Not listed</string>
     <string name="skindetail_not_enough_data">Not enough data points</string>

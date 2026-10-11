@@ -22,6 +22,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -37,6 +38,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.burixer85.cs2skinflip.AppViewModel
+import com.burixer85.cs2skinflip.core.ui.LocalDefaultMarketplace
 import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.network.NetworkStatusViewModel
 import com.burixer85.cs2skinflip.core.ui.components.OfflineBanner
@@ -71,9 +74,11 @@ fun AppNavigation(
     initialSkinId: String? = null,
     onNavigatedToSkin: () -> Unit = {},
     networkStatusViewModel: NetworkStatusViewModel = hiltViewModel(),
+    appViewModel: AppViewModel = hiltViewModel(),
 ) {
     val navController = rememberNavController()
     val isOnline by networkStatusViewModel.isOnline.collectAsState()
+    val marketplace by appViewModel.marketplace.collectAsState()
 
     // Handle notification tap: navigate to skin detail once navController is ready
     LaunchedEffect(initialSkinId) {
@@ -82,94 +87,97 @@ fun AppNavigation(
             onNavigatedToSkin()
         }
     }
-    Column(Modifier.fillMaxSize()) {
-        OfflineBanner(isOnline = isOnline)
-        NavHost(
-            navController = navController,
-            startDestination = Screen.Home.route,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            composable(Screen.Home.route) {
-                TopLevelScreen(navController) {
-                    HomeScreen(
+
+    CompositionLocalProvider(LocalDefaultMarketplace provides marketplace) {
+        Column(Modifier.fillMaxSize()) {
+            OfflineBanner(isOnline = isOnline)
+            NavHost(
+                navController = navController,
+                startDestination = Screen.Home.route,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                composable(Screen.Home.route) {
+                    TopLevelScreen(navController) {
+                        HomeScreen(
+                            onSkinClick = { skinId ->
+                                navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                            }
+                        )
+                    }
+                }
+
+                composable(Screen.Search.route) {
+                    TopLevelScreen(navController) {
+                        SearchScreen(
+                            onSkinClick = { skinId ->
+                                navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                            }
+                        )
+                    }
+                }
+
+                composable(Screen.Alerts.route) {
+                    TopLevelScreen(navController) {
+                        AlertsScreen(
+                            onSkinClick = { skinId ->
+                                navController.navigate(Screen.SkinDetail.createRoute(skinId))
+                            },
+                            onSignInClick = {
+                                navController.navigate(Screen.SteamLogin.route)
+                            },
+                        )
+                    }
+                }
+
+                composable(Screen.Settings.route) {
+                    TopLevelScreen(navController) {
+                        SettingsScreen(
+                            onWatchlistClick = {
+                                navController.navigate(Screen.Watchlist.route)
+                            },
+                            onPortfolioClick = {
+                                navController.navigate(Screen.Portfolio.route)
+                            },
+                            onSignInClick = {
+                                navController.navigate(Screen.SteamLogin.route)
+                            },
+                        )
+                    }
+                }
+
+                composable(Screen.SteamLogin.route) {
+                    SteamLoginScreen(onBack = { navController.popBackStack() })
+                }
+
+                composable(Screen.Watchlist.route) {
+                    WatchlistScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                        }
+                        },
+                        onBack = { navController.popBackStack() }
                     )
                 }
-            }
 
-            composable(Screen.Search.route) {
-                TopLevelScreen(navController) {
-                    SearchScreen(
-                        onSkinClick = { skinId ->
-                            navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                        }
-                    )
-                }
-            }
-
-            composable(Screen.Alerts.route) {
-                TopLevelScreen(navController) {
-                    AlertsScreen(
+                composable(Screen.Portfolio.route) {
+                    PortfolioScreen(
                         onSkinClick = { skinId ->
                             navController.navigate(Screen.SkinDetail.createRoute(skinId))
                         },
-                        onSignInClick = {
-                            navController.navigate(Screen.SteamLogin.route)
-                        },
+                        onBack = { navController.popBackStack() }
                     )
                 }
-            }
 
-            composable(Screen.Settings.route) {
-                TopLevelScreen(navController) {
-                    SettingsScreen(
-                        onWatchlistClick = {
-                            navController.navigate(Screen.Watchlist.route)
-                        },
-                        onPortfolioClick = {
-                            navController.navigate(Screen.Portfolio.route)
-                        },
-                        onSignInClick = {
-                            navController.navigate(Screen.SteamLogin.route)
-                        },
+                composable(
+                    route = Screen.SkinDetail.route,
+                    arguments = listOf(navArgument("skinId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
+                    SkinDetailScreen(
+                        skinId = skinId,
+                        onBack = { navController.popBackStack() },
+                        onConnectSteamClick = { navController.navigate(Screen.SteamLogin.route) },
                     )
                 }
-            }
-
-            composable(Screen.SteamLogin.route) {
-                SteamLoginScreen(onBack = { navController.popBackStack() })
-            }
-
-            composable(Screen.Watchlist.route) {
-                WatchlistScreen(
-                    onSkinClick = { skinId ->
-                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    },
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable(Screen.Portfolio.route) {
-                PortfolioScreen(
-                    onSkinClick = { skinId ->
-                        navController.navigate(Screen.SkinDetail.createRoute(skinId))
-                    },
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable(
-                route = Screen.SkinDetail.route,
-                arguments = listOf(navArgument("skinId") { type = NavType.StringType })
-            ) { backStackEntry ->
-                val skinId = backStackEntry.arguments?.getString("skinId") ?: return@composable
-                SkinDetailScreen(
-                    skinId = skinId,
-                    onBack = { navController.popBackStack() },
-                    onConnectSteamClick = { navController.navigate(Screen.SteamLogin.route) },
-                )
             }
         }
     }

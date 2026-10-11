@@ -5,12 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
+import com.burixer85.cs2skinflip.core.preferences.UserPreferences
 import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,6 +25,7 @@ sealed class WatchlistUiState {
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     private val watchlistRepository: WatchlistRepository,
+    private val preferences: UserPreferences,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
@@ -49,7 +52,7 @@ class WatchlistViewModel @Inject constructor(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                watchlistRepository.refreshPrices()
+                watchlistRepository.refreshPrices(preferences.marketplace.first())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.burixer85.cs2skinflip.R
+import com.burixer85.cs2skinflip.core.domain.model.Marketplace
+import com.burixer85.cs2skinflip.core.domain.model.Skin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -44,11 +46,33 @@ object Currency {
     }
 }
 
-enum class DefaultMarketplace(@StringRes val labelRes: Int) {
-    SKINPORT(R.string.marketplace_skinport),
-    WAXPEER(R.string.marketplace_waxpeer),
-    CSGO_MARKET(R.string.marketplace_csgo_market),
-    LOWEST(R.string.marketplace_lowest);
+/**
+ * The "default marketplace" setting: whose price the lists show. Alerts and the
+ * portfolio keep the lowest price — the backend evaluates alerts on it.
+ */
+enum class DefaultMarketplace(@StringRes val labelRes: Int, val marketplace: Marketplace?) {
+    SKINPORT(R.string.marketplace_skinport, Marketplace.SKINPORT),
+    WAXPEER(R.string.marketplace_waxpeer, Marketplace.WAXPEER),
+    CSGO_MARKET(R.string.marketplace_csgo_market, Marketplace.CSGO_MARKET),
+    CSFLOAT(R.string.marketplace_csfloat, Marketplace.CSFLOAT),
+    LOWEST(R.string.marketplace_lowest, null);
+
+    /**
+     * The price to show under this preference: the chosen marketplace's own quote,
+     * or [lowest] when it doesn't list the skin — a dash would hide a price the
+     * user can act on elsewhere.
+     */
+    fun pick(skinport: Double?, csgoMarket: Double?, waxpeer: Double?, csfloat: Double?, lowest: Double?): Double? =
+        when (this) {
+            SKINPORT -> skinport
+            WAXPEER -> waxpeer
+            CSGO_MARKET -> csgoMarket
+            CSFLOAT -> csfloat
+            LOWEST -> null
+        }?.takeIf { it > 0 } ?: lowest
+
+    fun priceOf(skin: Skin): Double =
+        pick(skin.skinportPrice, skin.csgoMarketPrice, skin.waxpeerPrice, skin.csfloatPrice, skin.lowestMarketPrice) ?: 0.0
 
     companion object {
         fun fromName(name: String?): DefaultMarketplace =

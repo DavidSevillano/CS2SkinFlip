@@ -73,6 +73,7 @@ import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.SkinRarity
 import com.burixer85.cs2skinflip.core.domain.model.SkinWear
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
+import com.burixer85.cs2skinflip.core.ui.LocalDefaultMarketplace
 import com.burixer85.cs2skinflip.core.ui.components.SkinCard
 import com.burixer85.cs2skinflip.core.ui.components.SkinListSkeleton
 import com.burixer85.cs2skinflip.core.ui.theme.AccentGreen
@@ -831,9 +832,10 @@ private fun SkinSuggestionRow(
                 color = TextTertiary,
             )
         }
-        if (skin.lowestMarketPrice > 0) {
+        val price = LocalDefaultMarketplace.current.priceOf(skin)
+        if (price > 0) {
             Text(
-                currency.format(skin.lowestMarketPrice),
+                currency.format(price),
                 style = MaterialTheme.typography.labelMedium,
                 color = AccentOrange,
                 fontWeight = FontWeight.Bold,

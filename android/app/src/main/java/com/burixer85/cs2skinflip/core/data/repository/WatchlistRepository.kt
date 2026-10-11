@@ -4,6 +4,7 @@ import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
 import com.burixer85.cs2skinflip.core.data.local.WatchlistEntity
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
+import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -35,7 +36,7 @@ class WatchlistRepository @Inject constructor(
      * shown while it is live. Throws on network failure — the stored prices
      * stay as they were.
      */
-    suspend fun refreshPrices() {
+    suspend fun refreshPrices(marketplace: DefaultMarketplace = DefaultMarketplace.LOWEST) {
         val entities = dao.getAll().first()
         if (entities.isEmpty()) return
 
@@ -45,8 +46,10 @@ class WatchlistRepository @Inject constructor(
             .associate { it.key to it.value }
 
         for (entity in entities) {
-            val lowest = prices[entity.skinId]?.lowestPrice ?: continue
-            if (lowest != entity.currentPrice) dao.update(entity.copy(currentPrice = lowest))
+            val p = prices[entity.skinId] ?: continue
+            val price = marketplace.pick(p.skinportPrice, p.csgoMarketPrice, p.waxpeerPrice, p.csfloatPrice, p.lowestPrice)
+                ?: continue
+            if (price != entity.currentPrice) dao.update(entity.copy(currentPrice = price))
         }
         liveChanges.value = prices.mapValues { it.value.priceChange24h }
     }

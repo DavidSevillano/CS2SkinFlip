@@ -4,6 +4,7 @@ import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
 import com.burixer85.cs2skinflip.core.data.local.WatchlistEntity
 import com.burixer85.cs2skinflip.core.data.remote.BatchSkinPriceDto
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
+import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -63,6 +64,22 @@ class WatchlistRepositoryTest {
         val repo = WatchlistRepository(FakeWatchlistDao(listOf(entity(1, "ak", price = 10.0, change = 5.0))), api)
 
         assertNull(repo.getAll().first().single().priceChange24h)
+    }
+
+    @Test
+    fun `shows the preferred marketplace price, or the lowest where it does not list the skin`() = runTest {
+        val dao = FakeWatchlistDao(listOf(entity(1, "ak", price = 10.0, change = 0.0), entity(2, "m4", price = 10.0, change = 0.0)))
+        whenever(api.getPricesBatch("ak,m4")).thenReturn(
+            mapOf(
+                "ak" to BatchSkinPriceDto(skinportPrice = 24.9, csgoMarketPrice = 27.6, waxpeerPrice = null, csfloatPrice = 25.2, lowestPrice = 24.9, priceChange24h = null),
+                "m4" to BatchSkinPriceDto(skinportPrice = 8.0, csgoMarketPrice = null, waxpeerPrice = null, csfloatPrice = null, lowestPrice = 8.0, priceChange24h = null),
+            ),
+        )
+        val repo = WatchlistRepository(dao, api)
+
+        repo.refreshPrices(DefaultMarketplace.CSGO_MARKET)
+
+        assertEquals(listOf(27.6, 8.0), dao.rows.value.map { it.currentPrice })
     }
 
     @Test

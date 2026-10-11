@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.ui.LocalCurrency
+import com.burixer85.cs2skinflip.core.ui.LocalDefaultMarketplace
 import com.burixer85.cs2skinflip.core.ui.theme.Surface
 import com.burixer85.cs2skinflip.core.ui.theme.SurfaceElevated
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
@@ -104,7 +105,7 @@ fun SkinCard(
                     Spacer(Modifier.height(4.dp))
                     val currency = LocalCurrency.current
                     Text(
-                        text = currency.format(skin.lowestMarketPrice.takeIf { it > 0.0 }),
+                        text = currency.format(LocalDefaultMarketplace.current.priceOf(skin).takeIf { it > 0.0 }),
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurface
@@ -179,7 +180,7 @@ fun SkinCardCompact(
         Column(horizontalAlignment = Alignment.End) {
             val currency = LocalCurrency.current
             Text(
-                text = currency.format(skin.lowestMarketPrice.takeIf { it > 0.0 }),
+                text = currency.format(LocalDefaultMarketplace.current.priceOf(skin).takeIf { it > 0.0 }),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold
             )

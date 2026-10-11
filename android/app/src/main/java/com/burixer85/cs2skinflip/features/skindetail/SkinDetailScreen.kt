@@ -73,6 +73,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.domain.model.Marketplace
+import com.burixer85.cs2skinflip.core.ui.LocalDefaultMarketplace
 import com.burixer85.cs2skinflip.core.domain.model.PricePoint
 import com.burixer85.cs2skinflip.core.domain.model.Skin
 import com.burixer85.cs2skinflip.core.ui.components.ErrorState
@@ -349,6 +350,7 @@ private fun SkinDetailContent(
                 MarketEntry(Marketplace.CSFLOAT,     skin.csfloatPrice,    Color(0xFFB57EDC),    csfloatUrl(marketHashName)),
             )
             val lowestPrice = entries.mapNotNull { it.price }.minOrNull()
+            val preferred = LocalDefaultMarketplace.current.marketplace
 
             entries.forEachIndexed { index, entry ->
                 MarketplacePriceRow(
@@ -356,6 +358,7 @@ private fun SkinDetailContent(
                     displayPrice = entry.price,
                     color = entry.color,
                     isLowest = entry.price != null && entry.price == lowestPrice,
+                    isPreferred = entry.marketplace == preferred,
                     onClick = if (entry.price != null) ({ openUrl(entry.url) }) else null
                 )
                 if (index < entries.lastIndex) Spacer(Modifier.height(8.dp))
@@ -526,6 +529,7 @@ private fun MarketplacePriceRow(
     displayPrice: Double?,
     color: Color,
     isLowest: Boolean,
+    isPreferred: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
     val isListed = displayPrice != null
@@ -566,6 +570,15 @@ private fun MarketplacePriceRow(
                         text = stringResource(R.string.skindetail_lowest_badge),
                         fontSize = 10.sp,
                         color = color,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (isPreferred) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.skindetail_preferred_badge),
+                        fontSize = 10.sp,
+                        color = TextSecondary,
                         fontWeight = FontWeight.Bold
                     )
                 }

@@ -92,6 +92,7 @@
     <string name="marketplace_skinport">Skinport</string>
     <string name="marketplace_waxpeer">Waxpeer</string>
     <string name="marketplace_csgo_market">CS:GO Market</string>
+    <string name="marketplace_csfloat">CSFloat</string>
     <string name="marketplace_lowest">Sempre o mais barato</string>
 
     <string name="skindetail_error_title">Erro</string>
@@ -101,6 +102,7 @@
     <string name="skindetail_price_history">Histórico de preços</string>
     <string name="skindetail_price_history_unavailable">Histórico de preços ainda não disponível</string>
     <string name="skindetail_lowest_badge">MENOR</string>
+    <string name="skindetail_preferred_badge">PREFERIDA</string>
     <string name="cd_open_browser">Abrir no navegador</string>
     <string name="skindetail_not_listed">Não listado</string>
     <string name="skindetail_not_enough_data">Dados insuficientes</string>
