@@ -8,7 +8,7 @@ Track CS2 skin prices, get price alerts & check your Steam inventory value
 CS2 SkinFlip is the ultimate skin price tracker for Counter-Strike 2 (CS2, formerly CS:GO). Compare skin prices across major marketplaces, follow price history, and make smarter buying and selling decisions — all from your phone.
 
 📊 COMPARE SKIN PRICES ACROSS MARKETPLACES
-Check prices for over 20,000 CS2 skins — knives, gloves, rifles and every weapon finish, from CS:GO classics to the latest Counter-Strike 2 releases — across multiple marketplaces in one place: Skinport, Waxpeer and Market.CSGO. CS2 SkinFlip always highlights the lowest available price, so you never overpay for a skin.
+Check prices for over 20,000 CS2 skins — knives, gloves, rifles and every weapon finish, from CS:GO classics to the latest Counter-Strike 2 releases — across multiple marketplaces in one place: Skinport, Waxpeer, Market.CSGO and CSFloat. CS2 SkinFlip always highlights the lowest available price, so you never overpay for a skin.
 
 🔔 CUSTOM PRICE ALERTS
 Set a price alert for any skin and get a push notification when the price reaches your target. Whether you are waiting for a knife to drop or an AK-47 skin to hit your budget, you will never miss a deal again.

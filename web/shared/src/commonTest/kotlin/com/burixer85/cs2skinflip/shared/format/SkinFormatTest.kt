@@ -12,6 +12,7 @@ private fun skin(
     csgoMarket: Double? = null,
     waxpeer: Double? = null,
     lowest: Double? = null,
+    csfloat: Double? = null,
 ) = Skin(
     id = "ak-47-redline-field-tested",
     marketHashName = "AK-47 | Redline (Field-Tested)",
@@ -21,6 +22,7 @@ private fun skin(
     skinportPrice = skinport,
     csgoMarketPrice = csgoMarket,
     waxpeerPrice = waxpeer,
+    csfloatPrice = csfloat,
     lowestPrice = lowest,
     priceChange24h = null,
     updatedAt = "2026-07-01T00:00:00.000Z",
@@ -75,6 +77,14 @@ class MarketplaceEntriesTest {
                 MarketplaceEntry("Skinport", 12.5),
             ),
             marketplaceEntries(skin(skinport = 12.5, csgoMarket = 9.99, waxpeer = 11.0)),
+        )
+    }
+
+    @Test
+    fun listsCsfloatAmongTheOthers() {
+        assertEquals(
+            listOf(MarketplaceEntry("CSFloat", 9.2), MarketplaceEntry("Skinport", 10.0)),
+            marketplaceEntries(skin(skinport = 10.0, csfloat = 9.2)),
         )
     }
 

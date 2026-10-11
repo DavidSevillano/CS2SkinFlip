@@ -38,7 +38,7 @@ private fun FlowContent.moverList(skins: List<Skin>) {
 fun renderHomePage(siteUrl: String, rising: List<Skin>, falling: List<Skin>): String {
     val title = "CS2 Skin Prices — Live Price Comparison | CS2SkinFlip"
     val description =
-        "Compare live CS2 skin prices across Skinport, CS:GO Market and Waxpeer. " +
+        "Compare live CS2 skin prices across Skinport, CS:GO Market, Waxpeer and CSFloat. " +
             "Free price history and price alerts for thousands of skins."
 
     val page = buildPage(

@@ -8,7 +8,7 @@ CS2 skin fiyatlarını takip et, fiyat alarmı kur, Steam envanter değerini gö
 CS2 SkinFlip, Counter-Strike 2 (CS2, eski adıyla CS:GO) için en kapsamlı skin fiyat takip uygulamasıdır. Büyük marketler arasında skin fiyatlarını karşılaştırın, fiyat geçmişini takip edin ve alım satım kararlarınızı daha akıllıca verin — hepsi telefonunuzdan.
 
 📊 MARKETLER ARASI FİYAT KARŞILAŞTIRMA
-20.000'den fazla CS2 skininin fiyatlarını — bıçaklar, eldivenler, tüfekler ve tüm kaplamalar, CS:GO klasiklerinden en yeni Counter-Strike 2 çıkışlarına kadar — Skinport, Waxpeer ve Market.CSGO dahil birden fazla markette tek bir yerden kontrol edin. CS2 SkinFlip her zaman mevcut en düşük fiyatı öne çıkarır; böylece bir skin için asla fazla ödemezsiniz.
+20.000'den fazla CS2 skininin fiyatlarını — bıçaklar, eldivenler, tüfekler ve tüm kaplamalar, CS:GO klasiklerinden en yeni Counter-Strike 2 çıkışlarına kadar — Skinport, Waxpeer, Market.CSGO ve CSFloat dahil birden fazla markette tek bir yerden kontrol edin. CS2 SkinFlip her zaman mevcut en düşük fiyatı öne çıkarır; böylece bir skin için asla fazla ödemezsiniz.
 
 🔔 ÖZEL FİYAT ALARMLARI
 Herhangi bir skin için fiyat alarmı kurun ve fiyat hedefinize ulaştığında push bildirimi alın. İster bir bıçağın ucuzlamasını bekleyin, ister bir AK-47 skininin bütçenize girmesini — fırsatları bir daha kaçırmayacaksınız.

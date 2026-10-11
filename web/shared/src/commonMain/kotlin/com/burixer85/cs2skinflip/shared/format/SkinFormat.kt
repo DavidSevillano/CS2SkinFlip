@@ -29,6 +29,7 @@ fun marketplaceEntries(skin: Skin): List<MarketplaceEntry> = listOf(
     MarketplaceEntry("Skinport", skin.skinportPrice ?: 0.0),
     MarketplaceEntry("CS:GO Market", skin.csgoMarketPrice ?: 0.0),
     MarketplaceEntry("Waxpeer", skin.waxpeerPrice ?: 0.0),
+    MarketplaceEntry("CSFloat", skin.csfloatPrice ?: 0.0),
 ).filter { it.price > 0.0 }.sortedBy { it.price }
 
 fun formatPrice(value: Double?): String = if (value == null) "N/A" else "$" + decimalString(value)

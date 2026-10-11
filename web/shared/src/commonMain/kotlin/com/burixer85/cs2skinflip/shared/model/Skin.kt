@@ -13,6 +13,7 @@ data class Skin(
     val skinportPrice: Double? = null,
     val csgoMarketPrice: Double? = null,
     val waxpeerPrice: Double? = null,
+    val csfloatPrice: Double? = null,
     val lowestPrice: Double? = null,
     val priceChange24h: Double? = null,
     val updatedAt: String,
