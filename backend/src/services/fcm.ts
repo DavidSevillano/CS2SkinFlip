@@ -37,6 +37,29 @@ const DEAD_TOKEN_CODES = new Set([
   'messaging/invalid-registration-token',
 ])
 
+/**
+ * Sends a one-off message with no skin attached (e.g. a release announcement).
+ * Same `price_alerts` channel as alerts: it is the only one the app creates.
+ */
+export async function sendPlainNotification(token: string, title: string, body: string): Promise<SendResult> {
+  const m = await getMessaging()
+  if (!m) return 'disabled'
+
+  try {
+    await m.send({
+      token,
+      notification: { title, body },
+      android: { notification: { channelId: 'price_alerts' } },
+    })
+    return 'sent'
+  } catch (e) {
+    const code = (e as { code?: string })?.code
+    if (code && DEAD_TOKEN_CODES.has(code)) return 'invalid-token'
+    logger.warn({ err: e }, '[FCM] Failed to send notification')
+    return 'failed'
+  }
+}
+
 export interface AlertNotification {
   token: string
   locale: string | null
