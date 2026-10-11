@@ -112,6 +112,7 @@ data class TopMoverDto(
     val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
     val waxpeerPrice: Double?,
+    val csfloatPrice: Double? = null,
     val lowestPrice: Double?,
     val priceChange24h: Double?,
     val volume24h: Int?,
@@ -144,6 +145,7 @@ data class BackendSkinPriceDto(
     val skinportPrice: Double?,       // USD — Skinport
     val csgoMarketPrice: Double?,     // USD — CS:GO Market
     val waxpeerPrice: Double?,        // USD — Waxpeer
+    val csfloatPrice: Double? = null, // USD — CSFloat
     val lowestPrice: Double?,
     val volume24h: Int?,
     val priceChange24h: Double?,
@@ -154,6 +156,7 @@ data class BatchSkinPriceDto(
     val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
     val waxpeerPrice: Double?,
+    val csfloatPrice: Double? = null,
     val lowestPrice: Double?,
     val priceChange24h: Double?,
 )
@@ -282,6 +285,7 @@ fun TopMoverDto.toDomain(): Skin {
         skinportPrice = skinportPrice,
         csgoMarketPrice = csgoMarketPrice,
         waxpeerPrice = waxpeerPrice,
+        csfloatPrice = csfloatPrice,
         lowestPrice = lowestPrice,
         priceChange24h = priceChange24h,
         volume24h = volume24h ?: 0,
@@ -313,6 +317,7 @@ fun BackendSkinDto.toDomain(
         skinportPrice = price?.skinportPrice,
         csgoMarketPrice = price?.csgoMarketPrice,
         waxpeerPrice = price?.waxpeerPrice,
+        csfloatPrice = price?.csfloatPrice,
         lowestPrice = price?.lowestPrice,
         // priceChange24h from the API takes priority; caller can override if needed
         priceChange24h = price?.priceChange24h ?: priceChange24h,

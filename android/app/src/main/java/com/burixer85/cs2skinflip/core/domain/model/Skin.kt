@@ -17,6 +17,7 @@ data class Skin(
     val skinportPrice: Double?,     // USD — Skinport
     val csgoMarketPrice: Double?,   // USD — CS:GO Market
     val waxpeerPrice: Double?,      // USD — Waxpeer
+    val csfloatPrice: Double? = null, // USD — CSFloat (null from backends that predate it)
     val lowestPrice: Double? = null,  // pre-computed lowest across all markets (from backend)
     val priceChange24h: Double?,      // percentage, null if no history yet
     val volume24h: Int,
@@ -29,7 +30,7 @@ data class Skin(
     /** Uses backend's pre-computed lowest price; falls back to min of individual sources. */
     val lowestMarketPrice: Double
         get() = lowestPrice
-            ?: listOfNotNull(skinportPrice, csgoMarketPrice, waxpeerPrice).minOrNull()
+            ?: listOfNotNull(skinportPrice, csgoMarketPrice, waxpeerPrice, csfloatPrice).minOrNull()
             ?: 0.0
 
     val displayName: String
@@ -81,5 +82,6 @@ enum class Marketplace(val displayName: String) {
     SKINPORT("Skinport"),
     CSGO_MARKET("CS:GO Market"),
     WAXPEER("Waxpeer"),
+    CSFLOAT("CSFloat"),
     STEAM("Steam Community Market"),
 }

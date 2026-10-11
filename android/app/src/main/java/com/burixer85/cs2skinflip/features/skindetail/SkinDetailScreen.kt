@@ -324,6 +324,13 @@ private fun SkinDetailContent(
                 return "https://waxpeer.com/$slug/item"
             }
 
+            // CSFloat resolves a market hash name to its own search filters.
+            fun csfloatUrl(name: String): String =
+                Uri.parse("https://csfloat.com/search")
+                    .buildUpon()
+                    .appendQueryParameter("market_hash_name", name)
+                    .build().toString()
+
             fun openUrl(url: String) {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             }
@@ -339,6 +346,7 @@ private fun SkinDetailContent(
                 MarketEntry(Marketplace.SKINPORT,    skin.skinportPrice,   AccentOrange,         skinportUrl(marketHashName)),
                 MarketEntry(Marketplace.CSGO_MARKET, skin.csgoMarketPrice, AccentGreen,          csgoMarketUrl(marketHashName)),
                 MarketEntry(Marketplace.WAXPEER,     skin.waxpeerPrice,    Color(0xFF4A90E2),    waxpeerUrl(marketHashName)),
+                MarketEntry(Marketplace.CSFLOAT,     skin.csfloatPrice,    Color(0xFFB57EDC),    csfloatUrl(marketHashName)),
             )
             val lowestPrice = entries.mapNotNull { it.price }.minOrNull()
 

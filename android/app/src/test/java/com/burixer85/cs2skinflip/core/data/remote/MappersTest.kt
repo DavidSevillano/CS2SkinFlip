@@ -52,6 +52,23 @@ class MappersTest {
         assertEquals(SkinRarity.KNIFE, dto.toDomain().rarity)
     }
 
+    @Test
+    fun `the CSFloat quote reaches the skin`() {
+        val dto = BackendSkinDto(
+            id = "k", name = "n", marketHashName = "AK-47 | Redline (Field-Tested)",
+            weapon = "AK-47", rarity = "Classified", iconUrl = "",
+            price = BackendSkinPriceDto(
+                skinportPrice = 26.0, csgoMarketPrice = 27.0, waxpeerPrice = null, csfloatPrice = 24.5,
+                lowestPrice = null, volume24h = 300, priceChange24h = null,
+            ),
+        )
+
+        val skin = dto.toDomain()
+        assertEquals(24.5, skin.csfloatPrice!!, 0.0)
+        // Without a backend lowestPrice the fallback minimum counts CSFloat too.
+        assertEquals(24.5, skin.lowestMarketPrice, 0.0)
+    }
+
     private fun topMover(marketHashName: String, rarity: String?) = TopMoverDto(
         skinId = "id", marketHashName = marketHashName, name = marketHashName, iconUrl = "", rarity = rarity,
         skinportPrice = null, csgoMarketPrice = null, waxpeerPrice = null, lowestPrice = 10.0,
