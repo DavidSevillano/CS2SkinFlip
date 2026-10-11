@@ -5,13 +5,20 @@ describe('alertNotificationText', () => {
   it('writes the notification in the user\'s language', () => {
     expect(alertNotificationText('es', 'BUY_BELOW', 'AK-47 | Redline', 30, 27.5)).toEqual({
       title: 'Alerta de precio: AK-47 | Redline',
-      body: 'Ha bajado a $27.50, por debajo de tu objetivo de $30.00',
+      body: 'Ha bajado a $27,50, por debajo de tu objetivo de $30,00',
     })
   })
 
   it('distinguishes a drop from a rise', () => {
     expect(alertNotificationText('en', 'SELL_ABOVE', 'AWP | Asiimov', 100, 112).body).toBe(
       'Rose to $112.00 — above your $100.00 target',
+    )
+  })
+
+  // Matches the app, which formats "$%.2f" without grouping.
+  it('does not group thousands', () => {
+    expect(alertNotificationText('en', 'BUY_BELOW', 'X', 17809.73, 14600).body).toBe(
+      'Dropped to $14600.00 — below your $17809.73 target',
     )
   })
 

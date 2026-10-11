@@ -111,15 +111,18 @@ export const alertRoutes: FastifyPluginAsync = async (app) => {
     const existing = await prisma.alert.findFirst({ where: { id, userId } })
     if (!existing) return reply.status(404).send({ error: 'Alert not found' })
 
-    const keyFieldChanged = body.data.targetPrice !== undefined || body.data.type !== undefined
+    // Re-arm when the type or price changes, and when the user switches the
+    // alert on: the check skips triggered alerts, so switching one back on
+    // without clearing isTriggered showed it as active while it never fired.
+    const rearm =
+      body.data.targetPrice !== undefined || body.data.type !== undefined || body.data.isActive === true
     const updated = await prisma.alert.update({
       where: { id },
       data: {
         targetPrice: body.data.targetPrice ?? existing.targetPrice,
         isActive: body.data.isActive ?? existing.isActive,
         type: body.data.type ?? existing.type,
-        // Re-arm the alert if type or price changed so it can trigger again
-        ...(keyFieldChanged ? { isTriggered: false, triggeredAt: null, isActive: true } : {}),
+        ...(rearm ? { isTriggered: false, triggeredAt: null, isActive: true } : {}),
       },
     })
 

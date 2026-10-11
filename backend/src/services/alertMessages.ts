@@ -59,7 +59,10 @@ export function normalizeLocale(raw: string | null | undefined): AlertLocale {
   return SUPPORTED_LOCALES.find((l) => l === language) ?? 'en'
 }
 
-const usd = (amount: number) => `$${amount.toFixed(2)}`
+// Same shape as the app's "$%.2f" in the device locale: the locale's decimal
+// separator, no thousands grouping — "$24,93" in Spanish, "$24.93" in English.
+const usd = (amount: number, locale: AlertLocale) =>
+  `$${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false })}`
 
 export function alertNotificationText(
   locale: string | null | undefined,
@@ -68,9 +71,10 @@ export function alertNotificationText(
   targetPrice: number,
   currentPrice: number,
 ): { title: string; body: string } {
-  const t = TEMPLATES[normalizeLocale(locale)]
+  const lang = normalizeLocale(locale)
+  const t = TEMPLATES[lang]
   const body = type === 'BUY_BELOW'
-    ? t.dropped(usd(currentPrice), usd(targetPrice))
-    : t.rose(usd(currentPrice), usd(targetPrice))
+    ? t.dropped(usd(currentPrice, lang), usd(targetPrice, lang))
+    : t.rose(usd(currentPrice, lang), usd(targetPrice, lang))
   return { title: t.title(skinName), body }
 }
