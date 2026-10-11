@@ -12,12 +12,16 @@ const addItemSchema = z.object({
 })
 
 const syncRequestSchema = z.object({
-  items: z.array(
-    z.object({
-      assetId: z.string(),
-      marketHashName: z.string(),
-    }),
-  ),
+  // CS2 caps an inventory at 1 000 items; 5 000 leaves room for anything Steam
+  // counts that we don't while bounding what one request can make us process.
+  items: z
+    .array(
+      z.object({
+        assetId: z.string().max(32),
+        marketHashName: z.string().max(200),
+      }),
+    )
+    .max(5000),
 })
 
 export const portfolioRoutes: FastifyPluginAsync = async (app) => {
@@ -88,29 +92,41 @@ export const portfolioRoutes: FastifyPluginAsync = async (app) => {
     })
     const skinByName = new Map(knownSkins.map((s) => [s.marketHashName, s]))
 
-    let synced = 0
-    for (const item of items) {
+    const now = new Date()
+    const rows = items.flatMap((item) => {
       const skin = skinByName.get(item.marketHashName)
-      if (!skin) continue
+      if (!skin) return []
+      return [{
+        userId,
+        skinId: skin.id,
+        assetId: item.assetId,
+        // Real purchase price is unknown — seed with the current market price so
+        // P&L starts at 0 and reflects movement from the sync point forward,
+        // rather than showing a meaningless -100% loss. User can correct it later.
+        acquirePrice: skin.price?.lowestPrice ?? 0,
+        acquiredAt: now,
+      }]
+    })
 
-      await prisma.portfolioItem.upsert({
-        where: { userId_assetId: { userId, assetId: item.assetId } },
-        update: {},
-        create: {
-          userId,
-          skinId: skin.id,
-          assetId: item.assetId,
-          // Real purchase price is unknown — seed with the current market price so
-          // P&L starts at 0 and reflects movement from the sync point forward,
-          // rather than showing a meaningless -100% loss. User can correct it later.
-          acquirePrice: skin.price?.lowestPrice ?? 0,
-          acquiredAt: new Date(),
-        },
-      })
-      synced++
+    // One statement instead of one upsert per item (hundreds of sequential round
+    // trips for a large inventory). skipDuplicates keeps items already in the
+    // portfolio — and any purchase price the user corrected — untouched.
+    if (rows.length > 0) {
+      await prisma.portfolioItem.createMany({ data: rows, skipDuplicates: true })
     }
 
-    return { synced, total: items.length }
+    // Sold or traded items have left the inventory, so they leave the portfolio.
+    // Not on an empty list, though: that is far likelier a Steam hiccup than a
+    // user who sold everything, and wiping would lose their corrected prices.
+    let removed = 0
+    if (items.length > 0) {
+      const result = await prisma.portfolioItem.deleteMany({
+        where: { userId, assetId: { notIn: items.map((i) => i.assetId) } },
+      })
+      removed = result.count
+    }
+
+    return { synced: rows.length, total: items.length, removed }
   })
 
   app.post('/portfolio', { onRequest: [authenticate] }, async (request, reply) => {
