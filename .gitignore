@@ -9,7 +9,6 @@ android/*.iml
 android/.externalNativeBuild
 android/.cdk.staging
 android/captures/
-android/gradle/wrapper/gradle-wrapper.jar
 
 # ─── Backend ──────────────────────────────────────────────
 backend/node_modules/
