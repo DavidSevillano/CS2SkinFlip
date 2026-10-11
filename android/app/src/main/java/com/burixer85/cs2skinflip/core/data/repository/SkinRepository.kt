@@ -92,7 +92,7 @@ class SkinRepository @Inject constructor(
     }
 
     suspend fun getPriceHistory(skinId: String, range: String): List<PricePoint> = runCatching {
-        backendApi.getPriceHistory(skinId, range).map { it.toDomain() }
+        backendApi.getPriceHistory(skinId, range).mapNotNull { it.toDomain() }
     }.getOrDefault(emptyList())
 
     suspend fun getAllWeapons(): List<String> = backendApi.getWeapons()

@@ -12,8 +12,8 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
-import java.text.SimpleDateFormat
-import java.util.Locale
+import java.time.Instant
+import java.time.format.DateTimeParseException
 
 // ─── Retrofit interface ───────────────────────────────────────────────────────
 
@@ -108,6 +108,7 @@ data class TopMoverDto(
     val marketHashName: String,
     val name: String,
     val iconUrl: String,
+    val rarity: String?,   // null from backends that predate it
     val skinportPrice: Double?,
     val csgoMarketPrice: Double?,
     val waxpeerPrice: Double?,
@@ -154,6 +155,7 @@ data class BatchSkinPriceDto(
     val csgoMarketPrice: Double?,
     val waxpeerPrice: Double?,
     val lowestPrice: Double?,
+    val priceChange24h: Double?,
 )
 
 data class PriceHistoryDto(
@@ -260,7 +262,6 @@ data class UpdateAlertRequest(
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
-private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US)
 
 fun TopMoverDto.toDomain(): Skin {
     val wear = parseWearFromName(marketHashName)
@@ -273,7 +274,7 @@ fun TopMoverDto.toDomain(): Skin {
         marketHashName = marketHashName,
         weapon = weaponName,
         skinName = patternName,
-        rarity = parseRarityFromName(marketHashName),
+        rarity = rarityOf(marketHashName, rarity),
         wear = wear,
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
@@ -304,7 +305,7 @@ fun BackendSkinDto.toDomain(
         marketHashName = marketHashName,
         weapon = weaponName,
         skinName = patternName,
-        rarity = parseRarity(rarity),
+        rarity = rarityOf(marketHashName, rarity),
         wear = wear,
         isStatTrak = marketHashName.contains("StatTrak™"),
         isSouvenir = marketHashName.contains("Souvenir"),
@@ -323,8 +324,18 @@ fun BackendSkinDto.toDomain(
     )
 }
 
-fun PriceHistoryDto.toDomain(): PricePoint {
-    val ts = runCatching { isoFormat.parse(timestamp)?.time }.getOrNull() ?: System.currentTimeMillis()
+/**
+ * Null when the timestamp can't be read — dropped rather than plotted at "now".
+ * `Instant.parse` honours the trailing `Z`; the SimpleDateFormat this replaced
+ * treated it as a literal and parsed in the device's zone, shifting every point
+ * by the user's UTC offset.
+ */
+fun PriceHistoryDto.toDomain(): PricePoint? {
+    val ts = try {
+        Instant.parse(timestamp).toEpochMilli()
+    } catch (e: DateTimeParseException) {
+        return null
+    }
     return PricePoint(timestamp = ts, price = price)
 }
 
@@ -363,9 +374,15 @@ fun parseRarity(raw: String): SkinRarity = when {
     else -> SkinRarity.MIL_SPEC
 }
 
-fun parseRarityFromName(marketHashName: String): SkinRarity = when {
+/**
+ * One rule for every list: knives and gloves (the ★ items) get the star rarity
+ * whatever grade the catalog gives them — gloves are "Extraordinary", which
+ * [parseRarity] doesn't know — and everything else uses its catalog grade.
+ */
+fun rarityOf(marketHashName: String, rarity: String?): SkinRarity = when {
     marketHashName.startsWith("★") -> SkinRarity.KNIFE
-    else -> SkinRarity.COVERT // default for top movers (no rarity in that endpoint)
+    rarity != null -> parseRarity(rarity)
+    else -> SkinRarity.COVERT // backend that predates `rarity` on top movers
 }
 
 // ─── Auth DTOs ───────────────────────────────────────────────────────────────
