@@ -92,6 +92,16 @@ Both must mention the one-time premium purchase (`purchaseToken` sent to Google 
 
 The Firebase service account file (`firebase-service-account.json`) is gitignored. Download from Firebase console → Project Settings → Service Accounts.
 
+### Steam sign-in
+
+Steam OpenID only. The callback rejects any assertion whose `openid.op_endpoint` isn't Steam or whose `openid.return_to` isn't our own callback (origin + path) — Steam's `check_authentication` vouches for its signature, not for who the assertion was minted for.
+
+**PKCE, not a JWT on the deep link.** The app opens `GET /auth/steam?challenge=<base64url(sha256(verifier))>`. The challenge rides on `return_to`, which Steam signs, and the callback reads it back from there. It then stores a one-time code in Redis (`auth:code:<code>`, 120s) and redirects to `cs2skinflip://auth/callback?code=…`; the app redeems it with `POST /auth/exchange { code, verifier }`. The code is consumed (`GETDEL`) by the first attempt whatever the outcome. A JWT on a custom-scheme link could be read by any app registering the scheme, and a link carrying an attacker's JWT signed the victim in to the attacker's account.
+
+**Legacy path:** a request with no `challenge` still gets `?token=<jwt>` on the deep link, for app versions released before PKCE. Remove it — and start rejecting tokens without `exp` in `authenticate` — once those versions have aged out.
+
+**Expiry:** every JWT now carries `exp` (`TOKEN_TTL`, 30d, `config/auth.ts`). `authenticate` returns a fresh one in `X-Refreshed-Token` when the current token has under 7 days left or no `exp` at all (legacy), so an active user is never signed out.
+
 ### Premium unlock (unlimited alerts)
 
 Free accounts get 1 alert (`FREE_ALERT_LIMIT` in `src/routes/alerts.ts`); a one-time Google Play purchase unlocks unlimited alerts by setting `User.isPremium = true`.

@@ -27,5 +27,10 @@ export function fakeRedisStore() {
     },
     keys: async (pattern: string) => [...store.keys()].filter((key) => toRegExp(pattern).test(key)),
     del: async (key: string) => (store.delete(key) ? 1 : 0),
+    getdel: async (key: string) => {
+      const value = store.get(key) ?? null
+      store.delete(key)
+      return value
+    },
   }
 }

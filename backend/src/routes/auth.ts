@@ -1,18 +1,52 @@
 import { FastifyPluginAsync } from 'fastify'
 import axios from 'axios'
+import { randomBytes, timingSafeEqual } from 'crypto'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { env } from '../config/env'
 import { authenticate } from '../middleware/authenticate'
+import { redis } from '../redis/client'
+import {
+  AUTH_CODE_KEY_PREFIX,
+  AUTH_CODE_TTL_SECONDS,
+  CHALLENGE_PATTERN,
+  TOKEN_TTL,
+  VERIFIER_PATTERN,
+  challengeFor,
+} from '../config/auth'
 
-const STEAM_OPENID_ENDPOINT = 'https://steamcommunity.com/openid/login'
+interface PendingLogin {
+  userId: string
+  steamId: string
+  challenge: string
+}
+
+const exchangeSchema = z.object({
+  code: z.string().min(1).max(200),
+  verifier: z.string().regex(VERIFIER_PATTERN),
+})
+
+function matchesChallenge(verifier: string, challenge: string): boolean {
+  const actual = Buffer.from(challengeFor(verifier))
+  const expected = Buffer.from(challenge)
+  return actual.length === expected.length && timingSafeEqual(actual, expected)
+}
+
+const STEAM_OPENID_ENDPOINT ='https://steamcommunity.com/openid/login'
 const STEAM_ID_REGEX = /^https:\/\/steamcommunity\.com\/openid\/id\/(\d{17})$/
 
-function buildSteamLoginUrl(): string {
+/**
+ * `challenge` (PKCE, from current app versions) rides on return_to. Steam signs
+ * return_to, so the callback can trust the challenge it reads back from there —
+ * unlike a bare query parameter, which anyone holding the URL could rewrite.
+ */
+function buildSteamLoginUrl(challenge?: string): string {
+  const returnTo = new URL(env.STEAM_CALLBACK_URL)
+  if (challenge) returnTo.searchParams.set('challenge', challenge)
   const params = new URLSearchParams({
     'openid.ns': 'http://specs.openid.net/auth/2.0',
     'openid.mode': 'checkid_setup',
-    'openid.return_to': env.STEAM_CALLBACK_URL,
+    'openid.return_to': returnTo.toString(),
     'openid.realm': env.FRONTEND_URL,
     'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
     'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
@@ -46,7 +80,9 @@ async function verifySteamAssertion(query: Record<string, string>): Promise<stri
   if (query['openid.op_endpoint'] !== STEAM_OPENID_ENDPOINT) return null
   if (!isOurReturnTo(query['openid.return_to'])) return null
 
-  const body = new URLSearchParams({ ...query, 'openid.mode': 'check_authentication' })
+  // Only the openid.* fields: the callback URL also carries our own `challenge`.
+  const openidFields = Object.fromEntries(Object.entries(query).filter(([key]) => key.startsWith('openid.')))
+  const body = new URLSearchParams({ ...openidFields, 'openid.mode': 'check_authentication' })
 
   const { data } = await axios.post(STEAM_OPENID_ENDPOINT, body.toString(), {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -62,8 +98,12 @@ async function verifySteamAssertion(query: Record<string, string>): Promise<stri
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
   // Redirects browser to Steam login
-  app.get('/auth/steam', async (_request, reply) => {
-    return reply.redirect(buildSteamLoginUrl())
+  app.get('/auth/steam', async (request, reply) => {
+    const { challenge } = request.query as { challenge?: string }
+    if (challenge !== undefined && !CHALLENGE_PATTERN.test(challenge)) {
+      return reply.status(400).send({ error: 'Invalid challenge' })
+    }
+    return reply.redirect(buildSteamLoginUrl(challenge))
   })
 
   // Steam redirects here after login; we verify & issue a JWT
@@ -105,7 +145,24 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       create: { steamId, username, avatarUrl },
     })
 
-    const token = app.jwt.sign({ userId: user.id, steamId: user.steamId })
+    // Current app versions: a one-time code bound to their PKCE challenge, which
+    // only the app holding the verifier can redeem at POST /auth/exchange. A JWT
+    // on the deep link could be read by any app registering the same scheme, and
+    // a link carrying someone else's JWT would sign the victim in to that account.
+    const challenge = new URL(query['openid.return_to']).searchParams.get('challenge')
+    if (challenge && CHALLENGE_PATTERN.test(challenge)) {
+      const code = randomBytes(32).toString('base64url')
+      await redis.set(
+        `${AUTH_CODE_KEY_PREFIX}${code}`,
+        { userId: user.id, steamId: user.steamId, challenge },
+        { ex: AUTH_CODE_TTL_SECONDS },
+      )
+      return reply.redirect(`${env.MOBILE_DEEP_LINK}?code=${code}`)
+    }
+
+    // Legacy app versions send no challenge and read the JWT off the deep link.
+    // Kept until they have aged out — see CLAUDE.md (Steam sign-in).
+    const token = app.jwt.sign({ userId: user.id, steamId: user.steamId }, { expiresIn: TOKEN_TTL })
 
     // Mobile apps receive token via query param redirect; web apps can read the cookie
     return reply
@@ -117,6 +174,23 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
         maxAge: 7 * 24 * 60 * 60,
       })
       .redirect(`${env.MOBILE_DEEP_LINK}?token=${token}`)
+  })
+
+  /**
+   * Redeems a one-time code from the PKCE callback. The code is consumed by the
+   * first attempt whatever its outcome, so a wrong verifier can't be retried.
+   */
+  app.post('/auth/exchange', async (request, reply) => {
+    const body = exchangeSchema.safeParse(request.body)
+    if (!body.success) return reply.status(400).send({ error: 'Invalid body' })
+
+    const pending = await redis.getdel<PendingLogin>(`${AUTH_CODE_KEY_PREFIX}${body.data.code}`)
+    if (!pending || !matchesChallenge(body.data.verifier, pending.challenge)) {
+      return reply.status(400).send({ error: 'Invalid or expired code' })
+    }
+
+    const token = app.jwt.sign({ userId: pending.userId, steamId: pending.steamId }, { expiresIn: TOKEN_TTL })
+    return { token }
   })
 
   app.post('/auth/logout', async (_request, reply) => {
