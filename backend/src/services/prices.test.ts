@@ -102,6 +102,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
     marketHashName: `Skin ${id} (Field-Tested)`,
     name: `Skin ${id}`,
     iconUrl: `http://img/${id}.png`,
+    rarity: 'Covert',
     price,
   })
 
@@ -143,6 +144,19 @@ describe('PriceService.getTopMovers — corroboration', () => {
     const movers = await new PriceService().getTopMovers('rising', 20)
 
     expect(movers.map((m) => m.skinId)).toEqual(['honest'])
+  })
+
+  // The home cards colour by rarity; without it the app guessed "Covert" for
+  // every non-knife mover.
+  it("reports each mover's real rarity", async () => {
+    skinFindMany.mockResolvedValue([
+      { ...skin('mil', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 104 })), rarity: 'Mil-Spec Grade' },
+    ])
+    queryRaw.mockResolvedValue([{ skinId: 'mil', price: 80 }])
+
+    const movers = await new PriceService().getTopMovers('rising', 20)
+
+    expect(movers[0].rarity).toBe('Mil-Spec Grade')
   })
 
   it('keeps a skin whose quotes merely differ by a normal spread', async () => {

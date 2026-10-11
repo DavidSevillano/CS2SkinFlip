@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../db/prisma'
-import { PriceService } from '../services/prices'
+import { PriceService, fetchReferencePrices, percentChange } from '../services/prices'
 
 const priceService = new PriceService()
 
@@ -8,9 +8,9 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
   /**
    * GET /prices/batch?ids=id1,id2,...
    *
-   * Returns prices for up to 50 skins in a single round-trip. Pure DB read —
-   * the 2-hourly bulk job keeps every column fresh, so there are no external
-   * API calls and no rate-limit concerns.
+   * Current prices and 24h change for up to 50 skins in one round trip — what
+   * the watchlist refreshes with. Pure DB read; the 6h bulk job keeps every
+   * column fresh, so there are no external API calls.
    */
   app.get('/prices/batch', async (request, reply) => {
     const { ids } = request.query as { ids?: string }
@@ -19,9 +19,10 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
     const idList = ids.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 50)
     if (idList.length === 0) return {}
 
-    const rows = await prisma.skinPrice.findMany({
-      where: { skinId: { in: idList } },
-    })
+    const [rows, references] = await Promise.all([
+      prisma.skinPrice.findMany({ where: { skinId: { in: idList } } }),
+      fetchReferencePrices(idList),
+    ])
 
     const response: Record<string, object> = {}
     for (const row of rows) {
@@ -30,6 +31,9 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
         csgoMarketPrice: row.csgoMarketPrice,
         waxpeerPrice:    row.waxpeerPrice,
         lowestPrice:     row.lowestPrice,
+        // Same fallback as GET /skins: the bulk job's cached value when there is
+        // no reference point in the window.
+        priceChange24h:  percentChange(row.lowestPrice, references.get(row.skinId)) ?? row.priceChange24h,
       }
     }
     return response

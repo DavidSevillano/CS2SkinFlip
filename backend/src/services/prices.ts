@@ -55,6 +55,37 @@ export async function invalidateTopMoversCache(): Promise<number> {
   return keys.length
 }
 
+/**
+ * Each skin's reference price for the 24h change: its latest PriceHistory point
+ * inside [24h ago − CHANGE_REFERENCE_WINDOW_MS, 24h ago]. Bounded on both ends
+ * so every caller resolves the same reference row for a skin.
+ *
+ * Raw `DISTINCT ON` because Prisma's `distinct` can't be pushed down under a
+ * timestamp `orderBy`: it fetches every row in the window and dedupes
+ * in-process, ~4x the rows on a metered connection. One row per skin crosses
+ * the wire, and only the two columns used.
+ */
+export async function fetchReferencePrices(skinIds: string[]): Promise<Map<string, number>> {
+  if (skinIds.length === 0) return new Map()
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
+  const rows = await prisma.$queryRaw<Array<{ skinId: string; price: number }>>`
+    SELECT DISTINCT ON ("skinId") "skinId", "price"
+    FROM "PriceHistory"
+    WHERE "skinId" IN (${Prisma.join(skinIds)})
+      AND "timestamp" >= ${windowStart}
+      AND "timestamp" <= ${dayAgo}
+    ORDER BY "skinId", "timestamp" DESC
+  `
+  return new Map(rows.map((r) => [r.skinId, r.price]))
+}
+
+/** Percentage change from `reference` to `current`, or null when either is unusable. */
+export function percentChange(current: number | null, reference: number | null | undefined): number | null {
+  if (current === null || reference == null || reference <= 0) return null
+  return ((current - reference) / reference) * 100
+}
+
 export class PriceService {
 
   /** Read stored prices from DB (populated by bulk job every 6h). Cached 5 min. */
@@ -117,9 +148,9 @@ export class PriceService {
   async getTopMovers(
     direction: 'rising' | 'falling' = 'rising',
     limit = 20
-  ): Promise<Array<AggregatedPrices & { name: string; iconUrl: string }>> {
+  ): Promise<Array<AggregatedPrices & { name: string; iconUrl: string; rarity: string }>> {
     const cacheKey = topMoversCacheKey(direction, limit)
-    const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string }>>(cacheKey)
+    const cached = await redis.get<Array<AggregatedPrices & { name: string; iconUrl: string; rarity: string }>>(cacheKey)
     if (cached) return cached
 
     const sortOrder = direction === 'falling' ? 'asc' : 'desc'
@@ -192,6 +223,7 @@ export class PriceService {
           marketHashName: skin.marketHashName,
           name: skin.name,
           iconUrl: skin.iconUrl,
+          rarity: skin.rarity,
           skinportPrice:   skin.price?.skinportPrice   ?? null,
           csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
           waxpeerPrice:    skin.price?.waxpeerPrice    ?? null,
