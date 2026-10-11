@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../db/prisma'
-import { PriceService, fetchReferencePrices, percentChange } from '../services/prices'
+import { PriceService } from '../services/prices'
+import { fetchReferencePrices, percentChange } from '../services/priceReference'
 
 const priceService = new PriceService()
 

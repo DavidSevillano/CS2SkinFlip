@@ -1,9 +1,8 @@
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
-import { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
-import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
+import { fetchReferencePrices, percentChange } from '../services/priceReference'
 import { env } from '../config/env'
 import { requireSecretHeader } from '../middleware/requireSecretHeader'
 
@@ -142,43 +141,14 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       skins = await prisma.skin.findMany({ where, include: { price: true }, skip, take: limit, orderBy: { name: 'asc' } })
     }
 
-    // Always recompute priceChange24h live from PriceHistory (same logic as /skins/:id)
-    // so values shown in search/home always match what the detail screen shows.
-    // The DB-cached column from the bulk job is stale between runs; prices can move in the interim.
-    //
-    // The window is bounded on BOTH ends, and by the same constant the bulk job
-    // uses, so that an unbounded `lte` and the job's window can't resolve
-    // different reference rows for the same skin — the drift
-    // `CHANGE_REFERENCE_WINDOW_MS` exists to prevent.
-    //
-    // Raw `DISTINCT ON` because Prisma's `distinct` cannot be pushed down to
-    // Postgres under a timestamp `orderBy`: it fetches every row in the window
-    // and dedupes in-process, so a 50-result page pulled ~4x the rows it used.
-    // This is the hottest route in the app and the connection is metered.
-    const skinIds = skins.map((s: any) => s.id as string)
-    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
-    const oldPrices =
-      skinIds.length === 0
-        ? []
-        : await prisma.$queryRaw<Array<{ skinId: string; price: number }>>`
-            SELECT DISTINCT ON ("skinId") "skinId", "price"
-            FROM "PriceHistory"
-            WHERE "skinId" IN (${Prisma.join(skinIds)})
-              AND "timestamp" >= ${windowStart}
-              AND "timestamp" <= ${dayAgo}
-            ORDER BY "skinId", "timestamp" DESC
-          `
-    const oldPriceMap = new Map(oldPrices.map((p) => [p.skinId, p.price]))
-
+    // Always recompute priceChange24h from PriceHistory so search, home and the
+    // detail screen agree; the bulk job's cached column is the fallback when the
+    // reference window holds no point. See fetchReferencePrices.
+    const references = await fetchReferencePrices(skins.map((s: any) => s.id as string))
     const enrichedSkins = skins.map((s: any) => {
       if (!s.price) return s
-      const oldPrice = oldPriceMap.get(s.id)
-      const currentPrice = s.price.lowestPrice
       const priceChange24h =
-        oldPrice != null && currentPrice != null && oldPrice > 0
-          ? ((currentPrice - oldPrice) / oldPrice) * 100
-          : s.price.priceChange24h ?? null  // fall back to bulk-job cache if no history entry
+        percentChange(s.price.lowestPrice, references.get(s.id)) ?? s.price.priceChange24h ?? null
       return { ...s, price: { ...s.price, priceChange24h } }
     })
 
@@ -252,15 +222,11 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     const skin = await prisma.skin.findUnique({ where: { id: skinId }, include: { price: true } })
     if (!skin) return reply.status(404).send({ error: 'Skin not found' })
 
-    // 24h % change recomputed from PriceHistory — more accurate than the bulk-job cache.
-    const oldEntry = await prisma.priceHistory.findFirst({
-      where: { skinId, timestamp: { lte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
-      orderBy: { timestamp: 'desc' },
-    })
-    const lowest = skin.price?.lowestPrice ?? null
-    const priceChange24h = oldEntry && lowest && oldEntry.price > 0
-      ? ((lowest - oldEntry.price) / oldEntry.price) * 100
-      : (skin.price?.priceChange24h ?? null)
+    // Same reference and fallback as the lists, so opening a skin from search
+    // shows the change the list just showed.
+    const references = await fetchReferencePrices([skinId])
+    const priceChange24h =
+      percentChange(skin.price?.lowestPrice ?? null, references.get(skinId)) ?? skin.price?.priceChange24h ?? null
 
     return {
       ...skin,

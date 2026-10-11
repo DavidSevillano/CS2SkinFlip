@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Fastify from 'fastify'
 
-const { skinFindMany, skinCount, queryRaw } = vi.hoisted(() => ({
+const { skinFindMany, skinFindUnique, skinCount, queryRaw } = vi.hoisted(() => ({
   skinFindMany: vi.fn(),
+  skinFindUnique: vi.fn(),
   skinCount: vi.fn(),
   queryRaw: vi.fn(),
 }))
 vi.mock('../db/prisma', () => ({
   prisma: {
-    skin: { findMany: skinFindMany, count: skinCount },
+    skin: { findMany: skinFindMany, findUnique: skinFindUnique, count: skinCount },
     $queryRaw: queryRaw,
   },
 }))
@@ -228,6 +229,37 @@ describe('GET /skins — 24h-change reference query', () => {
     // row() seeds priceChange24h: 3.2 on the price relation — narrowing the window
     // must not turn a known change into null.
     expect(res.json().data[0].price.priceChange24h).toBe(3.2)
+  })
+})
+
+// The detail screen resolved its reference with an unbounded `lte: dayAgo`, so
+// with no point inside the window it reached back days for one — and showed a
+// different 24h change than the search list for the same skin.
+describe('GET /skins/:skinId — 24h change', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinFindUnique.mockResolvedValue(row('ak', 110))
+  })
+
+  it('reads the reference from the same bounded window as the lists', async () => {
+    const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
+    queryRaw.mockResolvedValue([{ skinId: 'ak', price: 100 }])
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins/ak' })
+
+    const [gte, lte] = queryRawDates(queryRaw.mock.calls[0])
+    expect(lte.getTime() - gte.getTime()).toBe(CHANGE_REFERENCE_WINDOW_MS)
+    expect(res.json().price.priceChange24h).toBeCloseTo(10)
+  })
+
+  it('falls back to the bulk-job column like the lists do', async () => {
+    queryRaw.mockResolvedValue([])
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins/ak' })
+
+    expect(res.json().price.priceChange24h).toBe(3.2)
   })
 })
 
