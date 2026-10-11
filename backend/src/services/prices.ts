@@ -1,7 +1,7 @@
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
 import { fetchReferencePrices, percentChange } from './priceReference'
-import { MIN_TOP_MOVER_ABS_MOVE, MIN_TOP_MOVER_PRICE } from '../config/priceQuality'
+import { MIN_TOP_MOVER_ABS_MOVE, MIN_TOP_MOVER_LISTINGS, MIN_TOP_MOVER_PRICE } from '../config/priceQuality'
 import { isCorroborated } from './quotes'
 import type { AggregatedPrices } from '../types'
 
@@ -129,7 +129,15 @@ export class PriceService {
 
     const skins = await prisma.skin.findMany({
       include: { price: true },
-      where: { price: { lowestPrice: { gte: MIN_TOP_MOVER_PRICE }, OR: atLeastTwoQuotes } },
+      // The listing floor is SQL for the same reason: in-process, on 100
+      // candidates, it starved the list to 4 of 20 (measure-mover-liquidity.ts).
+      where: {
+        price: {
+          lowestPrice: { gte: MIN_TOP_MOVER_PRICE },
+          volume24h: { gte: MIN_TOP_MOVER_LISTINGS },
+          OR: atLeastTwoQuotes,
+        },
+      },
       orderBy: [
         { price: { priceChange24h: { sort: sortOrder, nulls: 'last' } } },
         { price: { lowestPrice: 'desc' } },

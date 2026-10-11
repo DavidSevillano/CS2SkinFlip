@@ -73,3 +73,24 @@ export const MIN_TOP_MOVER_ABS_MOVE = 2
  * screen for the same skin.
  */
 export const MAX_TOP_MOVER_QUOTE_SPREAD = 3
+
+/**
+ * Fewest CS:GO Market listings (`SkinPrice.volume24h`) a skin needs to be ranked
+ * in top movers. A skin with no CS:GO Market listing at all has no volume and
+ * is not ranked either: its liquidity can't be told.
+ *
+ * Corroboration says the quotes agree; it can't say there is a market. On a
+ * skin with one or two listings, "the lowest price" is a single seller's ask,
+ * and two marketplaces each holding one such listing agree easily. Measured
+ * 2026-10-11 with `scripts/measure-mover-liquidity.ts`: the top risers were a
+ * Well-Worn Nomad Knife | Crimson Web at +702% on 2 listings, a Butterfly Knife
+ * at +424% on 1, a Glock-18 | Sand Dune at +222% on 4 — 13 of the top 20 had
+ * five listings or fewer.
+ *
+ * Across the whole CS:GO Market feed the listing count is p25 4, p50 11, p75
+ * 28. At 10 the rising list's median goes from +91% to +16% and falling's from
+ * −36% to −12%, and both still fill 20/20 out of 1 000 candidates, because the
+ * filter runs in SQL and draws from the liquid pool. At 5, a +124% move on 5
+ * listings still led; past 10, the lists barely change.
+ */
+export const MIN_TOP_MOVER_LISTINGS = 10

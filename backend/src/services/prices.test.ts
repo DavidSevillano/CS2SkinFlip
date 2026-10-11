@@ -42,7 +42,7 @@ const { PriceService, invalidateTopMoversCache } = await import('./prices')
 
 const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
 
-const { MIN_TOP_MOVER_PRICE } = await import('../config/priceQuality')
+const { MIN_TOP_MOVER_PRICE, MIN_TOP_MOVER_LISTINGS } = await import('../config/priceQuality')
 
 describe('PriceService.getTopMovers — 24h-change reference query', () => {
   beforeEach(() => {
@@ -220,6 +220,18 @@ describe('PriceService.getTopMovers — movement worth acting on', () => {
     expect(skinFindMany.mock.calls[0][0].where.price.lowestPrice).toEqual({
       gte: MIN_TOP_MOVER_PRICE,
     })
+  })
+
+  // A lone listing is a seller's ask, not a market — two marketplaces each
+  // holding one agree easily. Also excludes a null volume (not listed on CS:GO
+  // Market), since `gte` never matches NULL.
+  it('makes the database require a minimum number of listings', async () => {
+    skinFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
+
+    await new PriceService().getTopMovers('rising', 20)
+
+    expect(skinFindMany.mock.calls[0][0].where.price.volume24h).toEqual({ gte: MIN_TOP_MOVER_LISTINGS })
   })
 
   it('drops a dramatic percentage that is worth pennies', async () => {
