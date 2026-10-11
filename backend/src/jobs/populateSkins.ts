@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { prisma } from '../db/prisma'
+import { redis } from '../redis/client'
 import { invalidateTopMoversCache } from '../services/prices'
 import type { FastifyBaseLogger } from 'fastify'
 
@@ -40,29 +41,18 @@ function slugify(str: string): string {
     .substring(0, 80)
 }
 
-export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
-  const existing = await prisma.skin.count()
-  // Threshold accounts for base skins (~9114) + StatTrak variants (~4500)
-  if (existing >= 12000) {
-    log.info(`[PopulateSkins] DB already has ${existing} skins, skipping`)
-    return
-  }
+interface SkinRecord {
+  id: string
+  name: string
+  marketHashName: string
+  weapon: string
+  rarity: string
+  iconUrl: string
+}
 
-  log.info('[PopulateSkins] Fetching full CS2 skin catalog...')
-
-  const skinsRes = await axios.get<BymykelSkin[]>(BYMYKEL_SKINS_URL, { timeout: 30000 })
-  const allSkins: BymykelSkin[] = skinsRes.data
-
-  log.info(`[PopulateSkins] ${allSkins.length} skins from catalog`)
-
-  // Build one DB record per skin × wear combination
-  const records: Array<{
-    id: string
-    marketHashName: string
-    weapon: string
-    rarity: string
-    iconUrl: string
-  }> = []
+/** One record per skin × wear, plus its StatTrak twin where the skin has one. */
+export function catalogRecords(allSkins: BymykelSkin[]): SkinRecord[] {
+  const records: SkinRecord[] = []
 
   for (const skin of allSkins) {
     if (!skin.wears || skin.wears.length === 0) continue
@@ -72,9 +62,14 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
       // Knife names start with "★ ", StatTrak knife format: "★ StatTrak™ Karambit | ..."
       const baseName = skin.name  // e.g. "AK-47 | Redline" or "★ Karambit | Fade"
       const marketHashName = `${baseName} (${wear.name})`
-      const id = slugify(marketHashName)
-
-      records.push({ id, marketHashName, weapon: skin.weapon.name, rarity: skin.rarity.name, iconUrl: skin.image })
+      records.push({
+        id: slugify(marketHashName),
+        name: marketHashName,
+        marketHashName,
+        weapon: skin.weapon.name,
+        rarity: skin.rarity.name,
+        iconUrl: skin.image,
+      })
 
       // Also create StatTrak variant if available
       if (skin.stattrak) {
@@ -82,9 +77,9 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
           ? `★ StatTrak™ ${baseName.slice(2)}`   // "★ StatTrak™ Karambit | Fade"
           : `StatTrak™ ${baseName}`               // "StatTrak™ AK-47 | Redline"
         const stattrakHashName = `${stattrakBase} (${wear.name})`
-        const stattrakId = slugify(stattrakHashName)
         records.push({
-          id: stattrakId,
+          id: slugify(stattrakHashName),
+          name: stattrakHashName,
           marketHashName: stattrakHashName,
           weapon: skin.weapon.name,
           rarity: skin.rarity.name,
@@ -94,43 +89,64 @@ export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
     }
   }
 
-  log.info(`[PopulateSkins] Inserting ${records.length} records...`)
+  return records
+}
 
-  let imported = 0
-  let skipped = 0
-  const BATCH_SIZE = 50
+// 6 columns per row keeps a batch far under Postgres' 65 535 bind parameters.
+const INSERT_BATCH_SIZE = 1000
 
-  for (let i = 0; i < records.length; i += BATCH_SIZE) {
-    const batch = records.slice(i, i + BATCH_SIZE)
+/**
+ * Adds any skin in the catalog that the database doesn't have yet. Existing
+ * rows are left untouched: `skipDuplicates` is ON CONFLICT DO NOTHING, so an
+ * id or marketHashName already present costs no write, and createMany returns
+ * only a count, so nothing is read back across Neon's metered transfer.
+ */
+export async function syncSkinCatalog(log: FastifyBaseLogger): Promise<{ inserted: number }> {
+  const skinsRes = await axios.get<BymykelSkin[]>(BYMYKEL_SKINS_URL, { timeout: 30000 })
+  const records = catalogRecords(skinsRes.data)
 
-    await Promise.all(
-      batch.map(async (r) => {
-        try {
-          await prisma.skin.upsert({
-            where: { id: r.id },
-            update: { iconUrl: r.iconUrl },
-            create: {
-              id: r.id,
-              name: r.marketHashName,
-              marketHashName: r.marketHashName,
-              weapon: r.weapon,
-              rarity: r.rarity,
-              iconUrl: r.iconUrl,
-            },
-          })
-
-          imported++
-        } catch {
-          skipped++
-        }
-      })
-    )
-
-    if (i % 1000 === 0 && i > 0) {
-      log.info(`[PopulateSkins] Progress: ${i}/${records.length}`)
-    }
+  let inserted = 0
+  for (let i = 0; i < records.length; i += INSERT_BATCH_SIZE) {
+    const { count } = await prisma.skin.createMany({
+      data: records.slice(i, i + INSERT_BATCH_SIZE),
+      skipDuplicates: true,
+    })
+    inserted += count
   }
 
-  await invalidateTopMoversCache()
-  log.info(`[PopulateSkins] Done — imported: ${imported}, skipped: ${skipped}`)
+  if (inserted > 0) await invalidateTopMoversCache()
+  log.info(`[PopulateSkins] Catalog has ${records.length} records — ${inserted} new`)
+  return { inserted }
+}
+
+// `pipeline:` rather than `prices:` because app.ts wipes `prices:*` on boot.
+export const CATALOG_SYNCED_AT_KEY = 'pipeline:catalog:syncedAt'
+// New skins arrive with game updates, weeks apart; a daily look is plenty.
+const CATALOG_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Runs [syncSkinCatalog] at most once a day, from the 6h price job — before the
+ * price fetch, so a new skin is priced in the same run. Returns null when skipped.
+ */
+export async function syncSkinCatalogIfDue(log: FastifyBaseLogger): Promise<{ inserted: number } | null> {
+  const raw = await redis.get(CATALOG_SYNCED_AT_KEY)
+  const last = Number(raw)
+  if (raw !== null && Number.isFinite(last) && Date.now() - last < CATALOG_SYNC_INTERVAL_MS) return null
+
+  const result = await syncSkinCatalog(log)
+  await redis.set(CATALOG_SYNCED_AT_KEY, Date.now())
+  return result
+}
+
+/** Bootstrap import for an empty database. Routine additions come from [syncSkinCatalogIfDue]. */
+export async function populateSkins(log: FastifyBaseLogger): Promise<void> {
+  const existing = await prisma.skin.count()
+  // Threshold accounts for base skins (~9114) + StatTrak variants (~4500)
+  if (existing >= 12000) {
+    log.info(`[PopulateSkins] DB already has ${existing} skins, skipping`)
+    return
+  }
+
+  log.info('[PopulateSkins] Fetching full CS2 skin catalog...')
+  await syncSkinCatalog(log)
 }

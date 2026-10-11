@@ -122,9 +122,9 @@ Fastify + Prisma + TypeScript. Vitest (`npm test`), colocated `*.test.ts` next t
 buildServer() → listen → populateSkins() → populatePrices() only if SkinPrice is empty
 ```
 
-`populateSkins` skips if the DB already has ≥ 12 000 rows. `populatePrices` runs on startup **only in a real bootstrap** (empty `SkinPrice`: new DB, `db:reset`) — a routine restart refreshes nothing.
+`populateSkins` is the bootstrap import and skips if the DB already has ≥ 12 000 rows; new skins arrive through the daily catalog sync instead (see [Skin catalog](#skin-catalog-populateskinsts)). `populatePrices` runs on startup **only in a real bootstrap** (empty `SkinPrice`: new DB, `db:reset`) — a routine restart refreshes nothing.
 
-**The periodic refresh is not scheduled in this process.** `.github/workflows/refresh-prices.yml` cron-triggers `POST /jobs/refresh-prices` every 6h (00/06/12/18 UTC), which runs populatePrices → alert check → history cleanup behind a Redis lock (`src/jobs/runner.ts`). A `setInterval` here would restart its clock on every deploy and double up if the service ever ran 2 instances.
+**The periodic refresh is not scheduled in this process.** `.github/workflows/refresh-prices.yml` cron-triggers `POST /jobs/refresh-prices` every 6h (00/06/12/18 UTC), which runs catalog sync (daily) → populatePrices → alert check → history cleanup behind a Redis lock (`src/jobs/runner.ts`). A `setInterval` here would restart its clock on every deploy and double up if the service ever ran 2 instances.
 
 The 6h cadence therefore lives in the workflow cron, mirrored by `REFRESH_INTERVAL_MS` in `src/config/priceHistory.ts`. Change one and you must change the other: `CHANGE_REFERENCE_WINDOW_MS` is defined against it, and `priceHistory.test.ts` pins the relationship.
 
@@ -178,6 +178,8 @@ Supports partial updates: `isActive`, `targetPrice`, and `type`. When `targetPri
 ### Skin catalog (`populateSkins.ts`)
 
 Source: `ByMykel/CSGO-API` GitHub JSON — **the catalog only, no prices**. It used to also fetch Steam prices from `prices.csgotrader.app` and seed `SkinPrice` with them; removed 2026-07-24 for two independent reasons. The endpoint had stopped serving JSON (it answers 200 with the site's HTML, and the "N prices loaded" log was counting the character indices of that string, so it reported ~36 700 prices every run). And even working, seeding `SkinPrice` here broke the bootstrap: `app.ts` runs `populatePrices` only when `SkinPrice` is empty, so a seeded row made a brand-new database skip the marketplace fetch and serve Steam-derived prices until the first cron run hours later.
+
+**New skins are added daily.** `syncSkinCatalogIfDue` runs from the 6h job at most once a day (`pipeline:catalog:syncedAt`), before the price fetch so a new skin is priced in the same run. It inserts with `createMany({ skipDuplicates: true })`: existing rows are neither rewritten nor read back, so the daily pass costs Neon no transfer beyond a count. It also no longer refreshes `iconUrl` on existing rows. A failed sync is logged, doesn't fail the price run and is retried on the next run.
 
 Each skin × wear combination = one DB row. StatTrak variants:
 - Regular: `StatTrak™ {name} ({wear})`

@@ -3,6 +3,7 @@ import { redis } from '../redis/client'
 import { populatePrices } from './populatePrices'
 import { cleanupPriceHistory } from './cleanupPriceHistory'
 import { revokeVoidedPurchases } from './revokeVoidedPurchases'
+import { syncSkinCatalogIfDue } from './populateSkins'
 import { AlertService } from '../services/alerts'
 import type { FastifyBaseLogger } from 'fastify'
 
@@ -71,6 +72,14 @@ async function executeRun(runId: string, startedAt: number, log: FastifyBaseLogg
   }
 
   try {
+    // Before the price fetch, so a skin added today is priced in this run. A
+    // catalog failure only delays new skins; it must not cost the price refresh.
+    try {
+      await syncSkinCatalogIfDue(log)
+    } catch (err) {
+      log.error({ err }, '[JobRunner] Catalog sync failed')
+    }
+
     const { updated } = await populatePrices(log)
 
     // Every fetcher swallows its own error and returns an empty map, so all three
