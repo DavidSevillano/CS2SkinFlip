@@ -346,3 +346,41 @@ describe('GET /skins — popular sort and category', () => {
     expect(res.statusCode).toBe(400)
   })
 })
+
+describe('GET /skins — popular sort price floor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinCount.mockResolvedValue(500)
+    skinFindMany.mockResolvedValue([])
+    queryRaw.mockResolvedValue([])
+  })
+
+  const priceConditions = () =>
+    skinFindMany.mock.calls[0][0].where.AND.filter((c: any) => c.price?.lowestPrice)
+
+  // Mass-dropped $0.005 skins hold the most listings.
+  it('hides sub-dollar skins when browsing', async () => {
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=popular&category=heavy' })
+
+    expect(priceConditions()).toEqual([{ price: { lowestPrice: { gte: 1 } } }])
+  })
+
+  it('still finds them by name', async () => {
+    queryRaw.mockResolvedValueOnce([{ id: 'sawed-off' }])
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=popular&q=sawed' })
+
+    expect(priceConditions()).toEqual([])
+  })
+
+  it('gives way to an explicit minimum price', async () => {
+    const app = await buildTestApp()
+
+    await app.inject({ method: 'GET', url: '/skins?sort=popular&minPrice=0.5' })
+
+    expect(priceConditions()).toEqual([{ price: { lowestPrice: { gte: 0.5 } } }])
+  })
+})

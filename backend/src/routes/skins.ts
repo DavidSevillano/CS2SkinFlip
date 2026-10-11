@@ -9,6 +9,11 @@ import { WEAPON_CATEGORIES, WEAPON_CATEGORY_KEYS } from '../config/weaponCategor
 
 const priceService = new PriceService()
 
+// USD. Measured 2026-10-11: without it the popular sort opened on eight skins
+// at $0.005-0.006 with 4-6k listings each; with it, AK-47 | Slate and M4A1-S |
+// Black Lotus.
+const MIN_POPULAR_BROWSE_PRICE = 1
+
 const searchQuerySchema = z.object({
   q: z.string().optional(),
   weapon: z.string().optional(),
@@ -75,9 +80,12 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     if (wear) conditions.push({ marketHashName: { contains: `(${wear})`, mode: 'insensitive' } })
     // use 'StatTrak' without ™ to avoid unicode matching issues
     if (statTrak) conditions.push({ marketHashName: { contains: 'StatTrak', mode: 'insensitive' } })
-    if (minPrice !== undefined || maxPrice !== undefined) {
+    // Listing counts are highest on mass-dropped $0.005 skins, which buried
+    // everything else under the popular sort. A typed name still finds them.
+    const priceFloor = minPrice ?? (sort === 'popular' && !q ? MIN_POPULAR_BROWSE_PRICE : undefined)
+    if (priceFloor !== undefined || maxPrice !== undefined) {
       const priceFilter: any = {}
-      if (minPrice !== undefined) priceFilter.gte = minPrice
+      if (priceFloor !== undefined) priceFilter.gte = priceFloor
       if (maxPrice !== undefined) priceFilter.lte = maxPrice
       conditions.push({ price: { lowestPrice: priceFilter } })
     }
