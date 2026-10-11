@@ -1,33 +1,20 @@
-# Kotlin
--keep class kotlin.** { *; }
--keepclassmembers class kotlin.Metadata { *; }
-
-# Hilt
--keep class dagger.hilt.** { *; }
--keep class javax.inject.** { *; }
--keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
-
-# Room
--keep class androidx.room.** { *; }
--keep @androidx.room.Entity class * { *; }
+# Kotlin, Hilt, Room, Retrofit and OkHttp ship their own consumer rules. Keeping
+# whole packages of them here (kotlin.**, dagger.hilt.**, androidx.room.**,
+# retrofit2.**, com.google.gson.**) only stopped R8 from shrinking them.
 
 # Retrofit / OkHttp
 -dontwarn okhttp3.**
--keep class retrofit2.** { *; }
--keepclassmembers,allowshrinking,allowobfuscation interface * {
-    @retrofit2.http.* <methods>;
-}
 
 # Coil
 -dontwarn coil.**
 
-# Gson
+# Gson (2.10, no bundled rules): it reads fields reflectively by name, and
+# Retrofit reads generic signatures off the service interfaces.
 -keepattributes Signature
 -keepattributes *Annotation*
 -dontwarn sun.misc.**
--keep class com.google.gson.** { *; }
 
-# App models
+# App models — DTOs and the enums they carry are (de)serialized by field name.
 -keep class com.burixer85.cs2skinflip.core.domain.model.** { *; }
 -keep class com.burixer85.cs2skinflip.core.data.local.** { *; }
 -keep class com.burixer85.cs2skinflip.core.data.remote.** { *; }
