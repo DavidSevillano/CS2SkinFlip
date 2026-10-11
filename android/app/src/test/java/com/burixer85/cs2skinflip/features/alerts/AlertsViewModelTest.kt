@@ -1,12 +1,12 @@
 package com.burixer85.cs2skinflip.features.alerts
 
 import android.app.Activity
-import com.android.billingclient.api.Purchase
 import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.AlertRepository
 import com.burixer85.cs2skinflip.core.data.repository.AlertsState
 import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
+import com.burixer85.cs2skinflip.core.data.repository.PremiumUnlockSource
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
@@ -32,7 +32,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
-import org.mockito.kotlin.atLeast
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -77,9 +76,8 @@ class AlertsViewModelTest {
 
     private suspend fun build(
         loggedIn: Boolean = true,
-        purchaseUpdates: MutableSharedFlow<List<Purchase>> = MutableSharedFlow(extraBufferCapacity = 1),
+        premiumUnlocked: MutableSharedFlow<PremiumUnlockSource> = MutableSharedFlow(extraBufferCapacity = 1),
         fetchResult: AlertsState = AlertsState(alerts = emptyList(), isPremium = false, activeCount = 0, freeLimit = 1),
-        syncPendingPurchases: Boolean = false,
     ): Harness {
         val alertRepository = mock<AlertRepository>()
         val authRepository = mock<AuthRepository>()
@@ -88,8 +86,7 @@ class AlertsViewModelTest {
         val billingRepository = mock<BillingRepository>()
 
         whenever(authRepository.isLoggedIn).thenReturn(flowOf(loggedIn))
-        whenever(billingRepository.purchaseUpdates).thenReturn(purchaseUpdates)
-        whenever(billingRepository.syncPendingPurchases()).thenReturn(syncPendingPurchases)
+        whenever(billingRepository.premiumUnlocked).thenReturn(premiumUnlocked)
         whenever(alertRepository.fetchAll()).thenReturn(fetchResult)
 
         val viewModel = AlertsViewModel(alertRepository, authRepository, skinRepository, analytics, billingRepository)
@@ -157,17 +154,10 @@ class AlertsViewModelTest {
     }
 
     @Test
-    fun `reloads alerts when a pending purchase is synced on login`() = runTest {
-        val h = build(loggedIn = true, syncPendingPurchases = true)
+    fun `checks for unconfirmed purchases once signed in`() = runTest {
+        val h = build(loggedIn = true)
 
-        verify(h.alertRepository, times(2)).fetchAll()
-    }
-
-    @Test
-    fun `does not reload twice when there is no pending purchase to sync`() = runTest {
-        val h = build(loggedIn = true, syncPendingPurchases = false)
-
-        verify(h.alertRepository, times(1)).fetchAll()
+        verify(h.billingRepository).syncPendingPurchases()
     }
 
     @Test
@@ -181,61 +171,41 @@ class AlertsViewModelTest {
     }
 
     @Test
-    fun `reloads alerts when a purchase update unlocks premium`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val h = build(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(h.billingRepository.verify(purchase)).thenReturn(true)
+    fun `reloads alerts when premium is unlocked`() = runTest {
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val h = build(premiumUnlocked = unlocked)
 
-        purchaseUpdates.tryEmit(listOf(purchase))
+        unlocked.tryEmit(PremiumUnlockSource.RESTORED)
 
-        verify(h.alertRepository, atLeast(2)).fetchAll()
+        verify(h.alertRepository, times(2)).fetchAll()
     }
 
     @Test
-    fun `does not reload alerts when a purchase update fails verification`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val h = build(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(h.billingRepository.verify(purchase)).thenReturn(false)
-
-        purchaseUpdates.tryEmit(listOf(purchase))
-
-        verify(h.alertRepository, times(1)).fetchAll()
-    }
-
-    @Test
-    fun `shows the purchase success dialog when a purchase update unlocks premium`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val h = build(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(h.billingRepository.verify(purchase)).thenReturn(true)
+    fun `shows the purchase success dialog for a fresh purchase`() = runTest {
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val h = build(premiumUnlocked = unlocked)
 
         assertFalse(h.viewModel.showPurchaseSuccessDialog.value)
-        purchaseUpdates.tryEmit(listOf(purchase))
+        unlocked.tryEmit(PremiumUnlockSource.PURCHASE)
 
         assertTrue(h.viewModel.showPurchaseSuccessDialog.value)
     }
 
     @Test
-    fun `does not show the purchase success dialog when verification fails`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val h = build(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(h.billingRepository.verify(purchase)).thenReturn(false)
+    fun `does not celebrate a purchase restored on sign-in`() = runTest {
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val h = build(premiumUnlocked = unlocked)
 
-        purchaseUpdates.tryEmit(listOf(purchase))
+        unlocked.tryEmit(PremiumUnlockSource.RESTORED)
 
         assertFalse(h.viewModel.showPurchaseSuccessDialog.value)
     }
 
     @Test
     fun `dismissPurchaseSuccessDialog hides the dialog`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val h = build(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(h.billingRepository.verify(purchase)).thenReturn(true)
-        purchaseUpdates.tryEmit(listOf(purchase))
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val h = build(premiumUnlocked = unlocked)
+        unlocked.tryEmit(PremiumUnlockSource.PURCHASE)
         assertTrue(h.viewModel.showPurchaseSuccessDialog.value)
 
         h.viewModel.dismissPurchaseSuccessDialog()

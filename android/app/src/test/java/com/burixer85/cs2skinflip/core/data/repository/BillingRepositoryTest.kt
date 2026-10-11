@@ -12,6 +12,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.flow.first
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -192,5 +194,61 @@ class BillingRepositoryTest {
         repository.verify(purchase(products = listOf("some_other_sku")))
 
         assertFalse(repository.isVerifying.value)
+    }
+
+    @Test
+    fun `a purchase update is verified once and announced as a fresh purchase`() = runBlocking<Unit> {
+        val billingManager = mock<BillingManager>()
+        val updates = kotlinx.coroutines.flow.MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
+        whenever(billingManager.purchaseUpdates).thenReturn(updates)
+        val backendApi = mock<CS2BackendApiService>()
+        whenever(backendApi.verifyPurchase(org.mockito.kotlin.any()))
+            .thenReturn(VerifyPurchaseResponseDto(isPremium = true, premiumUntil = null))
+        val repository = BillingRepository(billingManager, backendApi, mock())
+        val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.Unconfined)
+        val announced = async(Dispatchers.Unconfined) { repository.premiumUnlocked.first() }
+        repository.observePurchaseUpdates(scope)
+
+        val bought = listOf(purchase())
+        updates.emit(bought)
+
+        assertEquals(PremiumUnlockSource.PURCHASE, withTimeout(1_000) { announced.await() })
+        verify(backendApi, org.mockito.kotlin.times(1)).verifyPurchase(org.mockito.kotlin.any())
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+    }
+
+    // Alerts and Settings both run the pending check on sign-in; a token the
+    // backend already confirmed must not go back to it (and to Google Play).
+    @Test
+    fun `syncPendingPurchases skips tokens already confirmed this session`() = runBlocking<Unit> {
+        val billingManager = mock<BillingManager>()
+        val owned = listOf(purchase(token = "token-1"))
+        whenever(billingManager.queryOwnedPurchases()).thenReturn(owned)
+        val backendApi = mock<CS2BackendApiService>()
+        whenever(backendApi.verifyPurchase(org.mockito.kotlin.any()))
+            .thenReturn(VerifyPurchaseResponseDto(isPremium = true, premiumUntil = null))
+        val repository = BillingRepository(billingManager, backendApi, mock())
+
+        repository.syncPendingPurchases()
+        val second = repository.syncPendingPurchases()
+
+        assertFalse(second)
+        verify(backendApi, org.mockito.kotlin.times(1)).verifyPurchase(org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun `syncPendingPurchases announces a restored purchase`() = runBlocking<Unit> {
+        val billingManager = mock<BillingManager>()
+        val owned = listOf(purchase())
+        whenever(billingManager.queryOwnedPurchases()).thenReturn(owned)
+        val backendApi = mock<CS2BackendApiService>()
+        whenever(backendApi.verifyPurchase(org.mockito.kotlin.any()))
+            .thenReturn(VerifyPurchaseResponseDto(isPremium = true, premiumUntil = null))
+        val repository = BillingRepository(billingManager, backendApi, mock())
+        val announced = async(Dispatchers.Unconfined) { repository.premiumUnlocked.first() }
+
+        repository.syncPendingPurchases()
+
+        assertEquals(PremiumUnlockSource.RESTORED, withTimeout(1_000) { announced.await() })
     }
 }

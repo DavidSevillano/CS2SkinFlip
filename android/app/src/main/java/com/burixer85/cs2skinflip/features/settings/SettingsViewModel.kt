@@ -7,6 +7,7 @@ import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.MeResponseDto
 import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
+import com.burixer85.cs2skinflip.core.data.repository.PremiumUnlockSource
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import com.burixer85.cs2skinflip.core.preferences.UserPreferences
 import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
@@ -62,22 +63,15 @@ class SettingsViewModel @Inject constructor(
                 val me = runCatching { backendApi.getMe() }.getOrNull()
                 _accountState.value = me?.let { AccountUiState.SignedIn(it) } ?: AccountUiState.SignedOut
                 // Safety net: covers a purchase that succeeded but never reached the backend
-                // (e.g. app killed right after payment).
-                if (billingRepository.syncPendingPurchases()) {
-                    val refreshed = runCatching { backendApi.getMe() }.getOrNull()
-                    if (refreshed != null) _accountState.value = AccountUiState.SignedIn(refreshed)
-                }
+                // (e.g. app killed right after payment). An unlock arrives via premiumUnlocked.
+                billingRepository.syncPendingPurchases()
             }
         }
         viewModelScope.launch {
-            billingRepository.purchaseUpdates.collect { purchases ->
-                var unlocked = false
-                purchases.forEach { if (billingRepository.verify(it)) unlocked = true }
-                if (unlocked) {
-                    val refreshed = runCatching { backendApi.getMe() }.getOrNull()
-                    if (refreshed != null) _accountState.value = AccountUiState.SignedIn(refreshed)
-                    _showPurchaseSuccessDialog.value = true
-                }
+            billingRepository.premiumUnlocked.collect { source ->
+                val refreshed = runCatching { backendApi.getMe() }.getOrNull()
+                if (refreshed != null) _accountState.value = AccountUiState.SignedIn(refreshed)
+                if (source == PremiumUnlockSource.PURCHASE) _showPurchaseSuccessDialog.value = true
             }
         }
     }

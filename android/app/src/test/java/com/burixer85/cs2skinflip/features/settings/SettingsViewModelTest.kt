@@ -1,11 +1,11 @@
 package com.burixer85.cs2skinflip.features.settings
 
 import android.app.Activity
-import com.android.billingclient.api.Purchase
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.MeResponseDto
 import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
+import com.burixer85.cs2skinflip.core.data.repository.PremiumUnlockSource
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
 import com.burixer85.cs2skinflip.core.preferences.UserPreferences
 import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
@@ -70,8 +70,7 @@ class SettingsViewModelTest {
 
     private suspend fun viewModel(
         loggedIn: Boolean = true,
-        purchaseUpdates: MutableSharedFlow<List<Purchase>> = MutableSharedFlow(extraBufferCapacity = 1),
-        syncPendingPurchases: Boolean = false,
+        premiumUnlocked: MutableSharedFlow<PremiumUnlockSource> = MutableSharedFlow(extraBufferCapacity = 1),
         steamSession: SteamSessionManager = fakeSession(null),
     ): Deps {
         val preferences = mock<UserPreferences>()
@@ -81,8 +80,7 @@ class SettingsViewModelTest {
 
         whenever(preferences.marketplace).thenReturn(flowOf(DefaultMarketplace.LOWEST))
         whenever(authRepository.isLoggedIn).thenReturn(flowOf(loggedIn))
-        whenever(billingRepository.purchaseUpdates).thenReturn(purchaseUpdates)
-        whenever(billingRepository.syncPendingPurchases()).thenReturn(syncPendingPurchases)
+        whenever(billingRepository.premiumUnlocked).thenReturn(premiumUnlocked)
         whenever(backendApi.getMe()).thenReturn(meResponse())
 
         val viewModel = SettingsViewModel(preferences, authRepository, backendApi, billingRepository, steamSession)
@@ -118,17 +116,10 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `refetches the user when a pending purchase unlocks premium on login`() = runTest {
-        val deps = viewModel(loggedIn = true, syncPendingPurchases = true)
+    fun `checks for unconfirmed purchases once signed in`() = runTest {
+        val deps = viewModel(loggedIn = true)
 
-        verify(deps.backendApi, times(2)).getMe()
-    }
-
-    @Test
-    fun `does not refetch the user when there is no pending purchase`() = runTest {
-        val deps = viewModel(loggedIn = true, syncPendingPurchases = false)
-
-        verify(deps.backendApi, times(1)).getMe()
+        verify(deps.billingRepository).syncPendingPurchases()
     }
 
     @Test
@@ -158,61 +149,43 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `refetches the user when a purchase update unlocks premium`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val deps = viewModel(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(deps.billingRepository.verify(purchase)).thenReturn(true)
+    fun `refetches the user when premium is unlocked`() = runTest {
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val deps = viewModel(premiumUnlocked = unlocked)
 
-        purchaseUpdates.tryEmit(listOf(purchase))
+        unlocked.tryEmit(PremiumUnlockSource.RESTORED)
 
-        verify(deps.backendApi, org.mockito.kotlin.atLeast(2)).getMe()
+        verify(deps.backendApi, times(2)).getMe()
     }
 
     @Test
-    fun `does not refetch the user when a purchase update fails verification`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val deps = viewModel(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(deps.billingRepository.verify(purchase)).thenReturn(false)
-
-        purchaseUpdates.tryEmit(listOf(purchase))
-
-        verify(deps.backendApi, times(1)).getMe()
-    }
-
-    @Test
-    fun `shows the purchase success dialog when a purchase update unlocks premium`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val deps = viewModel(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(deps.billingRepository.verify(purchase)).thenReturn(true)
+    fun `shows the purchase success dialog for a fresh purchase`() = runTest {
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val deps = viewModel(premiumUnlocked = unlocked)
 
         assertFalse(deps.viewModel.showPurchaseSuccessDialog.value)
-        purchaseUpdates.tryEmit(listOf(purchase))
+        unlocked.tryEmit(PremiumUnlockSource.PURCHASE)
 
         assertTrue(deps.viewModel.showPurchaseSuccessDialog.value)
     }
 
+    // A purchase recovered on sign-in was paid for earlier; celebrating it now
+    // would pop a dialog out of nowhere.
     @Test
-    fun `does not show the purchase success dialog when verification fails`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val deps = viewModel(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(deps.billingRepository.verify(purchase)).thenReturn(false)
+    fun `does not celebrate a purchase restored on sign-in`() = runTest {
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val deps = viewModel(premiumUnlocked = unlocked)
 
-        purchaseUpdates.tryEmit(listOf(purchase))
+        unlocked.tryEmit(PremiumUnlockSource.RESTORED)
 
         assertFalse(deps.viewModel.showPurchaseSuccessDialog.value)
     }
 
     @Test
     fun `dismissPurchaseSuccessDialog hides the dialog`() = runTest {
-        val purchaseUpdates = MutableSharedFlow<List<Purchase>>(extraBufferCapacity = 1)
-        val deps = viewModel(purchaseUpdates = purchaseUpdates)
-        val purchase = mock<Purchase>()
-        whenever(deps.billingRepository.verify(purchase)).thenReturn(true)
-        purchaseUpdates.tryEmit(listOf(purchase))
+        val unlocked = MutableSharedFlow<PremiumUnlockSource>(extraBufferCapacity = 1)
+        val deps = viewModel(premiumUnlocked = unlocked)
+        unlocked.tryEmit(PremiumUnlockSource.PURCHASE)
         assertTrue(deps.viewModel.showPurchaseSuccessDialog.value)
 
         deps.viewModel.dismissPurchaseSuccessDialog()

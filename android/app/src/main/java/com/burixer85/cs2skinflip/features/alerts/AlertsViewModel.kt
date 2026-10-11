@@ -9,6 +9,7 @@ import com.burixer85.cs2skinflip.core.analytics.AnalyticsService
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.repository.AlertRepository
 import com.burixer85.cs2skinflip.core.data.repository.BillingRepository
+import com.burixer85.cs2skinflip.core.data.repository.PremiumUnlockSource
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.domain.model.Alert
 import com.burixer85.cs2skinflip.core.domain.model.AlertType
@@ -86,21 +87,17 @@ class AlertsViewModel @Inject constructor(
                 if (loggedIn) {
                     loadAlerts()
                     // Safety net: covers a purchase that succeeded but never reached the backend
-                    // (e.g. app killed right after payment).
-                    if (billingRepository.syncPendingPurchases()) loadAlerts()
+                    // (e.g. app killed right after payment). An unlock arrives via premiumUnlocked.
+                    billingRepository.syncPendingPurchases()
                 } else {
                     _uiState.value = AlertsUiState.NotLoggedIn
                 }
             }
         }
         viewModelScope.launch {
-            billingRepository.purchaseUpdates.collect { purchases ->
-                var unlocked = false
-                purchases.forEach { if (billingRepository.verify(it)) unlocked = true }
-                if (unlocked) {
-                    loadAlerts()
-                    _showPurchaseSuccessDialog.value = true
-                }
+            billingRepository.premiumUnlocked.collect { source ->
+                loadAlerts()
+                if (source == PremiumUnlockSource.PURCHASE) _showPurchaseSuccessDialog.value = true
             }
         }
     }
