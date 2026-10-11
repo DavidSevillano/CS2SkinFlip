@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Neon's pooled endpoint (`-pooler`). PgBouncer in transaction mode, which is
   // what the app wants: short-lived queries, no session state.
   url       = env("DATABASE_URL")
@@ -66,6 +66,11 @@ model Skin {
 
   price        SkinPrice?
   priceHistory PriceHistory[]
+  // No onDelete: a skin users hold alerts, watchlist entries or portfolio
+  // items for can't be deleted out from under them (Restrict).
+  watchlist    WatchlistItem[]
+  alerts       Alert[]
+  portfolio    PortfolioItem[]
 
   @@index([weapon])
   @@index([rarity])
@@ -76,12 +81,12 @@ model SkinPrice {
   skinId          String   @unique
   // Three bulk-public marketplaces — each refreshed every 6h via a single HTTP call.
   // No API keys, no rate-limit issues (4 requests/day per marketplace).
-  skinportPrice   Float?   // api.skinport.com (USD)
-  csgoMarketPrice Float?   // market.csgo.com (USD)
-  waxpeerPrice    Float?   // api.waxpeer.com (USD)
+  skinportPrice   Float? // api.skinport.com (USD)
+  csgoMarketPrice Float? // market.csgo.com (USD)
+  waxpeerPrice    Float? // api.waxpeer.com (USD)
   lowestPrice     Float?
   volume24h       Int?
-  priceChange24h  Float?   // cached %, recomputed during each price refresh job
+  priceChange24h  Float? // cached %, recomputed during each price refresh job
   updatedAt       DateTime @updatedAt
 
   skin Skin @relation(fields: [skinId], references: [id], onDelete: Cascade)
@@ -116,6 +121,7 @@ model WatchlistItem {
   updatedAt       DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skin Skin @relation(fields: [skinId], references: [id])
 
   @@unique([userId, skinId])
   @@index([userId])
@@ -133,6 +139,7 @@ model Alert {
   createdAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skin Skin @relation(fields: [skinId], references: [id])
 
   @@index([userId])
   @@index([isActive])
@@ -154,6 +161,7 @@ model PortfolioItem {
   createdAt    DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skin Skin @relation(fields: [skinId], references: [id])
 
   @@unique([userId, assetId])
   @@index([userId])

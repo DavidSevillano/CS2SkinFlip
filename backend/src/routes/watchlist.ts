@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
+import { isForeignKeyViolation } from '../db/errors'
 import { authenticate } from '../middleware/authenticate'
 
 const upsertSchema = z.object({
@@ -51,23 +52,26 @@ export const watchlistRoutes: FastifyPluginAsync = async (app) => {
 
     const { skinId, targetBuyPrice, targetSellPrice, alertEnabled } = body.data
 
-    const item = await prisma.watchlistItem.upsert({
-      where: { userId_skinId: { userId, skinId } },
-      update: {
-        targetBuyPrice: targetBuyPrice ?? null,
-        targetSellPrice: targetSellPrice ?? null,
-        alertEnabled: alertEnabled ?? false,
-      },
-      create: {
-        userId,
-        skinId,
-        targetBuyPrice: targetBuyPrice ?? null,
-        targetSellPrice: targetSellPrice ?? null,
-        alertEnabled: alertEnabled ?? false,
-      },
-    })
-
-    return item
+    try {
+      return await prisma.watchlistItem.upsert({
+        where: { userId_skinId: { userId, skinId } },
+        update: {
+          targetBuyPrice: targetBuyPrice ?? null,
+          targetSellPrice: targetSellPrice ?? null,
+          alertEnabled: alertEnabled ?? false,
+        },
+        create: {
+          userId,
+          skinId,
+          targetBuyPrice: targetBuyPrice ?? null,
+          targetSellPrice: targetSellPrice ?? null,
+          alertEnabled: alertEnabled ?? false,
+        },
+      })
+    } catch (e) {
+      if (isForeignKeyViolation(e)) return reply.status(404).send({ error: 'Skin not found' })
+      throw e
+    }
   })
 
   app.put('/watchlist/:id', { onRequest: [authenticate] }, async (request, reply) => {

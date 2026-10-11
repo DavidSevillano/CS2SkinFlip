@@ -2,20 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Fastify from 'fastify'
 import fastifyJwt from '@fastify/jwt'
 
-const { userFindUnique, skinFindMany, itemCreateMany, itemDeleteMany } = vi.hoisted(() => ({
+const { userFindUnique, skinFindMany, itemCreateMany, itemDeleteMany, itemUpsert } = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   skinFindMany: vi.fn(),
   itemCreateMany: vi.fn(),
   itemDeleteMany: vi.fn(),
+  itemUpsert: vi.fn(),
 }))
 vi.mock('../db/prisma', () => ({
   prisma: {
     user: { findUnique: userFindUnique },
     skin: { findMany: skinFindMany },
-    portfolioItem: { createMany: itemCreateMany, deleteMany: itemDeleteMany },
+    portfolioItem: { createMany: itemCreateMany, deleteMany: itemDeleteMany, upsert: itemUpsert },
   },
 }))
 
+const { Prisma } = await import('@prisma/client')
 const { portfolioRoutes } = await import('./portfolio')
 
 async function buildTestApp() {
@@ -89,5 +91,28 @@ describe('POST /portfolio/sync', () => {
 
     expect(res.statusCode).toBe(400)
     expect(skinFindMany).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /portfolio', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  // The foreign key to Skin turns an unknown skinId into P2003.
+  it('answers 404 for a skin that does not exist, not 500', async () => {
+    itemUpsert.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Foreign key constraint failed', { code: 'P2003', clientVersion: 'test' }),
+    )
+    const app = await buildTestApp()
+    const token = app.jwt.sign({ userId: 'user-1', steamId: 's' })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/portfolio',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { skinId: 'no-such-skin', assetId: 'a1', acquirePrice: 10 },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json()).toEqual({ error: 'Skin not found' })
   })
 })

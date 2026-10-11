@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
+import { isForeignKeyViolation } from '../db/errors'
 import { authenticate } from '../middleware/authenticate'
 
 const createSchema = z.object({
@@ -86,9 +87,15 @@ export const alertRoutes: FastifyPluginAsync = async (app) => {
     const body = createSchema.safeParse(request.body)
     if (!body.success) return reply.status(400).send({ error: 'Invalid body', details: body.error.flatten() })
 
-    const alert = await prisma.alert.create({
-      data: { userId, skinId: body.data.skinId, type: body.data.type, targetPrice: body.data.targetPrice },
-    })
+    let alert
+    try {
+      alert = await prisma.alert.create({
+        data: { userId, skinId: body.data.skinId, type: body.data.type, targetPrice: body.data.targetPrice },
+      })
+    } catch (e) {
+      if (isForeignKeyViolation(e)) return reply.status(404).send({ error: 'Skin not found' })
+      throw e
+    }
 
     return { ...alert, createdAt: alert.createdAt.toISOString(), triggeredAt: null }
   })

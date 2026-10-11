@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
+import { isForeignKeyViolation } from '../db/errors'
 import { authenticate } from '../middleware/authenticate'
 
 const addItemSchema = z.object({
@@ -136,20 +137,23 @@ export const portfolioRoutes: FastifyPluginAsync = async (app) => {
 
     const { skinId, assetId, acquirePrice, acquiredAt, float } = body.data
 
-    const item = await prisma.portfolioItem.upsert({
-      where: { userId_assetId: { userId, assetId } },
-      update: { acquirePrice, float: float ?? null },
-      create: {
-        userId,
-        skinId,
-        assetId,
-        acquirePrice,
-        acquiredAt: acquiredAt ? new Date(acquiredAt) : new Date(),
-        float: float ?? null,
-      },
-    })
-
-    return item
+    try {
+      return await prisma.portfolioItem.upsert({
+        where: { userId_assetId: { userId, assetId } },
+        update: { acquirePrice, float: float ?? null },
+        create: {
+          userId,
+          skinId,
+          assetId,
+          acquirePrice,
+          acquiredAt: acquiredAt ? new Date(acquiredAt) : new Date(),
+          float: float ?? null,
+        },
+      })
+    } catch (e) {
+      if (isForeignKeyViolation(e)) return reply.status(404).send({ error: 'Skin not found' })
+      throw e
+    }
   })
 
   app.delete('/portfolio/:id', { onRequest: [authenticate] }, async (request, reply) => {

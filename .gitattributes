@@ -1,0 +1,2 @@
+# Prisma checksums each migration file; a CRLF checkout would read as modified.
+backend/prisma/migrations/** text eol=lf

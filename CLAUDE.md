@@ -51,8 +51,9 @@ npm run dev
 npx tsc --noEmit
 
 # Database
-npm run db:push        # push schema changes without migration files
-npm run db:migrate     # create a migration file + apply
+npm run db:diff        # SQL that would bring the database to schema.prisma (read-only)
+npm run db:migrate     # apply pending migrations (prisma migrate deploy)
+npm run db:status      # which migrations the database has applied
 npm run db:studio      # open Prisma Studio in browser
 npm run db:reset       # reset DB and re-seed (destructive)
 
@@ -111,6 +112,16 @@ Free accounts get 1 alert (`FREE_ALERT_LIMIT` in `src/routes/alerts.ts`); a one-
 - Android also re-queries Play Billing for unconfirmed purchases on login/app start (`BillingRepository.syncPendingPurchases()`) as a safety net for purchases that succeeded but never reached the backend (e.g. app killed mid-flow).
 - Every verified token is recorded in `Purchase` and **bound to the first account that claims it** — promo-code redemptions carry no obfuscated account ID, so the token is the only link. A token bound to another account gets 403.
 - **Refunds revoke premium.** `jobs/revokeVoidedPurchases.ts` runs from the 6h cron at most once a day, pages Play's Voided Purchases API from a Redis checkpoint (`pipeline:billing:voidedCheckedUntil`, clamped to Play's 30-day lookback), marks matching `Purchase` rows `revokedAt` and sets `isPremium = false` unless the account holds another live purchase. Needs the Play service account to have the **"View financial data"** permission in Play Console. Accounts unlocked before `Purchase` existed are only traceable once the app re-verifies their purchase on startup.
+
+### Schema changes (migrations)
+
+The schema is versioned in `prisma/migrations/` (committed). `0_init` is a baseline taken from production on 2026-10-11 and marked applied there with `migrate resolve`, never run. To change the schema:
+
+1. Edit `schema.prisma`.
+2. `mkdir prisma/migrations/<n>_<name>` and `npm run db:diff > prisma/migrations/<n>_<name>/migration.sql` — the diff is against the **live database**, so it is exactly what will run. Read it; estimate its Neon cost (a rewrite of `PriceHistory` needs a second copy's worth of headroom under the 512 MB cap).
+3. `npm run db:migrate` **before** deploying code that depends on it.
+
+Not `migrate dev`: it needs a shadow database, which on Neon means creating and dropping databases in the project. Not `db push` either (the script is gone): it changes the schema without recording a migration, and the next `migrate deploy` then fails on objects that already exist.
 
 ## Architecture
 
