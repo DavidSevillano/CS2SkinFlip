@@ -144,7 +144,7 @@ fun SettingsScreen(
                 // Profile info row
                 AccountInfoRow(
                     username = user.username,
-                    email = user.steamId?.let { stringResource(R.string.settings_steam_id_label, it.takeLast(10)) } ?: "",
+                    email = user.steamId?.let { stringResource(R.string.settings_steam_id_label, it) } ?: "",
                     avatarUrl = user.avatarUrl,
                     isPremium = user.isPremium,
                 )
