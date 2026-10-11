@@ -227,18 +227,23 @@
     <string name="settings_feature_one_free_alert">1 ücretsiz fiyat uyarısı</string>
 
     <plurals name="search_results_count">
+        <item quantity="one">%d skin</item>
         <item quantity="other">%d skin</item>
     </plurals>
     <plurals name="watchlist_items_tracked">
+        <item quantity="one">%d öğe izleniyor</item>
         <item quantity="other">%d öğe izleniyor</item>
     </plurals>
     <plurals name="portfolio_items_count">
+        <item quantity="one">%d öğe</item>
         <item quantity="other">%d öğe</item>
     </plurals>
     <plurals name="alerts_active_count">
+        <item quantity="one">%d aktif</item>
         <item quantity="other">%d aktif</item>
     </plurals>
     <plurals name="alerts_count">
+        <item quantity="one">%d uyarı</item>
         <item quantity="other">%d uyarı</item>
     </plurals>
 </resources>
