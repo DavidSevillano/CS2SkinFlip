@@ -8,13 +8,6 @@ import retrofit2.http.Url
 
 interface SteamApiService {
 
-    // Perfil del jugador
-    @GET("ISteamUser/GetPlayerSummaries/v0002/")
-    suspend fun getPlayerSummaries(
-        @Query("key") apiKey: String,
-        @Query("steamids") steamId: String
-    ): PlayerSummariesResponse
-
     /**
      * Public inventory endpoint (no API key, works from any IP) — fetched directly from
      * the device rather than the backend so Steam's per-IP rate limiting on this
@@ -52,14 +45,6 @@ interface SteamApiService {
 }
 
 // --- DTOs ---
-
-data class PlayerSummariesResponse(val response: PlayerSummariesData)
-data class PlayerSummariesData(val players: List<PlayerDto>)
-data class PlayerDto(
-    val steamid: String,
-    val personaname: String,
-    val avatarfull: String
-)
 
 data class InventoryResponse(
     val success: Int?,

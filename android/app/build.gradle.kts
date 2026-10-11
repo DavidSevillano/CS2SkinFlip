@@ -29,9 +29,6 @@ android {
             useSupportLibrary = true
         }
 
-        val steamApiKey = localProperties.getProperty("STEAM_API_KEY") ?: ""
-        buildConfigField("String", "STEAM_API_KEY", "\"$steamApiKey\"")
-
         val backendUrl = localProperties.getProperty("BACKEND_URL") ?: "http://10.0.2.2:3000"
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
 

@@ -86,10 +86,6 @@ object AppModule {
     fun provideSteamApiService(@Named("steam") retrofit: Retrofit): SteamApiService =
         retrofit.create(SteamApiService::class.java)
 
-    @Provides
-    @Named("steam_api_key")
-    fun provideSteamApiKey(): String = BuildConfig.STEAM_API_KEY
-
     // ─── CS2SkinFlip Backend ──────────────────────────────────────────────────
 
     @Provides

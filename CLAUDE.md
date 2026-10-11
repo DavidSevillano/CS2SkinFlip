@@ -309,7 +309,6 @@ Get the hop count from `GET /debug/client-ip` (needs `DEBUG_SECRET` + the `X-Deb
 ### `android/local.properties`
 ```
 BACKEND_URL=http://10.0.2.2:3000
-STEAM_API_KEY=your_key_here
 ADMOB_APP_ID=your_admob_app_id
 ADMOB_BANNER_UNIT_ID=your_admob_banner_unit_id
 ADMOB_INTERSTITIAL_UNIT_ID=your_admob_interstitial_unit_id
