@@ -70,6 +70,15 @@
     <string name="sort_price_desc">Цена: по убыванию</string>
     <string name="sort_price_asc">Цена: по возрастанию</string>
     <string name="sort_name">Название A → Z</string>
+    <string name="sort_popular">Популярные</string>
+    <string name="category_all">Все</string>
+    <string name="category_rifles">Винтовки</string>
+    <string name="category_snipers">Снайперские</string>
+    <string name="category_pistols">Пистолеты</string>
+    <string name="category_smgs">ПП</string>
+    <string name="category_heavy">Тяжёлое</string>
+    <string name="category_knives">Ножи</string>
+    <string name="category_gloves">Перчатки</string>
 
     <!-- Item rarity (SkinRarity) -->
     <string name="rarity_consumer">Ширпотреб</string>

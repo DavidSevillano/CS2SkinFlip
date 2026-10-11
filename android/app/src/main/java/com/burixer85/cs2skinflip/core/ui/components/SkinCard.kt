@@ -88,7 +88,8 @@ fun SkinCard(
                     Text(
                         text = skin.name,
                         style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
+                        // Two lines: one cut "★ Bowie Knife | Crims…" before the finish.
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         fontWeight = FontWeight.SemiBold
                     )

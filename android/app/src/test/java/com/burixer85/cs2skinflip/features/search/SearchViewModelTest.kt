@@ -108,6 +108,28 @@ class SearchViewModelTest {
         assertEquals(listOf("k1", "k2", "k3", "k4", "k5", "k6"), vm.suggestions.value.map { it.id })
     }
 
+    // Price-descending opened the screen on one-listing knives at $40k+.
+    @Test
+    fun `opens sorted by popularity`() = runTest(dispatcher) {
+        val vm = newViewModel()
+
+        assertEquals(SortBy.POPULAR, vm.filters.value.sortBy)
+    }
+
+    // Either combination could leave the list empty: AK-47 within Gloves.
+    @Test
+    fun `a category and a weapon filter replace each other`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        advanceUntilIdle()
+
+        vm.onFiltersChange(vm.filters.value.copy(weapon = "AK-47"))
+        vm.onCategoryChange(WeaponCategory.GLOVES)
+        assertEquals(null, vm.filters.value.weapon)
+
+        vm.onFiltersChange(vm.filters.value.copy(weapon = "AWP"))
+        assertEquals(null, vm.filters.value.category)
+    }
+
     @Test
     fun `no suggestions without a query`() = runTest(dispatcher) {
         val vm = newViewModel()

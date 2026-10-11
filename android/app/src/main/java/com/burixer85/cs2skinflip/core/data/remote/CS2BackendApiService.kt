@@ -29,6 +29,7 @@ interface CS2BackendApiService {
     suspend fun searchSkins(
         @Query("q") query: String? = null,
         @Query("weapon") weapon: String? = null,
+        @Query("category") category: String? = null,
         @Query("rarity") rarity: String? = null,
         @Query("wear") wear: String? = null,
         @Query("statTrak") statTrak: Boolean? = null,

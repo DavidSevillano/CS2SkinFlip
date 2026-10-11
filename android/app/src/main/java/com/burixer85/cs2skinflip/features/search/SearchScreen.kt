@@ -244,6 +244,23 @@ fun SearchScreen(
             Spacer(Modifier.height(8.dp))
         }
 
+        // ── Category shortcuts ────────────────────────────────────────────────
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            item {
+                CategoryChip(stringResource(R.string.category_all), filters.category == null) {
+                    viewModel.onCategoryChange(null)
+                }
+            }
+            items(WeaponCategory.entries) { category ->
+                CategoryChip(stringResource(category.labelRes), filters.category == category) {
+                    viewModel.onCategoryChange(category)
+                }
+            }
+        }
+
         // ── Filter / Sort bar ─────────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -364,7 +381,7 @@ fun SearchScreen(
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(stringResource(R.string.no_results), color = TextSecondary)
-                            if (filters.activeCount > 0) {
+                            if (filters.activeCount > 0 || filters.category != null) {
                                 Spacer(Modifier.height(8.dp))
                                 TextButton(onClick = { viewModel.clearFilters() }) {
                                     Text(stringResource(R.string.search_clear_filters), color = AccentOrange)
@@ -712,6 +729,20 @@ private fun RarityChip(rarity: SkinRarity, selected: Boolean, onClick: () -> Uni
             )
         }
     }
+}
+
+@Composable
+private fun CategoryChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelMedium,
+        color = if (selected) Color.White else TextSecondary,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) AccentOrange else SurfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+    )
 }
 
 @Composable

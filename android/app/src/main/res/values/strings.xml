@@ -79,6 +79,15 @@
     <string name="sort_price_desc">Price: High → Low</string>
     <string name="sort_price_asc">Price: Low → High</string>
     <string name="sort_name">Name A → Z</string>
+    <string name="sort_popular">Most popular</string>
+    <string name="category_all">All</string>
+    <string name="category_rifles">Rifles</string>
+    <string name="category_snipers">Snipers</string>
+    <string name="category_pistols">Pistols</string>
+    <string name="category_smgs">SMGs</string>
+    <string name="category_heavy">Heavy</string>
+    <string name="category_knives">Knives</string>
+    <string name="category_gloves">Gloves</string>
 
     <!-- Item rarity (SkinRarity) -->
     <string name="rarity_consumer">Consumer Grade</string>

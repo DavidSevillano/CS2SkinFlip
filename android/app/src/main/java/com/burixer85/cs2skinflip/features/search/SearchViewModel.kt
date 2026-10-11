@@ -23,19 +23,34 @@ private const val PAGE_SIZE = 20
 private const val SUGGESTION_COUNT = 6
 
 enum class SortBy(@StringRes val labelRes: Int, val apiValue: String) {
+    POPULAR(R.string.sort_popular, "popular"),
     PRICE_DESC(R.string.sort_price_desc, "price_desc"),
     PRICE_ASC(R.string.sort_price_asc, "price_asc"),
     NAME(R.string.sort_name, "name"),
+}
+
+/** Mirrors the backend's `WEAPON_CATEGORIES` keys (`config/weaponCategories.ts`). */
+enum class WeaponCategory(@StringRes val labelRes: Int, val apiValue: String) {
+    RIFLES(R.string.category_rifles, "rifles"),
+    SNIPERS(R.string.category_snipers, "snipers"),
+    PISTOLS(R.string.category_pistols, "pistols"),
+    SMGS(R.string.category_smgs, "smgs"),
+    HEAVY(R.string.category_heavy, "heavy"),
+    KNIVES(R.string.category_knives, "knives"),
+    GLOVES(R.string.category_gloves, "gloves"),
 }
 
 data class SearchFilters(
     val wear: SkinWear? = null,
     val rarity: SkinRarity? = null,
     val weapon: String? = null,
+    // Shown in its own row of shortcuts, so not counted in activeCount.
+    val category: WeaponCategory? = null,
     val statTrakOnly: Boolean = false,
     val minPrice: Double? = null,
     val maxPrice: Double? = null,
-    val sortBy: SortBy = SortBy.PRICE_DESC,
+    // Price-descending opened on one-listing knives at $40k+.
+    val sortBy: SortBy = SortBy.POPULAR,
 ) {
     val activeCount: Int get() = listOfNotNull(
         wear,
@@ -117,7 +132,15 @@ class SearchViewModel @Inject constructor(
     }
 
     fun onFiltersChange(f: SearchFilters) {
-        _filters.value = f
+        // A weapon picked from the sheet or a suggestion may sit outside the
+        // selected category, which would leave the list empty.
+        _filters.value = if (f.weapon != null && f.weapon != _filters.value.weapon) f.copy(category = null) else f
+        triggerSearch()
+    }
+
+    /** Choosing a category replaces any weapon filter, which may lie outside it. */
+    fun onCategoryChange(category: WeaponCategory?) {
+        _filters.value = _filters.value.copy(category = category, weapon = if (category != null) null else _filters.value.weapon)
         triggerSearch()
     }
 

@@ -40,6 +40,7 @@ class SkinRepository @Inject constructor(
         val response = backendApi.searchSkins(
             query = query.ifBlank { null },
             weapon = filters.weapon,
+            category = filters.category?.apiValue,
             rarity = filters.rarity?.apiValue,
             wear = filters.wear?.apiValue,
             statTrak = if (filters.statTrakOnly) true else null,

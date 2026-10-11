@@ -70,6 +70,15 @@
     <string name="sort_price_desc">Fiyat: Yüksekten Düşüğe</string>
     <string name="sort_price_asc">Fiyat: Düşükten Yükseğe</string>
     <string name="sort_name">İsim A → Z</string>
+    <string name="sort_popular">En popüler</string>
+    <string name="category_all">Tümü</string>
+    <string name="category_rifles">Tüfekler</string>
+    <string name="category_snipers">Keskin nişancı</string>
+    <string name="category_pistols">Tabancalar</string>
+    <string name="category_smgs">SMG</string>
+    <string name="category_heavy">Ağır</string>
+    <string name="category_knives">Bıçaklar</string>
+    <string name="category_gloves">Eldivenler</string>
 
     <!-- Item rarity (SkinRarity) -->
     <string name="rarity_consumer">Tüketici Sınıfı</string>
