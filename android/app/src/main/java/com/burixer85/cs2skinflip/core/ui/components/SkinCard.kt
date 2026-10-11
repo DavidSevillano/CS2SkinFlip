@@ -117,7 +117,7 @@ fun SkinCard(
                 if (trailing != null) {
                     trailing()
                 } else {
-                    PriceChangeChip(change = skin.priceChange24h ?: 0.0)
+                    PriceChangeChip(change = skin.priceChange24h)
                 }
             }
         }
@@ -184,7 +184,7 @@ fun SkinCardCompact(
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.height(2.dp))
-            PriceChangeChip(change = skin.priceChange24h ?: 0.0)
+            PriceChangeChip(change = skin.priceChange24h)
         }
     }
 }

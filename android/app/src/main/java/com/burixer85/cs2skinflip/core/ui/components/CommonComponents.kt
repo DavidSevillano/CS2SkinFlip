@@ -60,10 +60,16 @@ import com.burixer85.cs2skinflip.core.ui.theme.SurfaceVariant
 import com.burixer85.cs2skinflip.core.ui.theme.TextSecondary
 
 @Composable
-fun PriceChangeChip(change: Double, modifier: Modifier = Modifier) {
-    val isPositive = change >= 0
-    val color = if (isPositive) AccentGreen else AccentRed
-    val sign = if (isPositive) "+" else ""
+fun PriceChangeChip(change: Double?, modifier: Modifier = Modifier) {
+    // Null = no 24h reference yet. "—" rather than a fake "+0.00%", which reads
+    // as "measured, and flat".
+    val isPositive = change != null && change >= 0
+    val color = when {
+        change == null -> TextSecondary
+        isPositive -> AccentGreen
+        else -> AccentRed
+    }
+    val text = if (change == null) "—" else "${if (isPositive) "+" else ""}${"%.2f".format(change)}%"
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
@@ -71,7 +77,7 @@ fun PriceChangeChip(change: Double, modifier: Modifier = Modifier) {
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
         Text(
-            text = "$sign${"%.2f".format(change)}%",
+            text = text,
             color = color,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold

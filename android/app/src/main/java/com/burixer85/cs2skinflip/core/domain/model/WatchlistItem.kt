@@ -8,7 +8,7 @@ data class WatchlistItem(
     val targetBuyPrice: Double?,
     val targetSellPrice: Double?,
     val currentPrice: Double,
-    val priceChange24h: Double,
+    val priceChange24h: Double?,   // null until a live refresh says otherwise
     val alertEnabled: Boolean = false,
     val addedAt: Long = System.currentTimeMillis()
 ) {

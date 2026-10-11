@@ -143,7 +143,7 @@ class SkinDetailViewModel @Inject constructor(
                         targetBuyPrice = null,
                         targetSellPrice = null,
                         currentPrice = state.skin.lowestMarketPrice,
-                        priceChange24h = state.skin.priceChange24h ?: 0.0
+                        priceChange24h = state.skin.priceChange24h
                     )
                 )
             }

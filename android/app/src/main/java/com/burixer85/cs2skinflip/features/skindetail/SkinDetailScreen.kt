@@ -276,7 +276,7 @@ private fun SkinDetailContent(
                     fontSize = 12.sp,
                     color = TextSecondary
                 )
-                PriceChangeChip(change = skin.priceChange24h ?: 0.0)
+                PriceChangeChip(change = skin.priceChange24h)
             }
             Spacer(Modifier.height(12.dp))
             // Steam is the reference price, not a place flippers transact (15% fee,

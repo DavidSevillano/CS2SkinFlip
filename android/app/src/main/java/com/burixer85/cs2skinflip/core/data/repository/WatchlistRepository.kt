@@ -2,19 +2,53 @@ package com.burixer85.cs2skinflip.core.data.repository
 
 import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
 import com.burixer85.cs2skinflip.core.data.local.WatchlistEntity
+import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** GET /prices/batch accepts at most this many skins per call. */
+private const val PRICE_BATCH_SIZE = 50
+
 @Singleton
 class WatchlistRepository @Inject constructor(
-    private val dao: WatchlistDao
+    private val dao: WatchlistDao,
+    private val backendApi: CS2BackendApiService,
 ) {
-    fun getAll(): Flow<List<WatchlistItem>> = dao.getAll().map { list ->
-        list.map { it.toDomain() }
+    // Live 24h change per skin from the last refresh. Kept in memory rather than
+    // in Room: the `priceChange24h` column is a snapshot from when the skin was
+    // added, and changing its type would need a schema bump — which, under
+    // fallbackToDestructiveMigration, wipes every user's watchlist.
+    private val liveChanges = MutableStateFlow<Map<String, Double?>>(emptyMap())
+
+    fun getAll(): Flow<List<WatchlistItem>> = combine(dao.getAll(), liveChanges) { list, changes ->
+        list.map { it.toDomain(priceChange24h = changes[it.skinId]) }
+    }
+
+    /**
+     * Pulls current prices for every watched skin. Prices are written back to
+     * Room so the last known one survives going offline; the 24h change is only
+     * shown while it is live. Throws on network failure — the stored prices
+     * stay as they were.
+     */
+    suspend fun refreshPrices() {
+        val entities = dao.getAll().first()
+        if (entities.isEmpty()) return
+
+        val prices = entities.map { it.skinId }.distinct()
+            .chunked(PRICE_BATCH_SIZE)
+            .flatMap { ids -> backendApi.getPricesBatch(ids.joinToString(",")).entries }
+            .associate { it.key to it.value }
+
+        for (entity in entities) {
+            val lowest = prices[entity.skinId]?.lowestPrice ?: continue
+            if (lowest != entity.currentPrice) dao.update(entity.copy(currentPrice = lowest))
+        }
+        liveChanges.value = prices.mapValues { it.value.priceChange24h }
     }
 
     suspend fun isInWatchlist(skinId: String): Boolean = dao.findBySkinId(skinId) != null
@@ -37,7 +71,7 @@ class WatchlistRepository @Inject constructor(
         }
     }
 
-    private fun WatchlistEntity.toDomain() = WatchlistItem(
+    private fun WatchlistEntity.toDomain(priceChange24h: Double?) = WatchlistItem(
         id = id,
         skinId = skinId,
         skinName = skinName,
@@ -58,7 +92,8 @@ class WatchlistRepository @Inject constructor(
         targetBuyPrice = targetBuyPrice,
         targetSellPrice = targetSellPrice,
         currentPrice = currentPrice,
-        priceChange24h = priceChange24h,
+        // Column is non-null; the snapshot is never displayed (see liveChanges).
+        priceChange24h = priceChange24h ?: 0.0,
         alertEnabled = alertEnabled,
         addedAt = addedAt
     )

@@ -30,6 +30,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -70,6 +71,7 @@ fun WatchlistScreen(
     viewModel: WatchlistViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     Column(Modifier.fillMaxSize().background(Background)) {
         TopAppBar(
@@ -98,7 +100,11 @@ fun WatchlistScreen(
                             textAlign = TextAlign.Center,
                         )
                     }
-                } else {
+                } else PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = viewModel::refreshPrices,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     LazyColumn(Modifier.fillMaxSize()) {
                         item {
                             Row(

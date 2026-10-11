@@ -7,6 +7,7 @@ import com.burixer85.cs2skinflip.core.data.repository.WatchlistRepository
 import com.burixer85.cs2skinflip.core.domain.model.WatchlistItem
 import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -27,6 +28,9 @@ class WatchlistViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
     val uiState: StateFlow<WatchlistUiState> = _uiState
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
     init {
         // One-time cleanup: remove pre-seeded mock items from older versions.
         // Their skin IDs don't match real backend cuids, so user-added items aren't affected.
@@ -36,6 +40,24 @@ class WatchlistViewModel @Inject constructor(
             }
         }
         observeWatchlist()
+        refreshPrices()
+    }
+
+    /** Pulls live prices; on failure the last stored prices simply stay on screen. */
+    fun refreshPrices() {
+        if (_isRefreshing.value) return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                watchlistRepository.refreshPrices()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Offline or backend down — keep showing the cached prices.
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
     }
 
     private fun observeWatchlist() {
