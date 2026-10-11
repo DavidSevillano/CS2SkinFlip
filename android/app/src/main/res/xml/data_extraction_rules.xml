@@ -1,19 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup and device-transfer rules for Android 12+ (older versions read
+  backup_rules.xml). Keep the two files in sync; see that file for why each
+  path is excluded.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore/auth_prefs.preferences_pb" />
+        <exclude domain="root" path="app_webview/" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore/auth_prefs.preferences_pb" />
+        <exclude domain="root" path="app_webview/" />
     </device-transfer>
-    -->
 </data-extraction-rules>

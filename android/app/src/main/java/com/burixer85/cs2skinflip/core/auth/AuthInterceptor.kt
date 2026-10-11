@@ -21,11 +21,24 @@ class AuthInterceptor @Inject constructor(
             chain.request()
         }
         val response = chain.proceed(request)
-        // Stale/invalid token (e.g. points to a deleted user) — clear it so the UI
-        // falls back to the "sign in with Steam" prompt instead of silently failing.
-        if (response.code == 401 && token != null) {
+        if (token == null) return response
+
+        if (response.code == 401) {
+            // Stale/invalid token (e.g. points to a deleted user) — clear it so the UI
+            // falls back to the "sign in with Steam" prompt instead of silently failing.
             runBlocking { tokenDataStore.clearToken() }
+        } else {
+            // Sliding renewal: the backend sends a fresh JWT when ours nears expiry.
+            // Swapped in only if ours is still the stored one, so a sign-out that
+            // happened while this request was in flight stays signed out.
+            response.header(REFRESHED_TOKEN_HEADER)?.let { fresh ->
+                runBlocking { tokenDataStore.replaceToken(expected = token, replacement = fresh) }
+            }
         }
         return response
+    }
+
+    private companion object {
+        const val REFRESHED_TOKEN_HEADER = "X-Refreshed-Token"
     }
 }

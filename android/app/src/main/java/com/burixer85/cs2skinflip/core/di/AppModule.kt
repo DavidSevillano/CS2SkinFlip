@@ -10,6 +10,7 @@ import com.burixer85.cs2skinflip.core.data.local.AlertDao
 import com.burixer85.cs2skinflip.core.data.local.AppDatabase
 import com.burixer85.cs2skinflip.core.data.local.WatchlistDao
 import com.burixer85.cs2skinflip.core.auth.AuthInterceptor
+import com.burixer85.cs2skinflip.core.auth.legacyTokenMigration
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.burixer85.cs2skinflip.core.network.CronetTransport
@@ -28,6 +29,13 @@ import javax.inject.Named
 import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
+
+// The JWT lives apart from user_prefs so backup_rules / data_extraction_rules can
+// exclude it alone. The migration moves a token older versions left in user_prefs.
+private val Context.authDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "auth_prefs",
+    produceMigrations = { ctx -> listOf(legacyTokenMigration(ctx.dataStore)) },
+)
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -49,6 +57,11 @@ object AppModule {
     @Provides
     @Singleton
     fun provideDataStore(@ApplicationContext ctx: Context): DataStore<Preferences> = ctx.dataStore
+
+    @Provides
+    @Singleton
+    @Named("auth")
+    fun provideAuthDataStore(@ApplicationContext ctx: Context): DataStore<Preferences> = ctx.authDataStore
 
     @Provides
     @Singleton

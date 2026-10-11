@@ -8,6 +8,8 @@
     <application
         android:name=".CS2SkinFlipApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -51,16 +53,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Steam OAuth deep link callback -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="cs2skinflip"
-                    android:host="auth"
-                    android:path="/callback" />
-            </intent-filter>
+            <!-- No intent filter for cs2skinflip://auth/callback on purpose: the sign-in
+                 redirect is caught inside SteamLoginScreen's WebView. Exposing it here
+                 let any app or web page deliver a login of its choosing. -->
         </activity>
 
     </application>

@@ -50,16 +50,21 @@ class SteamLoginViewModel @Inject constructor(
     private val premiumStatusRepository: PremiumStatusRepository,
     private val steamSession: SteamSessionManager,
 ) : ViewModel() {
+    /** Starts a sign-in and returns the `/auth/steam` URL carrying its PKCE challenge. */
+    fun beginSignIn(): String =
+        "${BuildConfig.BACKEND_URL.trimEnd('/')}/auth/steam?challenge=${authRepository.beginLogin()}"
+
     /**
      * Completes the single Steam sign-in: the OpenID round-trip in the WebView
-     * has just left the JWT on the deep-link redirect *and* deposited
-     * `steamLoginSecure` in the shared cookie jar. Persist both so the account is
-     * logged in and price calls can carry the session.
+     * has just left a one-time code on the deep-link redirect *and* deposited
+     * `steamLoginSecure` in the shared cookie jar. Redeems the code and persists
+     * the session so price calls can carry it. False if the code was refused.
      */
-    suspend fun completeSignIn(token: String) {
-        authRepository.handleCallback(token)
+    suspend fun completeSignIn(code: String): Boolean {
+        if (!authRepository.completeLogin(code)) return false
         steamSession.persistSession()
         premiumStatusRepository.refresh()
+        return true
     }
 }
 
@@ -72,9 +77,10 @@ class SteamLoginViewModel @Inject constructor(
  *     jar, from where [SteamSessionManager] attaches it to price requests (Steam
  *     load-sheds anonymous market calls at peak hours; cookied calls keep working).
  *  2. When the OpenID round-trip finishes, the backend redirects to the app's
- *     `cs2skinflip://auth/callback?token=…` deep link, which this screen
- *     intercepts to save the JWT — the same token [MainActivity] would have saved
- *     had the flow run in an external browser.
+ *     `cs2skinflip://auth/callback?code=…` deep link, which this screen
+ *     intercepts and redeems with the PKCE verifier only this process holds.
+ *     This is the only place a sign-in can complete: the app no longer accepts
+ *     that link from outside, so no other app or web page can plant a login.
  *
  * The WebView is deliberately dumb: top-level navigation is locked to our backend
  * and Steam's domains, no JavaScript bridge is installed, and nothing reads page
@@ -91,13 +97,19 @@ fun SteamLoginScreen(
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
     val finished = remember { mutableStateOf(false) }
 
-    fun completeSignIn(token: String) {
+    fun completeSignIn(code: String) {
         if (finished.value) return
         finished.value = true
         scope.launch {
-            viewModel.completeSignIn(token)
-            Toast.makeText(context, R.string.steam_prices_connected_toast, Toast.LENGTH_SHORT).show()
-            onBack()
+            if (viewModel.completeSignIn(code)) {
+                Toast.makeText(context, R.string.steam_prices_connected_toast, Toast.LENGTH_SHORT).show()
+                onBack()
+            } else {
+                // Refused or offline: start over with a fresh challenge.
+                Toast.makeText(context, R.string.error_generic_retry, Toast.LENGTH_SHORT).show()
+                finished.value = false
+                webViewRef.value?.loadUrl(viewModel.beginSignIn())
+            }
         }
     }
 
@@ -137,10 +149,10 @@ fun SteamLoginScreen(
                             request: WebResourceRequest?,
                         ): Boolean {
                             val url = request?.url ?: return false
-                            // The backend's final redirect carries the JWT on the
-                            // app's own scheme — capture it and never try to load it.
+                            // The backend's final redirect carries a one-time code on
+                            // the app's own scheme — capture it and never try to load it.
                             if (url.scheme == DEEP_LINK_SCHEME) {
-                                url.getQueryParameter("token")?.let { completeSignIn(it) }
+                                url.getQueryParameter("code")?.let { completeSignIn(it) }
                                 return true
                             }
                             val host = url.host ?: return false
@@ -152,7 +164,7 @@ fun SteamLoginScreen(
                         }
                     }
                     webViewRef.value = this
-                    loadUrl("${BuildConfig.BACKEND_URL.trimEnd('/')}/auth/steam")
+                    loadUrl(viewModel.beginSignIn())
                 }
             },
         )

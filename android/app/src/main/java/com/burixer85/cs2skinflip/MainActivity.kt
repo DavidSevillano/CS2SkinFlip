@@ -56,7 +56,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        handleAuthIntent(intent)
         val openedFromAlertNotification = handleNotificationIntent(intent)
 
         adsManager.initialize(this)
@@ -90,19 +89,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleAuthIntent(intent)
         handleNotificationIntent(intent)
-    }
-
-    private fun handleAuthIntent(intent: Intent) {
-        val data = intent.data ?: return
-        if (data.scheme == "cs2skinflip" && data.host == "auth" && data.path == "/callback") {
-            val token = data.getQueryParameter("token") ?: return
-            lifecycleScope.launch {
-                authRepository.handleCallback(token)
-                premiumStatusRepository.refresh()
-            }
-        }
     }
 
     /** Returns true if [intent] came from an alert push notification (carries a skinId extra). */

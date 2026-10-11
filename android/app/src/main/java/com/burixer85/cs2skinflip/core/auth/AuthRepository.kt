@@ -1,9 +1,11 @@
 package com.burixer85.cs2skinflip.core.auth
 
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
+import com.burixer85.cs2skinflip.core.data.remote.ExchangeLoginCodeRequest
 import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
 import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -20,10 +22,48 @@ class AuthRepository @Inject constructor(
     val isLoggedIn: Flow<Boolean> = tokenDataStore.token.map { it != null }
     val token: Flow<String?> = tokenDataStore.token
 
-    /** Steam OAuth deep-link callback — saves the JWT */
-    suspend fun handleCallback(token: String) {
+    /** The PKCE verifier of the sign-in in progress, if any. Never leaves the device. */
+    @Volatile
+    private var pendingVerifier: String? = null
+
+    /** Device FCM token lookup, swappable in tests (FirebaseMessaging is unavailable on the JVM). */
+    internal var fcmTokenProvider: suspend () -> String? = {
+        suspendCancellableCoroutine { cont ->
+            FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { cont.resume(it) }
+                .addOnFailureListener { cont.resume(null) }
+        }
+    }
+
+    /**
+     * Starts a Steam sign-in and returns the PKCE challenge to send to
+     * `GET /auth/steam`. Starting again discards any earlier attempt.
+     */
+    fun beginLogin(): String {
+        val verifier = Pkce.newVerifier()
+        pendingVerifier = verifier
+        return Pkce.challengeFor(verifier)
+    }
+
+    /**
+     * Redeems the one-time code the backend put on the sign-in redirect. Returns
+     * false — and stays signed out — when no sign-in was started here (a login
+     * link the app didn't ask for, e.g. one planted to sign the user in to
+     * someone else's account) or when the backend refuses the code.
+     */
+    suspend fun completeLogin(code: String): Boolean {
+        val verifier = pendingVerifier ?: return false
+        pendingVerifier = null
+        val token = try {
+            backendApi.exchangeLoginCode(ExchangeLoginCodeRequest(code, verifier)).token
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return false
+        }
         tokenDataStore.saveToken(token)
         syncFcmToken()
+        return true
     }
 
     suspend fun logout() {
@@ -45,17 +85,12 @@ class AuthRepository @Inject constructor(
     }
 
     /**
-     * Sends the device's current FCM token right after the Steam callback.
+     * Sends the device's current FCM token right after sign-in.
      * Needed because [onNewToken][com.google.firebase.messaging.FirebaseMessagingService.onNewToken]
      * only fires once per install (or on token rotation) — usually before any user is signed in —
      * so without this, `fcmToken` would never get associated with the account.
      */
     private suspend fun syncFcmToken() {
-        val token = suspendCancellableCoroutine<String?> { cont ->
-            FirebaseMessaging.getInstance().token
-                .addOnSuccessListener { cont.resume(it) }
-                .addOnFailureListener { cont.resume(null) }
-        }
-        token?.let { updateFcmToken(it) }
+        fcmTokenProvider()?.let { updateFcmToken(it) }
     }
 }

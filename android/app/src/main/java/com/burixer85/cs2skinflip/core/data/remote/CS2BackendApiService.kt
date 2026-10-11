@@ -84,6 +84,10 @@ interface CS2BackendApiService {
     @DELETE("auth/me")
     suspend fun deleteAccount()
 
+    /** Redeems the one-time code from the Steam sign-in redirect (PKCE). */
+    @POST("auth/exchange")
+    suspend fun exchangeLoginCode(@Body body: ExchangeLoginCodeRequest): ExchangeLoginCodeResponse
+
     @POST("billing/verify-purchase")
     suspend fun verifyPurchase(@Body body: VerifyPurchaseRequest): VerifyPurchaseResponseDto
 
@@ -367,6 +371,15 @@ fun parseRarityFromName(marketHashName: String): SkinRarity = when {
 // ─── Auth DTOs ───────────────────────────────────────────────────────────────
 
 data class FcmTokenRequest(
+    val token: String,
+)
+
+data class ExchangeLoginCodeRequest(
+    val code: String,
+    val verifier: String,
+)
+
+data class ExchangeLoginCodeResponse(
     val token: String,
 )
 
