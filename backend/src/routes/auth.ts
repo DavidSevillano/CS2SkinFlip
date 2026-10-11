@@ -20,7 +20,32 @@ function buildSteamLoginUrl(): string {
   return `${STEAM_OPENID_ENDPOINT}?${params.toString()}`
 }
 
+/**
+ * True if `returnTo` is our own callback — same origin and path, any query.
+ *
+ * Steam's `check_authentication` only vouches for its signature and nonce, not
+ * for who the assertion was minted for. Any other site offering "Sign in through
+ * Steam" collects equally valid assertions from its visitors, and without this
+ * check could replay one here and be handed that visitor's account. A plain
+ * prefix test is not enough either: `/auth/steam/callback.evil` starts with it.
+ */
+function isOurReturnTo(returnTo: string | undefined): boolean {
+  if (!returnTo) return false
+  try {
+    const actual = new URL(returnTo)
+    const expected = new URL(env.STEAM_CALLBACK_URL)
+    return actual.origin === expected.origin && actual.pathname === expected.pathname
+  } catch {
+    return false
+  }
+}
+
 async function verifySteamAssertion(query: Record<string, string>): Promise<string | null> {
+  // Checked before asking Steam: an assertion meant for someone else, or from
+  // another provider, is rejected without spending a round trip on it.
+  if (query['openid.op_endpoint'] !== STEAM_OPENID_ENDPOINT) return null
+  if (!isOurReturnTo(query['openid.return_to'])) return null
+
   const body = new URLSearchParams({ ...query, 'openid.mode': 'check_authentication' })
 
   const { data } = await axios.post(STEAM_OPENID_ENDPOINT, body.toString(), {
