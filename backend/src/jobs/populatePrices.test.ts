@@ -323,6 +323,17 @@ describe('populatePrices — bulk write path', () => {
     expect(new Set(writtenSkinIds).size).toBe(SKIN_COUNT)
   })
 
+  // Literal numbers in place of bind placeholders reached production once: the
+  // mocks accept any SQL, Postgres rejected `8` for "updatedAt".
+  it('binds every value through a numbered placeholder', async () => {
+    await populatePrices(log)
+
+    const [sql, ...params] = executeRawUnsafe.mock.calls[0]
+    const tuples = (sql as string).match(/VALUES (.*)\s+ON CONFLICT/s)![1]
+    expect(tuples.startsWith('($1,$2,$3,$4,$5,$6,$7,$8,$9),($10,')).toBe(true)
+    expect(tuples.match(/\$\d+/g)).toHaveLength(params.length)
+  })
+
   it('upserts on the skinId unique constraint rather than inserting duplicates', async () => {
     await populatePrices(log)
 

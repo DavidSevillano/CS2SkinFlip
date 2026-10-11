@@ -231,7 +231,7 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
     const tuples = batch
       .map((_, n) => {
         const b = n * SKIN_PRICE_COLUMNS
-        return `(${b + 1},${b + 2},${b + 3},${b + 4},${b + 5},${b + 6},${b + 7},${b + 8},${b + 9})`
+        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`
       })
       .join(',')
 
