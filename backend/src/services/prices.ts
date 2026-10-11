@@ -54,11 +54,24 @@ export async function invalidateTopMoversCache(): Promise<number> {
   return keys.length
 }
 
+// ─── Per-skin price cache ────────────────────────────────────────────────────
+// Same discipline as the top-movers keys: the writer below and the invalidator
+// derive from one prefix.
+const SKIN_PRICE_CACHE_PREFIX = 'prices'
+
+/** Drops every cached per-skin price — after a bulk run, and on boot. */
+export async function invalidateSkinPriceCache(): Promise<number> {
+  const keys = await redis.keys(`${SKIN_PRICE_CACHE_PREFIX}:*`)
+  if (keys.length === 0) return 0
+  await Promise.all(keys.map((key) => redis.del(key)))
+  return keys.length
+}
+
 export class PriceService {
 
   /** Read stored prices from DB (populated by bulk job every 6h). Cached 5 min. */
   async getPricesForSkin(skinId: string, marketHashName: string): Promise<AggregatedPrices> {
-    const cacheKey = `prices:${skinId}`
+    const cacheKey = `${SKIN_PRICE_CACHE_PREFIX}:${skinId}`
     const cached = await redis.get<AggregatedPrices>(cacheKey)
     if (cached) return cached
 

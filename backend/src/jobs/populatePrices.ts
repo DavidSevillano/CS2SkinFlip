@@ -6,7 +6,7 @@ import { prisma } from '../db/prisma'
 import { redis } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import { MAX_QUOTE_DEVIATION_FROM_MEDIAN } from '../config/priceQuality'
-import { invalidateTopMoversCache } from '../services/prices'
+import { invalidateSkinPriceCache, invalidateTopMoversCache } from '../services/prices'
 import type { FastifyBaseLogger } from 'fastify'
 
 const brotliDecompress = promisify(zlib.brotliDecompress)
@@ -81,8 +81,16 @@ interface CsgoMarketItem {
   volume: string
 }
 
-async function fetchCsgoMarketPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
+/**
+ * Prices plus `volumes`: CS:GO Market's `volume` per item, which tracks how many
+ * listings it has — the liquidity signal the other two feeds don't carry. A skin
+ * with one listing has a "lowest price" that is one seller's ask.
+ */
+async function fetchCsgoMarketPrices(
+  log: FastifyBaseLogger,
+): Promise<{ prices: Map<string, number>; volumes: Map<string, number> }> {
   const map = new Map<string, number>()
+  const volumes = new Map<string, number>()
   try {
     const { data } = await axios.get<CsgoMarketItem[] | { items: CsgoMarketItem[] }>(
       'https://market.csgo.com/api/v2/prices/USD.json',
@@ -93,13 +101,15 @@ async function fetchCsgoMarketPrices(log: FastifyBaseLogger): Promise<Map<string
       const price = parseFloat(item.price)
       if (price > 0 && item.market_hash_name) {
         map.set(item.market_hash_name, price)
+        const volume = parseInt(item.volume, 10)
+        if (Number.isFinite(volume) && volume >= 0) volumes.set(item.market_hash_name, volume)
       }
     }
     log.info(`[Prices] CS:GO Market: ${map.size} items`)
   } catch (err) {
     log.warn(`[Prices] CS:GO Market failed: ${(err as Error).message}`)
   }
-  return map
+  return { prices: map, volumes }
 }
 
 // ─── Waxpeer ─────────────────────────────────────────────────────────────────
@@ -180,14 +190,15 @@ interface SkinPriceRow {
   waxpeer: number | null
   lowestPrice: number
   priceChange24h: number | null
+  volume: number | null
 }
 
-// 500 rows x 8 columns = 4000 bind parameters, comfortably under Postgres' 65535
+// 500 rows x 9 columns = 4500 bind parameters, comfortably under Postgres' 65535
 // cap. The catalog is ~24k skins but only ~13.2k carry a price from any
 // marketplace (measured 2026-07-22), so a full run is ~27 statements.
 const WRITE_BATCH = 500
 
-const SKIN_PRICE_COLUMNS = 8
+const SKIN_PRICE_COLUMNS = 9
 
 /**
  * Upserts every priced skin in batched multi-row statements, returning the number
@@ -218,7 +229,7 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
     const tuples = batch
       .map((_, n) => {
         const b = n * SKIN_PRICE_COLUMNS
-        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8})`
+        return `(${b + 1},${b + 2},${b + 3},${b + 4},${b + 5},${b + 6},${b + 7},${b + 8},${b + 9})`
       })
       .join(',')
 
@@ -235,14 +246,14 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
       r.lowestPrice,
       r.priceChange24h,
       now,
+      r.volume,
     ])
 
-    // `volume24h` is deliberately absent from both the column list and the SET
-    // clause: this job never computes it, and naming it here would overwrite
-    // whatever else populated it with NULL on every run.
+    // `volume24h` holds CS:GO Market's listing count (see fetchCsgoMarketPrices),
+    // the liquidity signal top movers filters on. The name predates that use.
     await prisma.$executeRawUnsafe(
       `INSERT INTO "SkinPrice" (
-         "id","skinId","skinportPrice","csgoMarketPrice","waxpeerPrice","lowestPrice","priceChange24h","updatedAt"
+         "id","skinId","skinportPrice","csgoMarketPrice","waxpeerPrice","lowestPrice","priceChange24h","updatedAt","volume24h"
        ) VALUES ${tuples}
        ON CONFLICT ("skinId") DO UPDATE SET
          "skinportPrice"   = EXCLUDED."skinportPrice",
@@ -250,7 +261,8 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
          "waxpeerPrice"    = EXCLUDED."waxpeerPrice",
          "lowestPrice"     = EXCLUDED."lowestPrice",
          "priceChange24h"  = EXCLUDED."priceChange24h",
-         "updatedAt"       = EXCLUDED."updatedAt"`,
+         "updatedAt"       = EXCLUDED."updatedAt",
+         "volume24h"       = EXCLUDED."volume24h"`,
       ...values,
     )
 
@@ -302,14 +314,95 @@ export interface PopulatePricesSummary {
   historyRows: number
 }
 
+// ─── Marketplace outages ─────────────────────────────────────────────────────
+// Each fetcher swallows its own failure and returns an empty map. Writing that
+// as NULL moved lowestPrice to whichever marketplaces survived — an artificial
+// jump that fired SELL_ABOVE alerts and wrote a bogus history point, then the
+// reverse on the next run. A marketplace that is down keeps its last quotes for
+// a while instead.
+export const MARKETPLACE_HEALTH_KEY = 'pipeline:prices:marketplaceHealth'
+
+type Marketplace = 'skinport' | 'csgoMarket' | 'waxpeer'
+type MarketplaceHealth = Partial<Record<Marketplace, { count: number; at: number }>>
+
+// Down = nothing at all, or under half the items of its last healthy run (a
+// truncated or degraded answer is as misleading as an empty one).
+const DOWN_BELOW_FRACTION = 0.5
+// Four runs. Past that, stale quotes are worse than none.
+const MAX_CARRY_FORWARD_MS = 24 * 60 * 60 * 1000
+
+function isDown(size: number, lastHealthy: { count: number } | undefined): boolean {
+  return size === 0 || (lastHealthy !== undefined && size < lastHealthy.count * DOWN_BELOW_FRACTION)
+}
+
+async function readMarketplaceHealth(log: FastifyBaseLogger): Promise<MarketplaceHealth> {
+  try {
+    const raw = await redis.get<MarketplaceHealth | string>(MARKETPLACE_HEALTH_KEY)
+    if (!raw) return {}
+    return typeof raw === 'string' ? (JSON.parse(raw) as MarketplaceHealth) : raw
+  } catch (err) {
+    log.warn({ err }, '[PricePopulate] Could not read marketplace health; nothing will be carried forward')
+    return {}
+  }
+}
+
+interface PreviousQuotes {
+  skinportPrice: number | null
+  csgoMarketPrice: number | null
+  waxpeerPrice: number | null
+  volume24h: number | null
+}
+
 export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePricesSummary> {
   log.info('[PricePopulate] Fetching prices from 3 marketplaces in parallel...')
 
-  const [skinportMap, csgoMarketMap, waxpeerMap] = await Promise.all([
+  const [skinportMap, csgoMarket, waxpeerMap] = await Promise.all([
     fetchSkinportPrices(log),
     fetchCsgoMarketPrices(log),
     fetchWaxpeerPrices(log),
   ])
+  const csgoMarketMap = csgoMarket.prices
+
+  const now = Date.now()
+  const health = await readMarketplaceHealth(log)
+  const sizes: Record<Marketplace, number> = {
+    skinport: skinportMap.size,
+    csgoMarket: csgoMarketMap.size,
+    waxpeer: waxpeerMap.size,
+  }
+  const marketplaces = Object.keys(sizes) as Marketplace[]
+  const down = marketplaces.filter((m) => isDown(sizes[m], health[m]))
+
+  // Carrying all three forward would keep /health "fresh" over prices nothing
+  // refreshed — exactly what the freshness marker exists to catch.
+  if (down.length === marketplaces.length) {
+    log.error(
+      '[PricePopulate] No skins updated — every marketplace is down or degraded. Leaving prices and the freshness marker untouched; /health will report stale.',
+    )
+    return { updated: 0, historyRows: 0 }
+  }
+
+  const carried = down.filter((m) => {
+    const last = health[m]
+    return last !== undefined && now - last.at <= MAX_CARRY_FORWARD_MS
+  })
+  for (const m of down) {
+    log.warn(
+      `[PricePopulate] ${m} looks down (${sizes[m]} items, last healthy run ${health[m]?.count ?? 'unknown'}) — ${carried.includes(m) ? 'keeping its previous prices' : 'writing no prices for it'}`,
+    )
+  }
+
+  // Only read when needed: ~13k rows of four columns, once per outage run.
+  const previous = new Map<string, PreviousQuotes>()
+  if (carried.length > 0) {
+    const rows = await prisma.skinPrice.findMany({
+      select: { skinId: true, skinportPrice: true, csgoMarketPrice: true, waxpeerPrice: true, volume24h: true },
+    })
+    for (const r of rows) previous.set(r.skinId, r)
+  }
+  const carrySkinport = carried.includes('skinport')
+  const carryCsgoMarket = carried.includes('csgoMarket')
+  const carryWaxpeer = carried.includes('waxpeer')
 
   const skins = await prisma.skin.findMany({ select: { id: true, marketHashName: true } })
   log.info(`[PricePopulate] Merging prices for ${skins.length} skins...`)
@@ -338,9 +431,12 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
   const oldPriceMap = new Map(recentHistory.map((h) => [h.skinId, h.price]))
 
   const rows = skins.flatMap((skin) => {
-    const skinport = skinportMap.get(skin.marketHashName) ?? null
-    const csgo     = csgoMarketMap.get(skin.marketHashName) ?? null
-    const waxpeer  = waxpeerMap.get(skin.marketHashName) ?? null
+    const prev = previous.get(skin.id)
+    const name = skin.marketHashName
+    const skinport = carrySkinport ? prev?.skinportPrice ?? null : skinportMap.get(name) ?? null
+    const csgo = carryCsgoMarket ? prev?.csgoMarketPrice ?? null : csgoMarketMap.get(name) ?? null
+    const waxpeer = carryWaxpeer ? prev?.waxpeerPrice ?? null : waxpeerMap.get(name) ?? null
+    const volume = carryCsgoMarket ? prev?.volume24h ?? null : csgoMarket.volumes.get(name) ?? null
 
     if (!skinport && !csgo && !waxpeer) return []
 
@@ -352,7 +448,7 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
       ? ((lowestPrice - oldPrice) / oldPrice) * 100
       : null
 
-    return [{ skinId: skin.id, skinport, csgo, waxpeer, lowestPrice, priceChange24h }]
+    return [{ skinId: skin.id, skinport, csgo, waxpeer, lowestPrice, priceChange24h, volume }]
   })
 
   const updated = await writeSkinPrices(rows)
@@ -367,6 +463,18 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
   }
 
   await invalidateTopMoversCache()
+  // The alert check runs next and reads through the 5-min per-skin cache.
+  await invalidateSkinPriceCache()
+
+  // Remember healthy marketplaces' sizes; a down one keeps its last good record,
+  // which is what the carry-forward window is measured from.
+  const nextHealth: MarketplaceHealth = { ...health }
+  for (const m of marketplaces) if (!down.includes(m)) nextHealth[m] = { count: sizes[m], at: now }
+  try {
+    await redis.set(MARKETPLACE_HEALTH_KEY, nextHealth)
+  } catch (err) {
+    log.warn({ err }, '[PricePopulate] Could not record marketplace health')
+  }
 
   // Only a run that actually moved prices counts as successful. Each fetcher
   // swallows its own errors and returns an empty map, so all three marketplaces

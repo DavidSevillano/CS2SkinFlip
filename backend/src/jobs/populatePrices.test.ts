@@ -9,9 +9,10 @@ import { fakeRedisStore } from '../test/fakeRedis'
 // Prisma materialised every row in-process — enough to exhaust a 512MB instance.
 // The query must stay bounded on BOTH ends.
 
-const { skinFindMany, queryRaw, priceHistoryCreateMany, executeRawUnsafe } =
+const { skinFindMany, skinPriceFindMany, queryRaw, priceHistoryCreateMany, executeRawUnsafe } =
   vi.hoisted(() => ({
     skinFindMany: vi.fn(),
+    skinPriceFindMany: vi.fn(),
     queryRaw: vi.fn(),
     priceHistoryCreateMany: vi.fn(),
     executeRawUnsafe: vi.fn(),
@@ -20,6 +21,7 @@ const { skinFindMany, queryRaw, priceHistoryCreateMany, executeRawUnsafe } =
 vi.mock('../db/prisma', () => ({
   prisma: {
     skin: { findMany: skinFindMany },
+    skinPrice: { findMany: skinPriceFindMany },
     priceHistory: { createMany: priceHistoryCreateMany },
     $queryRaw: queryRaw,
     $executeRawUnsafe: executeRawUnsafe,
@@ -51,7 +53,7 @@ vi.mock('../redis/client', () => ({
 const { axiosGet } = vi.hoisted(() => ({ axiosGet: vi.fn() }))
 vi.mock('axios', () => ({ default: { get: axiosGet } }))
 
-const { populatePrices, getPriceHealth, PRICE_RUN_TIMESTAMP_KEY } = await import('./populatePrices')
+const { populatePrices, getPriceHealth, PRICE_RUN_TIMESTAMP_KEY, MARKETPLACE_HEALTH_KEY } = await import('./populatePrices')
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as any
 
@@ -60,7 +62,13 @@ const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
 describe('populatePrices — 24h-change reference query', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    axiosGet.mockResolvedValue({ data: [] })
+    // One marketplace answering is enough for the run to reach the read query;
+    // with all three down it now stops before touching the database.
+    axiosGet.mockImplementation(async (url: string) =>
+      url.includes('market.csgo.com')
+        ? { data: [{ market_hash_name: 'AK-47 | Redline (Field-Tested)', price: '10', volume: '5' }] }
+        : { data: [] },
+    )
     skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: 'AK-47 | Redline (Field-Tested)' }])
     queryRaw.mockResolvedValue([])
     priceHistoryCreateMany.mockResolvedValue({ count: 0 })
@@ -318,13 +326,15 @@ describe('populatePrices — bulk write path', () => {
     expect(sql).toContain('ON CONFLICT ("skinId") DO UPDATE')
   })
 
-  // The job never computes volume24h. Naming it in the statement would blank it
-  // on every run for whatever else does.
-  it('leaves volume24h untouched', async () => {
+  // CS:GO Market's `volume` (its count of listings) is the liquidity signal top
+  // movers needs; the column existed but nothing ever filled it.
+  it("writes CS:GO Market's volume into volume24h", async () => {
     await populatePrices(log)
 
-    const sql = executeRawUnsafe.mock.calls[0][0] as string
-    expect(sql).not.toContain('volume24h')
+    const [sql, ...params] = executeRawUnsafe.mock.calls[0]
+    expect(sql).toMatch(/"volume24h"\s+= EXCLUDED\."volume24h"/)
+    // 9 columns per row; volume is the last one of the first row.
+    expect(params[8]).toBe(5)
   })
 
   it('still reports the rows it wrote in the run summary', async () => {
@@ -448,5 +458,131 @@ describe('populatePrices — outlier rejection across marketplaces', () => {
 
     const [, , , skinport, csgo, waxpeer] = executeRawUnsafe.mock.calls[0]
     expect({ skinport, csgo, waxpeer }).toEqual({ skinport: 100, csgo: 105, waxpeer: 2000 })
+  })
+})
+
+describe('populatePrices — one marketplace down', () => {
+  const NAME = 'AK-47 | Redline (Field-Tested)'
+  const HOUR = 60 * 60 * 1000
+
+  /** Skinport and Waxpeer answer normally; CS:GO Market returns nothing. */
+  function csgoMarketDown() {
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('skinport')) {
+        const items = [{ market_hash_name: NAME, min_price: 30, suggested_price: null }]
+        return { data: brotliCompressSync(Buffer.from(JSON.stringify(items), 'utf8')) }
+      }
+      if (url.includes('waxpeer')) return { data: { success: true, items: [{ name: NAME, min: 31_000 }] } }
+      return { data: [] }
+    })
+  }
+
+  /** The bind parameters of the single written row, by column. */
+  function writtenRow() {
+    const p = executeRawUnsafe.mock.calls[0]
+    return { skinport: p[3], csgo: p[4], waxpeer: p[5], lowest: p[6], volume: p[9] }
+  }
+
+  const redis = fakeRedisStore()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    redis.store.clear()
+    redisGet.mockImplementation(redis.get)
+    redisSet.mockImplementation(redis.set)
+    redisKeys.mockImplementation(redis.keys)
+    redisDel.mockImplementation(redis.del)
+    skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: NAME }])
+    skinPriceFindMany.mockResolvedValue([
+      { skinId: 'skin-1', skinportPrice: 29, csgoMarketPrice: 12, waxpeerPrice: 30, volume24h: 7 },
+    ])
+    queryRaw.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 1 })
+    executeRawUnsafe.mockResolvedValue(1)
+  })
+
+  // Writing NULL for a marketplace that merely failed to answer moved
+  // lowestPrice to whichever survived: an artificial jump, a false SELL_ABOVE
+  // alert, and a polluted history point — then the reverse on the next run.
+  it('keeps its last prices instead of blanking them', async () => {
+    redis.store.set(MARKETPLACE_HEALTH_KEY, { csgoMarket: { count: 1, at: Date.now() - 6 * HOUR } })
+    csgoMarketDown()
+
+    await populatePrices(log)
+
+    expect(writtenRow()).toMatchObject({ skinport: 30, csgo: 12, waxpeer: 31, lowest: 12, volume: 7 })
+    expect(log.warn).toHaveBeenCalled()
+  })
+
+  it('stops carrying them once its last good run is over a day old', async () => {
+    redis.store.set(MARKETPLACE_HEALTH_KEY, { csgoMarket: { count: 1, at: Date.now() - 25 * HOUR } })
+    csgoMarketDown()
+
+    await populatePrices(log)
+
+    expect(writtenRow()).toMatchObject({ csgo: null, lowest: 30 })
+  })
+
+  it('treats a sharp drop in item count as down, not just an empty answer', async () => {
+    redis.store.set(MARKETPLACE_HEALTH_KEY, { csgoMarket: { count: 20_000, at: Date.now() - 6 * HOUR } })
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('market.csgo.com')) return { data: [{ market_hash_name: NAME, price: '999', volume: '1' }] }
+      if (url.includes('waxpeer')) return { data: { success: true, items: [{ name: NAME, min: 31_000 }] } }
+      return { data: [] }
+    })
+
+    await populatePrices(log)
+
+    expect(writtenRow().csgo).toBe(12)
+  })
+
+  it('reads previous prices only when it has to', async () => {
+    redis.store.set(MARKETPLACE_HEALTH_KEY, { csgoMarket: { count: 1, at: Date.now() - HOUR } })
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('market.csgo.com')) return { data: [{ market_hash_name: NAME, price: '11', volume: '3' }] }
+      return { data: [] }
+    })
+
+    await populatePrices(log)
+
+    expect(skinPriceFindMany).not.toHaveBeenCalled()
+  })
+
+  // Carrying every marketplace forward would keep /health "fresh" over prices
+  // nothing refreshed — the failure the freshness marker exists to catch.
+  it('writes nothing when every marketplace is down, even with prices to carry', async () => {
+    redis.store.set(MARKETPLACE_HEALTH_KEY, {
+      skinport: { count: 1, at: Date.now() - HOUR },
+      csgoMarket: { count: 1, at: Date.now() - HOUR },
+      waxpeer: { count: 1, at: Date.now() - HOUR },
+    })
+    axiosGet.mockResolvedValue({ data: [] })
+
+    const summary = await populatePrices(log)
+
+    expect(summary.updated).toBe(0)
+    expect(executeRawUnsafe).not.toHaveBeenCalled()
+  })
+
+  it("remembers each healthy marketplace's size for the next run", async () => {
+    csgoMarketDown()
+
+    await populatePrices(log)
+
+    const health = redis.store.get(MARKETPLACE_HEALTH_KEY) as Record<string, { count: number }>
+    expect(health.skinport.count).toBe(1)
+    expect(health.waxpeer.count).toBe(1)
+    expect(health.csgoMarket).toBeUndefined()
+  })
+
+  // The alert check runs right after this job and reads prices through a 5-min
+  // cache; without clearing it, alerts could fire on the previous run's prices.
+  it('clears the per-skin price cache once new prices are written', async () => {
+    redis.store.set('prices:skin-1', { lowestPrice: 1 })
+    csgoMarketDown()
+
+    await populatePrices(log)
+
+    expect(redis.store.has('prices:skin-1')).toBe(false)
   })
 })

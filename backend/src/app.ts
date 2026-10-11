@@ -4,8 +4,7 @@ import { env } from './config/env'
 import { prisma } from './db/prisma'
 import { populateSkins } from './jobs/populateSkins'
 import { populatePrices } from './jobs/populatePrices'
-import { redis } from './redis/client'
-import { invalidateTopMoversCache } from './services/prices'
+import { invalidateSkinPriceCache, invalidateTopMoversCache } from './services/prices'
 
 async function main() {
   const app = await buildServer()
@@ -23,8 +22,7 @@ async function main() {
   try {
     await app.listen({ port: env.PORT, host: env.HOST })
     // Clear ALL price caches on startup so clients get fresh data immediately
-    const keys = await redis.keys('prices:*')
-    if (keys.length > 0) await Promise.all(keys.map(k => redis.del(k)))
+    await invalidateSkinPriceCache()
     await invalidateTopMoversCache()
 
     // The periodic refresh is triggered externally (a GitHub Actions cron ->

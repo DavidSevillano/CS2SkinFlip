@@ -153,6 +153,10 @@ Three marketplaces are fetched in parallel every 6h by the cron-triggered job (`
 
 `calcLowestPrice()` is **not** a plain MIN — a plain MIN trusts whichever marketplace is most wrong. When all three quote a skin, any quote further than `MAX_QUOTE_DEVIATION_FROM_MEDIAN` (4x) from the median of the three is discarded before the MIN is taken. With fewer than three quotes there is no majority to appeal to, so those rows keep the plain MIN and are instead refused by top movers. `SkinPrice.lowestPrice` stores the result and is the primary price shown in the Android app; the individual marketplace columns always record what each one actually said, rejected or not.
 
+**A marketplace that is down keeps its last quotes.** Every fetcher swallows its own error and returns an empty map; writing that as NULL moved `lowestPrice` to whichever marketplaces survived, an artificial jump that fired false alerts and polluted `PriceHistory`. `populatePrices` records each healthy marketplace's item count in Redis (`pipeline:prices:marketplaceHealth`); one returning nothing, or under half its last healthy count, is treated as down and its previous column values are carried forward for up to 24h. If all three are down nothing is written at all, so `/health` still goes stale.
+
+`SkinPrice.volume24h` holds **CS:GO Market's `volume`** (its count of listings for the item), the only liquidity signal in the three feeds — the column name predates that use. A skin with one or two listings has a "lowest price" that is a single seller's ask.
+
 Thresholds and the production measurements behind them live in `src/config/priceQuality.ts`. Re-derive them with `scripts/measure-price-quality.ts` rather than adjusting by feel.
 
 **No live calls anywhere.** The DB is the single source of truth. `GET /skins/:id`, `GET /prices/batch`, and the search/top-movers endpoints all read straight from `SkinPrice` — search responses already contain the marketplace prices and `lowestPrice` correct on first render. The Android `SkinRepository` is correspondingly simple: no `livePriceCache`, no batch refresh after list loads.
