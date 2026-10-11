@@ -1,6 +1,7 @@
 package com.burixer85.cs2skinflip.core.preferences
 
 import android.content.Context
+import android.content.res.Resources
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
@@ -44,6 +45,15 @@ object LocaleHelper {
             .putString(KEY_LANGUAGE_TAG, language.tag)
             .apply()
     }
+
+    /**
+     * BCP 47 tag of the language the app is shown in: the override if one is set,
+     * otherwise the device's. Read from the system resources rather than
+     * [Locale.getDefault], which [wrap] overwrites and nothing restores when the
+     * user goes back to "follow system".
+     */
+    fun effectiveTag(context: Context): String =
+        getLanguage(context).tag ?: Resources.getSystem().configuration.locales[0].toLanguageTag()
 
     /** Wraps [context] with the saved language override, if any. Call from `attachBaseContext`. */
     fun wrap(context: Context): Context {

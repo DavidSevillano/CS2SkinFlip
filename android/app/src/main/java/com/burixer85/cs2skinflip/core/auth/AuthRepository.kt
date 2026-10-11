@@ -1,12 +1,16 @@
 package com.burixer85.cs2skinflip.core.auth
 
+import android.content.Context
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.ExchangeLoginCodeRequest
 import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
 import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
+import com.burixer85.cs2skinflip.core.preferences.LocaleHelper
 import com.google.firebase.messaging.FirebaseMessaging
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import javax.inject.Inject
@@ -15,6 +19,7 @@ import kotlin.coroutines.resume
 
 @Singleton
 class AuthRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val tokenDataStore: TokenDataStore,
     private val backendApi: CS2BackendApiService,
     private val premiumStatusRepository: PremiumStatusRepository,
@@ -34,6 +39,9 @@ class AuthRepository @Inject constructor(
                 .addOnFailureListener { cont.resume(null) }
         }
     }
+
+    /** The app's language tag, swappable in tests. */
+    internal var localeProvider: () -> String = { LocaleHelper.effectiveTag(context) }
 
     /**
      * Starts a Steam sign-in and returns the PKCE challenge to send to
@@ -80,7 +88,7 @@ class AuthRepository @Inject constructor(
 
     /** Register or refresh the FCM token on the backend. No-op if not logged in. */
     suspend fun updateFcmToken(token: String) {
-        runCatching { backendApi.updateFcmToken(FcmTokenRequest(token)) }
+        runCatching { backendApi.updateFcmToken(FcmTokenRequest(token, localeProvider())) }
         // Silently ignore failures — token update is best-effort
     }
 
@@ -92,5 +100,14 @@ class AuthRepository @Inject constructor(
      */
     private suspend fun syncFcmToken() {
         fcmTokenProvider()?.let { updateFcmToken(it) }
+    }
+
+    /**
+     * Re-sends the token with the current language, so alert notifications follow
+     * a language change — and reach users who signed in before the app sent one.
+     * No-op when signed out.
+     */
+    suspend fun resyncFcmToken() {
+        if (tokenDataStore.token.first() != null) syncFcmToken()
     }
 }

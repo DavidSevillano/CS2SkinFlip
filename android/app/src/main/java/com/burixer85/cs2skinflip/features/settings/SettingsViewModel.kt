@@ -84,6 +84,11 @@ class SettingsViewModel @Inject constructor(
         _showPurchaseSuccessDialog.value = false
     }
 
+    /** Alert notifications are written by the backend, in the language it was last told. */
+    fun onLanguageChanged() {
+        viewModelScope.launch { authRepository.resyncFcmToken() }
+    }
+
     fun setMarketplace(m: DefaultMarketplace) {
         viewModelScope.launch { preferences.setMarketplace(m) }
     }

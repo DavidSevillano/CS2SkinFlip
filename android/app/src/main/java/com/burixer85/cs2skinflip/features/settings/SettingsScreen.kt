@@ -284,6 +284,7 @@ fun SettingsScreen(
                 LocaleHelper.setLanguage(context, language)
                 currentAppLanguage = language
                 showLanguageSheet = false
+                viewModel.onLanguageChanged()
                 context.findActivity()?.recreate()
             },
             onDismiss = { showLanguageSheet = false },

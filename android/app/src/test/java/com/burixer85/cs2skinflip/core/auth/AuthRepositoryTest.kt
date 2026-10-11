@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.ExchangeLoginCodeRequest
 import com.burixer85.cs2skinflip.core.data.remote.ExchangeLoginCodeResponse
+import com.burixer85.cs2skinflip.core.data.remote.FcmTokenRequest
 import com.burixer85.cs2skinflip.core.data.repository.PremiumStatusRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -33,8 +34,9 @@ class AuthRepositoryTest {
         val store = TokenDataStore(
             PreferenceDataStoreFactory.create(produceFile = { tempFolder.newFile("auth.preferences_pb") })
         )
-        val repo = AuthRepository(store, backendApi, PremiumStatusRepository(backendApi)).apply {
+        val repo = AuthRepository(mock(), store, backendApi, PremiumStatusRepository(backendApi)).apply {
             fcmTokenProvider = { null }
+            localeProvider = { "es" }
         }
         return repo to store
     }
@@ -100,5 +102,26 @@ class AuthRepositoryTest {
 
         assertFalse(ok)
         assertNull(store.token.first())
+    }
+
+    @Test
+    fun `the FCM token is sent with the app language`() = runTest {
+        val (repo, store) = repository()
+        repo.fcmTokenProvider = { "device-token" }
+        store.saveToken("jwt")
+
+        repo.resyncFcmToken()
+
+        verify(backendApi).updateFcmToken(FcmTokenRequest("device-token", "es"))
+    }
+
+    @Test
+    fun `resync does nothing while signed out`() = runTest {
+        val (repo, _) = repository()
+        repo.fcmTokenProvider = { "device-token" }
+
+        repo.resyncFcmToken()
+
+        verify(backendApi, never()).updateFcmToken(any())
     }
 }

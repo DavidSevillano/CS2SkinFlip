@@ -389,6 +389,8 @@ fun rarityOf(marketHashName: String, rarity: String?): SkinRarity = when {
 
 data class FcmTokenRequest(
     val token: String,
+    /** The app's language, so the backend writes alert notifications in it. */
+    val locale: String? = null,
 )
 
 data class ExchangeLoginCodeRequest(
