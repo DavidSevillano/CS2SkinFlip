@@ -13,6 +13,9 @@ vi.mock('./populatePrices', () => ({ populatePrices }))
 const { cleanupPriceHistory } = vi.hoisted(() => ({ cleanupPriceHistory: vi.fn() }))
 vi.mock('./cleanupPriceHistory', () => ({ cleanupPriceHistory }))
 
+const { revokeVoidedPurchases } = vi.hoisted(() => ({ revokeVoidedPurchases: vi.fn() }))
+vi.mock('./revokeVoidedPurchases', () => ({ revokeVoidedPurchases }))
+
 // runner.ts constructs an AlertService in its module body; the class mock gives it
 // a spyable checkAll without dragging in the real prisma/redis.
 const { checkAll } = vi.hoisted(() => ({ checkAll: vi.fn() }))
@@ -38,6 +41,7 @@ describe('runRefreshPrices', () => {
     populatePrices.mockResolvedValue({ updated: 100, historyRows: 100 })
     checkAll.mockResolvedValue(undefined)
     cleanupPriceHistory.mockResolvedValue(undefined)
+    revokeVoidedPurchases.mockResolvedValue(null)
   })
 
   it('takes the lock with NX and a TTL so a crashed run self-heals', async () => {
@@ -82,7 +86,17 @@ describe('runRefreshPrices', () => {
     expect(typeof status.durationMs).toBe('number')
     expect(checkAll).toHaveBeenCalledTimes(1)
     expect(cleanupPriceHistory).toHaveBeenCalledTimes(1)
+    expect(revokeVoidedPurchases).toHaveBeenCalledTimes(1)
     expect(redisDel).toHaveBeenCalledWith(REFRESH_LOCK_KEY)
+  })
+
+  it('still marks the price run ok when the voided-purchase check fails', async () => {
+    revokeVoidedPurchases.mockRejectedValue(new Error('Play quota'))
+
+    await runRefreshPrices(log)
+
+    await vi.waitFor(() => expect(lastStatus().state).toBe('ok'))
+    expect(log.error).toHaveBeenCalled()
   })
 
   it('captures a thrown error into the status and still releases the lock', async () => {

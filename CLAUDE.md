@@ -99,6 +99,8 @@ Free accounts get 1 alert (`FREE_ALERT_LIMIT` in `src/routes/alerts.ts`); a one-
 - Android launches Play Billing for the non-consumable product `premium_unlimited_alerts`, tagging the purchase with the user's ID via `setObfuscatedAccountId` so a token can't be replayed against a different account.
 - `POST /billing/verify-purchase` (`src/routes/billing.ts`) takes the resulting `purchaseToken`, verifies + acknowledges it against the Google Play Developer API (`src/services/googlePlay.ts`, lazily initialised like `fcm.ts`), checks the obfuscated account ID matches the caller, then sets `isPremium`.
 - Android also re-queries Play Billing for unconfirmed purchases on login/app start (`BillingRepository.syncPendingPurchases()`) as a safety net for purchases that succeeded but never reached the backend (e.g. app killed mid-flow).
+- Every verified token is recorded in `Purchase` and **bound to the first account that claims it** — promo-code redemptions carry no obfuscated account ID, so the token is the only link. A token bound to another account gets 403.
+- **Refunds revoke premium.** `jobs/revokeVoidedPurchases.ts` runs from the 6h cron at most once a day, pages Play's Voided Purchases API from a Redis checkpoint (`pipeline:billing:voidedCheckedUntil`, clamped to Play's 30-day lookback), marks matching `Purchase` rows `revokedAt` and sets `isPremium = false` unless the account holds another live purchase. Needs the Play service account to have the **"View financial data"** permission in Play Console. Accounts unlocked before `Purchase` existed are only traceable once the app re-verifies their purchase on startup.
 
 ## Architecture
 

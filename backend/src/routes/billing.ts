@@ -27,6 +27,23 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(403).send({ error: 'Purchase does not belong to this account' })
     }
 
+    // Bind the token to the first account that claims it. Purchases made in the
+    // app always carry the account ID checked above, but promo-code redemptions
+    // don't — without this, one such token could unlock any number of accounts.
+    // The row is also what lets `revokeVoidedPurchases` find this account when
+    // the purchase is refunded.
+    const purchase = await prisma.purchase.upsert({
+      where: { purchaseToken: body.data.purchaseToken },
+      create: { userId, purchaseToken: body.data.purchaseToken, orderId: result.orderId ?? null },
+      update: {},
+    })
+    if (purchase.userId !== userId) {
+      return reply.status(403).send({ error: 'Purchase does not belong to this account' })
+    }
+    if (purchase.revokedAt) {
+      return reply.status(400).send({ error: 'Purchase verification failed', message: 'Purchase was refunded' })
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
       data: { isPremium: true },

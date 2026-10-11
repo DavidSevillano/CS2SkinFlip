@@ -29,8 +29,27 @@ model User {
   watchlist WatchlistItem[]
   alerts    Alert[]
   portfolio PortfolioItem[]
+  purchases Purchase[]
 
   @@index([steamId])
+}
+
+// One row per Google Play purchase that unlocked premium. Exists so a token can
+// be bound to the first account that claims it (Play records no obfuscated
+// account ID for promo-code redemptions), and so a refund can be traced back to
+// the account it unlocked: `revokeVoidedPurchases` matches Play's voided
+// purchases against `purchaseToken`. One row per buyer — negligible storage.
+model Purchase {
+  id            String    @id @default(cuid())
+  userId        String
+  purchaseToken String    @unique
+  orderId       String?
+  revokedAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Skin {

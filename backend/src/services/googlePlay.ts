@@ -25,7 +25,7 @@ async function getClient() {
 }
 
 type VerifyResult =
-  | { ok: true; obfuscatedAccountId: string | null }
+  | { ok: true; obfuscatedAccountId: string | null; orderId: string | null }
   | { ok: false; reason: string }
 
 /**
@@ -58,9 +58,42 @@ export async function verifyAndAcknowledgePurchase(purchaseToken: string): Promi
       })
     }
 
-    return { ok: true, obfuscatedAccountId: data.obfuscatedExternalAccountId ?? null }
+    return {
+      ok: true,
+      obfuscatedAccountId: data.obfuscatedExternalAccountId ?? null,
+      orderId: data.orderId ?? null,
+    }
   } catch (e) {
     console.warn('[GooglePlay] Verification failed:', e)
     return { ok: false, reason: 'Verification request to Google Play failed' }
   }
+}
+
+/**
+ * Purchase tokens Play has voided (refunded, charged back, cancelled) since
+ * `startTimeMillis`, across every page. Play only looks back 30 days, so the
+ * caller must poll at least that often. Returns null when Google Play
+ * verification isn't configured; throws on API errors so the caller can leave
+ * its checkpoint where it was and retry the same window next time.
+ */
+export async function listVoidedPurchaseTokens(startTimeMillis: number): Promise<string[] | null> {
+  const client = await getClient()
+  if (!client) return null
+
+  const tokens: string[] = []
+  let pageToken: string | undefined
+  do {
+    const { data } = await client.purchases.voidedpurchases.list({
+      packageName: env.GOOGLE_PLAY_PACKAGE_NAME,
+      startTime: String(startTimeMillis),
+      maxResults: 1000,
+      token: pageToken,
+    })
+    for (const voided of data.voidedPurchases ?? []) {
+      if (voided.purchaseToken) tokens.push(voided.purchaseToken)
+    }
+    pageToken = data.tokenPagination?.nextPageToken ?? undefined
+  } while (pageToken)
+
+  return tokens
 }

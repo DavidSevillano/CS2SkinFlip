@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { redis } from '../redis/client'
 import { populatePrices } from './populatePrices'
 import { cleanupPriceHistory } from './cleanupPriceHistory'
+import { revokeVoidedPurchases } from './revokeVoidedPurchases'
 import { AlertService } from '../services/alerts'
 import type { FastifyBaseLogger } from 'fastify'
 
@@ -87,6 +88,13 @@ async function executeRun(runId: string, startedAt: number, log: FastifyBaseLogg
 
     await alertService.checkAll()
     await cleanupPriceHistory(log)
+    // Billing housekeeping riding the same cron. Its failure is not the price
+    // run's failure: prices were refreshed, and the next run retries the window.
+    try {
+      await revokeVoidedPurchases(log)
+    } catch (err) {
+      log.error({ err }, '[JobRunner] Voided-purchase check failed')
+    }
     await finish({ state: 'ok', updated })
     log.info(`[JobRunner] Run ${runId} finished — ${updated} skins updated`)
   } catch (err) {

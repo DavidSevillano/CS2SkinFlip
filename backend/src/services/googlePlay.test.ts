@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const { readFileSync } = vi.hoisted(() => ({ readFileSync: vi.fn() }))
 vi.mock('fs', () => ({ default: { readFileSync } }))
 
-const { productsGet, productsAcknowledge } = vi.hoisted(() => ({
+const { productsGet, productsAcknowledge, voidedList } = vi.hoisted(() => ({
+  voidedList: vi.fn(),
   productsGet: vi.fn(),
   productsAcknowledge: vi.fn(),
 }))
@@ -11,7 +12,10 @@ vi.mock('googleapis', () => ({
   google: {
     auth: { GoogleAuth: vi.fn() },
     androidpublisher: vi.fn(() => ({
-      purchases: { products: { get: productsGet, acknowledge: productsAcknowledge } },
+      purchases: {
+        products: { get: productsGet, acknowledge: productsAcknowledge },
+        voidedpurchases: { list: voidedList },
+      },
     })),
   },
 }))
@@ -24,7 +28,7 @@ vi.mock('../config/env', () => ({
   },
 }))
 
-const { verifyAndAcknowledgePurchase } = await import('./googlePlay')
+const { verifyAndAcknowledgePurchase, listVoidedPurchaseTokens } = await import('./googlePlay')
 
 describe('verifyAndAcknowledgePurchase', () => {
   beforeEach(() => {
@@ -49,7 +53,7 @@ describe('verifyAndAcknowledgePurchase', () => {
 
     const result = await verifyAndAcknowledgePurchase('token-2')
 
-    expect(result).toEqual({ ok: true, obfuscatedAccountId: 'user-1' })
+    expect(result).toEqual({ ok: true, obfuscatedAccountId: 'user-1', orderId: null })
     expect(productsAcknowledge).toHaveBeenCalledWith({
       packageName: 'com.burixer85.cs2skinflip',
       productId: 'premium_unlimited_alerts',
@@ -65,7 +69,7 @@ describe('verifyAndAcknowledgePurchase', () => {
 
     const result = await verifyAndAcknowledgePurchase('token-3')
 
-    expect(result).toEqual({ ok: true, obfuscatedAccountId: 'user-2' })
+    expect(result).toEqual({ ok: true, obfuscatedAccountId: 'user-2', orderId: null })
     expect(productsAcknowledge).not.toHaveBeenCalled()
   })
 
@@ -74,7 +78,7 @@ describe('verifyAndAcknowledgePurchase', () => {
 
     const result = await verifyAndAcknowledgePurchase('token-4')
 
-    expect(result).toEqual({ ok: true, obfuscatedAccountId: null })
+    expect(result).toEqual({ ok: true, obfuscatedAccountId: null, orderId: null })
   })
 
   it('fails gracefully when the Google Play API call throws', async () => {
@@ -83,5 +87,57 @@ describe('verifyAndAcknowledgePurchase', () => {
     const result = await verifyAndAcknowledgePurchase('token-5')
 
     expect(result).toEqual({ ok: false, reason: 'Verification request to Google Play failed' })
+  })
+})
+
+describe('verifyAndAcknowledgePurchase orderId', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    readFileSync.mockReturnValue('{}')
+  })
+
+  it('passes the order id through so the purchase can be recorded', async () => {
+    productsGet.mockResolvedValue({
+      data: { purchaseState: 0, acknowledgementState: 1, obfuscatedExternalAccountId: 'user-1', orderId: 'GPA.1234' },
+    })
+
+    const result = await verifyAndAcknowledgePurchase('token-6')
+
+    expect(result).toEqual({ ok: true, obfuscatedAccountId: 'user-1', orderId: 'GPA.1234' })
+  })
+})
+
+describe('listVoidedPurchaseTokens', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    readFileSync.mockReturnValue('{}')
+  })
+
+  it('asks Play for voided purchases since the given time and follows every page', async () => {
+    voidedList
+      .mockResolvedValueOnce({
+        data: {
+          voidedPurchases: [{ purchaseToken: 'a' }, { purchaseToken: 'b' }],
+          tokenPagination: { nextPageToken: 'page-2' },
+        },
+      })
+      .mockResolvedValueOnce({ data: { voidedPurchases: [{ purchaseToken: 'c' }, {}] } })
+
+    const tokens = await listVoidedPurchaseTokens(1_700_000_000_000)
+
+    expect(tokens).toEqual(['a', 'b', 'c'])
+    expect(voidedList).toHaveBeenNthCalledWith(1, {
+      packageName: 'com.burixer85.cs2skinflip',
+      startTime: '1700000000000',
+      maxResults: 1000,
+      token: undefined,
+    })
+    expect(voidedList.mock.calls[1][0].token).toBe('page-2')
+  })
+
+  it('returns an empty list when nothing was voided', async () => {
+    voidedList.mockResolvedValue({ data: {} })
+
+    expect(await listVoidedPurchaseTokens(0)).toEqual([])
   })
 })

@@ -2,12 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import Fastify from 'fastify'
 import fastifyJwt from '@fastify/jwt'
 
-const { userFindUnique, userUpdate } = vi.hoisted(() => ({
+const { userFindUnique, userUpdate, purchaseUpsert } = vi.hoisted(() => ({
   userFindUnique: vi.fn(),
   userUpdate: vi.fn(),
+  purchaseUpsert: vi.fn(),
 }))
 vi.mock('../db/prisma', () => ({
-  prisma: { user: { findUnique: userFindUnique, update: userUpdate } },
+  prisma: {
+    user: { findUnique: userFindUnique, update: userUpdate },
+    purchase: { upsert: purchaseUpsert },
+  },
 }))
 
 const { verifyAndAcknowledgePurchase } = vi.hoisted(() => ({ verifyAndAcknowledgePurchase: vi.fn() }))
@@ -26,6 +30,8 @@ describe('POST /billing/verify-purchase', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     userFindUnique.mockResolvedValue({ id: 'user-1' })
+    // By default the token is unclaimed, so the upsert binds it to the caller.
+    purchaseUpsert.mockImplementation(async ({ create }) => ({ ...create, revokedAt: null }))
   })
 
   it('rejects requests without a valid JWT', async () => {
@@ -119,5 +125,61 @@ describe('POST /billing/verify-purchase', () => {
     })
 
     expect(res.statusCode).toBe(200)
+  })
+
+  it('records the purchase against the caller so a refund can be traced back to it', async () => {
+    verifyAndAcknowledgePurchase.mockResolvedValue({ ok: true, obfuscatedAccountId: 'user-1', orderId: 'GPA.1' })
+    userUpdate.mockResolvedValue({ isPremium: true, premiumUntil: null })
+    const app = await buildTestApp()
+    const token = app.jwt.sign({ userId: 'user-1' })
+
+    await app.inject({
+      method: 'POST',
+      url: '/billing/verify-purchase',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { purchaseToken: 'tok' },
+    })
+
+    expect(purchaseUpsert).toHaveBeenCalledWith({
+      where: { purchaseToken: 'tok' },
+      create: { userId: 'user-1', purchaseToken: 'tok', orderId: 'GPA.1' },
+      update: {},
+    })
+  })
+
+  // Promo-code redemptions carry no obfuscated account ID, so the token itself
+  // is the only thing tying the purchase to an account: first claim wins.
+  it('rejects a token without an account id that another account already claimed', async () => {
+    verifyAndAcknowledgePurchase.mockResolvedValue({ ok: true, obfuscatedAccountId: null })
+    purchaseUpsert.mockResolvedValue({ userId: 'someone-else', purchaseToken: 'tok', revokedAt: null })
+    const app = await buildTestApp()
+    const token = app.jwt.sign({ userId: 'user-1' })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/billing/verify-purchase',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { purchaseToken: 'tok' },
+    })
+
+    expect(res.statusCode).toBe(403)
+    expect(userUpdate).not.toHaveBeenCalled()
+  })
+
+  it('does not re-unlock premium from a purchase that was refunded', async () => {
+    verifyAndAcknowledgePurchase.mockResolvedValue({ ok: true, obfuscatedAccountId: 'user-1' })
+    purchaseUpsert.mockResolvedValue({ userId: 'user-1', purchaseToken: 'tok', revokedAt: new Date() })
+    const app = await buildTestApp()
+    const token = app.jwt.sign({ userId: 'user-1' })
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/billing/verify-purchase',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { purchaseToken: 'tok' },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(userUpdate).not.toHaveBeenCalled()
   })
 })
