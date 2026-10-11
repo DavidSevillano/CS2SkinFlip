@@ -20,6 +20,8 @@ interface SteamApiService {
         @Url url: String,
         @Query("l") language: String = "english",
         @Query("count") count: Int = 1000,
+        // Continuation cursor: the previous page's `last_assetid` when it said `more_items`.
+        @Query("start_assetid") startAssetId: String? = null,
     ): InventoryResponse
 
     /**
@@ -50,7 +52,9 @@ data class InventoryResponse(
     val success: Int?,
     val assets: List<AssetDto>?,
     val descriptions: List<DescriptionDto>?,
-    val total_inventory_count: Int?
+    val total_inventory_count: Int?,
+    val more_items: Int? = null,     // 1 when another page follows
+    val last_assetid: String? = null,
 )
 
 data class AssetDto(

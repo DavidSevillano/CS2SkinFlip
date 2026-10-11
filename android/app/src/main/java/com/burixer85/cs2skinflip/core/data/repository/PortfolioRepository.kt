@@ -1,6 +1,8 @@
 package com.burixer85.cs2skinflip.core.data.repository
 
+import com.burixer85.cs2skinflip.core.data.remote.AssetDto
 import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
+import com.burixer85.cs2skinflip.core.data.remote.DescriptionDto
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamInventoryPrivateException
 import com.burixer85.cs2skinflip.core.data.remote.SyncItemRequest
@@ -12,6 +14,9 @@ import com.burixer85.cs2skinflip.core.domain.model.PortfolioSummary
 import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Guard against Steam reporting more pages forever. CS2 caps inventories at 1 000 items. */
+private const val MAX_INVENTORY_PAGES = 10
 
 data class PortfolioState(
     val items: List<PortfolioItem>,
@@ -46,19 +51,31 @@ class PortfolioRepository @Inject constructor(
         val steamId = backendApi.getMe().steamId
             ?: throw IllegalStateException("No linked Steam account")
 
-        val inventory = try {
-            steamApiService.getPublicInventory("https://steamcommunity.com/inventory/$steamId/730/2")
-        } catch (e: HttpException) {
-            if (e.code() == 401 || e.code() == 403) throw SteamInventoryPrivateException()
-            throw e
-        }
-        if (inventory.success != 1) {
-            throw IllegalStateException("Steam inventory request did not succeed")
+        // Steam pages large inventories; follow `more_items` so nothing past the
+        // first page is silently left out. Bounded in case Steam keeps saying "more".
+        val assets = mutableListOf<AssetDto>()
+        val descriptions = mutableListOf<DescriptionDto>()
+        var startAssetId: String? = null
+        for (page in 1..MAX_INVENTORY_PAGES) {
+            val inventory = try {
+                steamApiService.getPublicInventory(
+                    url = "https://steamcommunity.com/inventory/$steamId/730/2",
+                    startAssetId = startAssetId,
+                )
+            } catch (e: HttpException) {
+                if (e.code() == 401 || e.code() == 403) throw SteamInventoryPrivateException()
+                throw e
+            }
+            if (inventory.success != 1) {
+                throw IllegalStateException("Steam inventory request did not succeed")
+            }
+            assets += inventory.assets.orEmpty()
+            descriptions += inventory.descriptions.orEmpty()
+            startAssetId = inventory.last_assetid?.takeIf { inventory.more_items == 1 } ?: break
         }
 
-        val descByKey = (inventory.descriptions ?: emptyList())
-            .associateBy { "${it.classid}_${it.instanceid}" }
-        val items = (inventory.assets ?: emptyList()).mapNotNull { asset ->
+        val descByKey = descriptions.associateBy { "${it.classid}_${it.instanceid}" }
+        val items = assets.mapNotNull { asset ->
             val desc = descByKey["${asset.classid}_${asset.instanceid}"] ?: return@mapNotNull null
             if (desc.market_hash_name.isBlank()) return@mapNotNull null
             SyncItemRequest(assetId = asset.assetid, marketHashName = desc.market_hash_name)
