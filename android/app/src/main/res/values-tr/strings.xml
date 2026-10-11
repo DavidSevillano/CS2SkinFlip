@@ -46,6 +46,10 @@
 
     <string name="cd_clear">Temizle</string>
     <string name="search_popular_weapons">Popüler silahlar</string>
+    <string name="search_suggestion_query">\"%1$s\" ara</string>
+    <string name="search_suggestion_all_skins">tüm skinlerde</string>
+    <string name="search_suggestion_filter_weapon">silaha göre filtrele</string>
+    <string name="offline_banner">İnternet bağlantısı yok</string>
     <string name="search_filters">Filtreler</string>
     <string name="search_clear_filters">Filtreleri temizle</string>
     <string name="search_price_any">Herhangi</string>

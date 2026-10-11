@@ -46,6 +46,10 @@
 
     <string name="cd_clear">Limpar</string>
     <string name="search_popular_weapons">Armas populares</string>
+    <string name="search_suggestion_query">Buscar \"%1$s\"</string>
+    <string name="search_suggestion_all_skins">em todas as skins</string>
+    <string name="search_suggestion_filter_weapon">filtrar por arma</string>
+    <string name="offline_banner">Sem conexão com a internet</string>
     <string name="search_filters">Filtros</string>
     <string name="search_clear_filters">Limpar filtros</string>
     <string name="search_price_any">Qualquer</string>

@@ -180,8 +180,8 @@ fun SearchScreen(
                                 modifier = Modifier.size(18.dp), tint = TextSecondary)
                         }
                     },
-                    primary = "Search for \"$query\"",
-                    secondary = "in all skins",
+                    primary = stringResource(R.string.search_suggestion_query, query),
+                    secondary = stringResource(R.string.search_suggestion_all_skins),
                     onClick = { searchActive = false },
                 )
 
@@ -209,7 +209,7 @@ fun SearchScreen(
                             modifier = Modifier.size(18.dp), tint = AccentOrange)
                     },
                     primary = weapon,
-                    secondary = "filter by weapon",
+                    secondary = stringResource(R.string.search_suggestion_filter_weapon),
                     onClick = {
                         viewModel.onQueryChange("")
                         viewModel.onFiltersChange(filters.copy(weapon = weapon))
@@ -232,7 +232,7 @@ fun SearchScreen(
                                 modifier = Modifier.size(18.dp), tint = AccentOrange)
                         },
                         primary = w,
-                        secondary = "filter by weapon",
+                        secondary = stringResource(R.string.search_suggestion_filter_weapon),
                         onClick = {
                             viewModel.onFiltersChange(filters.copy(weapon = w))
                             searchActive = false

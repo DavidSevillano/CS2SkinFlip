@@ -17,7 +17,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.ui.theme.AccentRed
 import com.burixer85.cs2skinflip.core.ui.theme.TextPrimary
 
@@ -43,7 +45,7 @@ fun OfflineBanner(isOnline: Boolean, modifier: Modifier = Modifier) {
                 tint = TextPrimary,
             )
             Text(
-                text = "No internet connection",
+                text = stringResource(R.string.offline_banner),
                 color = TextPrimary,
                 modifier = Modifier.padding(start = 8.dp),
             )

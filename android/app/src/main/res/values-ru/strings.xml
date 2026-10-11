@@ -46,6 +46,10 @@
 
     <string name="cd_clear">Очистить</string>
     <string name="search_popular_weapons">Популярное оружие</string>
+    <string name="search_suggestion_query">Искать «%1$s»</string>
+    <string name="search_suggestion_all_skins">среди всех скинов</string>
+    <string name="search_suggestion_filter_weapon">фильтр по оружию</string>
+    <string name="offline_banner">Нет подключения к интернету</string>
     <string name="search_filters">Фильтры</string>
     <string name="search_clear_filters">Сбросить фильтры</string>
     <string name="search_price_any">Любая</string>

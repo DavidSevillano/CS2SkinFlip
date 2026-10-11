@@ -55,6 +55,10 @@
     <!-- Search -->
     <string name="cd_clear">Clear</string>
     <string name="search_popular_weapons">Popular weapons</string>
+    <string name="search_suggestion_query">Search for \"%1$s\"</string>
+    <string name="search_suggestion_all_skins">in all skins</string>
+    <string name="search_suggestion_filter_weapon">filter by weapon</string>
+    <string name="offline_banner">No internet connection</string>
     <string name="search_filters">Filters</string>
     <string name="search_clear_filters">Clear filters</string>
     <string name="search_price_any">Any</string>
