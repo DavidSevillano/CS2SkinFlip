@@ -31,6 +31,12 @@ object Currency {
         return "$%.2f".format(usd)
     }
 
+    /**
+     * A signed money change, e.g. "+$1.20" or "-$0.01". Unlike [format], zero and
+     * negatives are real values here — a loss rendered as "—" read as "no data".
+     */
+    fun formatChange(usd: Double): String = (if (usd < 0) "-" else "+") + "$%.2f".format(kotlin.math.abs(usd))
+
     /** Format a Skinport EUR price (shown as-is with the € symbol). */
     fun formatEur(eur: Double?): String {
         if (eur == null || eur <= 0) return "—"

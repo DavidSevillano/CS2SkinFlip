@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -101,7 +102,7 @@ fun PortfolioScreen(
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Surface),
-            windowInsets = WindowInsets(0.dp),
+            windowInsets = WindowInsets.statusBars,
         )
 
         when (val state = uiState) {
@@ -176,7 +177,7 @@ private fun SummaryCard(summary: PortfolioSummary) {
                     Text(stringResource(R.string.portfolio_pl_label), fontSize = 12.sp, color = TextSecondary)
                     val sign = if (summary.totalProfitLoss >= 0) "+" else ""
                     Text(
-                        "$sign${Currency.format(summary.totalProfitLoss)} ($sign${"%.1f".format(summary.totalProfitLossPct)}%)",
+                        "${Currency.formatChange(summary.totalProfitLoss)} ($sign${"%.1f".format(summary.totalProfitLossPct)}%)",
                         fontSize = 15.sp, fontWeight = FontWeight.Bold, color = plColor,
                     )
                 }
