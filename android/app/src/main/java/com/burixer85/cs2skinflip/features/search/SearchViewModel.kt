@@ -10,14 +10,17 @@ import com.burixer85.cs2skinflip.core.domain.model.SkinWear
 import com.burixer85.cs2skinflip.core.data.repository.SkinRepository
 import com.burixer85.cs2skinflip.core.util.toUserMessageRes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val PAGE_SIZE = 20
+private const val SUGGESTION_COUNT = 6
 
 enum class SortBy(@StringRes val labelRes: Int, val apiValue: String) {
     PRICE_DESC(R.string.sort_price_desc, "price_desc"),
@@ -71,88 +74,74 @@ class SearchViewModel @Inject constructor(
     private val _availableWeapons = MutableStateFlow<List<String>>(emptyList())
     val availableWeapons: StateFlow<List<String>> = _availableWeapons
 
-    /** Live skin suggestions shown in the autocomplete dropdown — debounced, top 6. */
+    /**
+     * Skin suggestions for the autocomplete dropdown: the first results of the
+     * main search for the current query. Not a separate request — the search
+     * route is rate-limited per IP (shared behind mobile carrier NAT), and a
+     * second lookup on every pause in typing spent that budget twice.
+     */
     private val _suggestions = MutableStateFlow<List<Skin>>(emptyList())
     val suggestions: StateFlow<List<Skin>> = _suggestions
 
-    /** True while the autocomplete is fetching (drives the small spinner). */
+    /** True while the search behind the suggestions is running (drives the small spinner). */
     private val _suggestionsLoading = MutableStateFlow(false)
     val suggestionsLoading: StateFlow<Boolean> = _suggestionsLoading
 
     private var currentPage = 1
     private var searchJob: Job? = null
-    private var suggestJob: Job? = null
+    private var loadMoreJob: Job? = null
 
     init {
         viewModelScope.launch {
-            _availableWeapons.value = runCatching { skinRepository.getAllWeapons() }.getOrDefault(emptyList())
+            _availableWeapons.value = try {
+                skinRepository.getAllWeapons()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
         }
-        triggerSearch(resetPage = true)
+        triggerSearch()
     }
 
     fun onQueryChange(q: String) {
         _query.value = q
-        triggerSearch(resetPage = true, debounceMs = 300)
-        triggerSuggestions(q)
+        if (q.isBlank()) clearSuggestions()
+        triggerSearch(debounceMs = 300)
     }
 
-    /** Cancels any pending suggestion lookups (e.g. when the dropdown closes). */
+    /** Hides the suggestions (e.g. when the dropdown closes). */
     fun clearSuggestions() {
-        suggestJob?.cancel()
         _suggestions.value = emptyList()
         _suggestionsLoading.value = false
     }
 
-    private fun triggerSuggestions(q: String) {
-        suggestJob?.cancel()
-        if (q.isBlank()) {
-            _suggestions.value = emptyList()
-            _suggestionsLoading.value = false
-            return
-        }
-        suggestJob = viewModelScope.launch {
-            delay(250)  // debounce — slightly tighter than the main search to feel snappy
-            _suggestionsLoading.value = true
-            runCatching {
-                skinRepository.searchSkinsPage(
-                    query = q,
-                    filters = SearchFilters(),  // ignore active filters in the suggestion list
-                    page = 1,
-                    limit = 6,
-                )
-            }.onSuccess { (skins, _, _) ->
-                _suggestions.value = skins
-            }.onFailure {
-                _suggestions.value = emptyList()
-            }
-            _suggestionsLoading.value = false
-        }
-    }
-
     fun onFiltersChange(f: SearchFilters) {
         _filters.value = f
-        triggerSearch(resetPage = true)
+        triggerSearch()
     }
 
     fun clearFilters() {
         _filters.value = SearchFilters(sortBy = _filters.value.sortBy)
-        triggerSearch(resetPage = true)
+        triggerSearch()
     }
 
     fun loadMore() {
         val current = _uiState.value as? SearchUiState.Success ?: return
         if (!current.hasMore || current.isLoadingMore) return
         _uiState.value = current.copy(isLoadingMore = true)
-        currentPage++
-        viewModelScope.launch {
-            runCatching {
-                skinRepository.searchSkinsPage(
+        val nextPage = currentPage + 1
+        loadMoreJob = viewModelScope.launch {
+            try {
+                val (skins, hasMore, total) = skinRepository.searchSkinsPage(
                     query = _query.value,
                     filters = _filters.value,
-                    page = currentPage,
+                    page = nextPage,
                     limit = PAGE_SIZE,
                 )
-            }.onSuccess { (skins, hasMore, total) ->
+                // Advanced only once the page is in: a failed page is retried
+                // on the next scroll instead of being skipped.
+                currentPage = nextPage
                 // Deduplicate by ID to guard against the same item appearing on two pages
                 // (e.g., a row inserted between fetches shifts the OFFSET window).
                 val existingIds = current.results.map { it.id }.toHashSet()
@@ -163,33 +152,46 @@ class SearchViewModel @Inject constructor(
                     hasMore = hasMore,
                     totalCount = total,
                 )
-            }.onFailure {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 _uiState.value = current.copy(isLoadingMore = false)
             }
         }
     }
 
-    private fun triggerSearch(resetPage: Boolean = true, debounceMs: Long = 0) {
+    private fun triggerSearch(debounceMs: Long = 0) {
         searchJob?.cancel()
+        // A next page still loading belongs to the previous query; letting it
+        // finish would append its results to the new ones.
+        loadMoreJob?.cancel()
         searchJob = viewModelScope.launch {
             if (debounceMs > 0) delay(debounceMs)
-            if (resetPage) currentPage = 1
+            val query = _query.value
+            currentPage = 1
             _uiState.value = SearchUiState.Loading
-            runCatching {
-                skinRepository.searchSkinsPage(
-                    query = _query.value,
+            _suggestionsLoading.value = query.isNotBlank()
+            try {
+                val (skins, hasMore, total) = skinRepository.searchSkinsPage(
+                    query = query,
                     filters = _filters.value,
                     page = 1,
                     limit = PAGE_SIZE,
                 )
-            }.onSuccess { (skins, hasMore, total) ->
                 _uiState.value = SearchUiState.Success(
                     results = skins,
                     hasMore = hasMore,
                     totalCount = total,
                 )
-            }.onFailure { e ->
+                _suggestions.value = if (query.isBlank()) emptyList() else skins.take(SUGGESTION_COUNT)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 _uiState.value = SearchUiState.Error(e.toUserMessageRes())
+                _suggestions.value = emptyList()
+            } finally {
+                // A cancelled search leaves the flag to the one that replaced it.
+                if (isActive) _suggestionsLoading.value = false
             }
         }
     }
