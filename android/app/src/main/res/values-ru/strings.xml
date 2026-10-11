@@ -134,6 +134,7 @@
     <string name="portfolio_error_sync_failed">Не удалось синхронизировать. Попробуйте снова.</string>
 
     <string name="alerts_title">Оповещения о цене</string>
+    <string name="notification_channel_price_alerts_description">Когда скин достигает вашей целевой цены</string>
     <string name="alerts_empty_title">Пока нет оповещений</string>
     <string name="alerts_empty_subtitle">Получайте уведомление, когда скин достигнет целевой цены покупки или продажи.</string>
     <string name="alerts_create_first">Создать первое оповещение</string>

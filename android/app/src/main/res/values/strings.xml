@@ -147,6 +147,7 @@
 
     <!-- Alerts -->
     <string name="alerts_title">Price Alerts</string>
+    <string name="notification_channel_price_alerts_description">When a skin reaches your target price</string>
     <string name="alerts_empty_title">No alerts yet</string>
     <string name="alerts_empty_subtitle">Get notified when a skin hits your target buy or sell price.</string>
     <string name="alerts_create_first">Create first alert</string>

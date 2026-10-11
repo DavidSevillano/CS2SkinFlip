@@ -134,6 +134,7 @@
     <string name="portfolio_error_sync_failed">Senkronize edilemedi. Tekrar dene.</string>
 
     <string name="alerts_title">Fiyat uyarıları</string>
+    <string name="notification_channel_price_alerts_description">Bir skin hedef fiyatına ulaştığında</string>
     <string name="alerts_empty_title">Henüz uyarı yok</string>
     <string name="alerts_empty_subtitle">Bir skin hedef alış veya satış fiyatına ulaştığında bildirim al.</string>
     <string name="alerts_create_first">İlk uyarıyı oluştur</string>

@@ -3,6 +3,7 @@ package com.burixer85.cs2skinflip
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
@@ -17,6 +18,25 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 const val NOTIFICATION_CHANNEL_ID = "price_alerts"
+
+/**
+ * Creates the price-alert channel, or refreshes its name and description in the
+ * current language. Called at app start: alerts arriving while the app is in the
+ * background are shown by the system, which falls back to a generic "Misc"
+ * channel when this one doesn't exist yet — and before, it was only created
+ * when a notification happened to arrive in the foreground.
+ */
+fun ensurePriceAlertChannel(context: Context) {
+    val channel = NotificationChannel(
+        NOTIFICATION_CHANNEL_ID,
+        context.getString(R.string.alerts_title),
+        NotificationManager.IMPORTANCE_HIGH,
+    ).apply {
+        description = context.getString(R.string.notification_channel_price_alerts_description)
+    }
+    // Idempotent; on an existing channel it only updates name and description.
+    context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+}
 
 @AndroidEntryPoint
 class CS2SkinFlipMessagingService : FirebaseMessagingService() {
@@ -54,19 +74,7 @@ class CS2SkinFlipMessagingService : FirebaseMessagingService() {
         showNotification(title, body, skinId)
     }
 
-    private fun ensureChannel() {
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) == null) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "Price Alerts",
-                NotificationManager.IMPORTANCE_HIGH,
-            ).apply {
-                description = "Notifications when a skin hits your target price"
-            }
-            manager.createNotificationChannel(channel)
-        }
-    }
+    private fun ensureChannel() = ensurePriceAlertChannel(this)
 
     private fun showNotification(title: String, body: String, skinId: String?) {
         val intent = Intent(this, MainActivity::class.java).apply {

@@ -134,6 +134,7 @@
     <string name="portfolio_error_sync_failed">No se pudo sincronizar. Inténtalo de nuevo.</string>
 
     <string name="alerts_title">Alertas de precio</string>
+    <string name="notification_channel_price_alerts_description">Cuando un skin alcanza tu precio objetivo</string>
     <string name="alerts_empty_title">Aún no hay alertas</string>
     <string name="alerts_empty_subtitle">Recibe una notificación cuando una skin alcance tu precio objetivo de compra o venta.</string>
     <string name="alerts_create_first">Crear primera alerta</string>

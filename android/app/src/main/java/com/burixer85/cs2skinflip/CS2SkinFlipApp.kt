@@ -22,5 +22,6 @@ class CS2SkinFlipApp : Application() {
         super.onCreate()
         FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
         billingRepository.observePurchaseUpdates(appScope)
+        ensurePriceAlertChannel(this)
     }
 }
