@@ -70,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.burixer85.cs2skinflip.BuildConfig
 import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.preferences.AppLanguage
 import com.burixer85.cs2skinflip.core.preferences.DefaultMarketplace
@@ -268,7 +269,7 @@ fun SettingsScreen(
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, color = AccentOrange, fontSize = 14.sp)
-                Text(stringResource(R.string.settings_version_info), fontSize = 12.sp, color = TextSecondary)
+                Text(stringResource(R.string.settings_version_info, BuildConfig.VERSION_NAME), fontSize = 12.sp, color = TextSecondary)
                 Text(stringResource(R.string.settings_disclaimer), fontSize = 11.sp, color = TextSecondary)
             }
         }

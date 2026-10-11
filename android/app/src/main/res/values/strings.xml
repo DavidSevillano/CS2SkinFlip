@@ -189,7 +189,7 @@
     <string name="alert_type_sell_above_desc">Notify when price rises above target</string>
 
     <!-- Settings -->
-    <string name="settings_version_info">Version 1.0.0 · MVP</string>
+    <string name="settings_version_info">Version %1$s</string>
     <string name="settings_disclaimer">Prices are for informational purposes only</string>
     <string name="settings_premium_plan">Premium Plan</string>
     <string name="settings_free_plan">Free Plan</string>

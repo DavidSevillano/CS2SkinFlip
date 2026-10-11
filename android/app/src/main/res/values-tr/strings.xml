@@ -174,7 +174,7 @@
     <string name="alert_type_sell_above">Üzerine çıkar</string>
     <string name="alert_type_sell_above_desc">Fiyat hedefin üzerine çıktığında bildir</string>
 
-    <string name="settings_version_info">Sürüm 1.0.0 · MVP</string>
+    <string name="settings_version_info">Sürüm %1$s</string>
     <string name="settings_disclaimer">Fiyatlar yalnızca bilgilendirme amaçlıdır</string>
     <string name="settings_premium_plan">Premium Plan</string>
     <string name="settings_free_plan">Ücretsiz plan</string>

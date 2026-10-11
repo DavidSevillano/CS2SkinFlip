@@ -174,7 +174,7 @@
     <string name="alert_type_sell_above">Поднимается выше</string>
     <string name="alert_type_sell_above_desc">Уведомлять, когда цена поднимается выше цели</string>
 
-    <string name="settings_version_info">Версия 1.0.0 · MVP</string>
+    <string name="settings_version_info">Версия %1$s</string>
     <string name="settings_disclaimer">Цены приведены только в информационных целях</string>
     <string name="settings_premium_plan">План Premium</string>
     <string name="settings_free_plan">Бесплатный план</string>

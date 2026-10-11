@@ -174,7 +174,7 @@
     <string name="alert_type_sell_above">Wzrasta powyżej</string>
     <string name="alert_type_sell_above_desc">Powiadom, gdy cena wzrośnie powyżej celu</string>
 
-    <string name="settings_version_info">Wersja 1.0.0 · MVP</string>
+    <string name="settings_version_info">Wersja %1$s</string>
     <string name="settings_disclaimer">Ceny mają charakter wyłącznie informacyjny</string>
     <string name="settings_premium_plan">Plan Premium</string>
     <string name="settings_free_plan">Plan darmowy</string>

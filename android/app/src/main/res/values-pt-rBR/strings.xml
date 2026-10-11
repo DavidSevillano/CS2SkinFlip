@@ -174,7 +174,7 @@
     <string name="alert_type_sell_above">Sobe acima de</string>
     <string name="alert_type_sell_above_desc">Notificar quando o preço subir acima da meta</string>
 
-    <string name="settings_version_info">Versão 1.0.0 · MVP</string>
+    <string name="settings_version_info">Versão %1$s</string>
     <string name="settings_disclaimer">Os preços são apenas para fins informativos</string>
     <string name="settings_premium_plan">Plano Premium</string>
     <string name="settings_free_plan">Plano gratuito</string>
