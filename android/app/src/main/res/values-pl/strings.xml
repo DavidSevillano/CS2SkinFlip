@@ -131,6 +131,7 @@
     <string name="portfolio_edit_price_title">Edytuj cenę zakupu</string>
     <string name="portfolio_error_invalid_price">Wprowadź prawidłową cenę</string>
     <string name="portfolio_error_inventory_private">Twój ekwipunek Steam jest prywatny. Ustaw go jako publiczny w ustawieniach prywatności Steam, aby zsynchronizować.</string>
+    <string name="portfolio_error_steam_busy">Steam ogranicza teraz liczbę zapytań. Spróbuj ponownie za kilka minut.</string>
     <string name="portfolio_error_sync_failed">Nie udało się zsynchronizować. Spróbuj ponownie.</string>
 
     <string name="alerts_title">Alerty cenowe</string>

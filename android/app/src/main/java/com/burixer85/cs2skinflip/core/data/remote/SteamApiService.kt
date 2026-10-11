@@ -2,7 +2,6 @@ package com.burixer85.cs2skinflip.core.data.remote
 
 import retrofit2.http.GET
 import retrofit2.http.Header
-import retrofit2.http.Headers
 import retrofit2.http.Query
 import retrofit2.http.Url
 
@@ -15,13 +14,17 @@ interface SteamApiService {
      * server's outbound IP. count is capped at 1000 — Steam returns 400 above that.
      */
     @GET
-    @Headers("User-Agent: Mozilla/5.0")
     suspend fun getPublicInventory(
         @Url url: String,
         @Query("l") language: String = "english",
         @Query("count") count: Int = 1000,
         // Continuation cursor: the previous page's `last_assetid` when it said `more_items`.
         @Query("start_assetid") startAssetId: String? = null,
+        // Same identity as getMarketPriceOverview below: the WebView's real UA plus the
+        // user's Steam session cookies when they signed in. Steam answers anonymous
+        // inventory calls with a 429 per IP; the signed-in owner of the inventory gets through.
+        @Header("User-Agent") userAgent: String = "Mozilla/5.0",
+        @Header("Cookie") sessionCookie: String? = null,
     ): InventoryResponse
 
     /**

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.burixer85.cs2skinflip.R
 import com.burixer85.cs2skinflip.core.auth.AuthRepository
 import com.burixer85.cs2skinflip.core.data.remote.SteamInventoryPrivateException
+import com.burixer85.cs2skinflip.core.data.remote.SteamRateLimitedException
 import com.burixer85.cs2skinflip.core.data.repository.PortfolioRepository
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioItem
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioSummary
@@ -82,6 +83,7 @@ class PortfolioViewModel @Inject constructor(
                 .onFailure { e ->
                     val messageRes = when {
                         e is SteamInventoryPrivateException -> R.string.portfolio_error_inventory_private
+                        e is SteamRateLimitedException -> R.string.portfolio_error_steam_busy
                         e.isBadRequest() -> R.string.portfolio_error_sync_failed
                         else -> e.toUserMessageRes()
                     }

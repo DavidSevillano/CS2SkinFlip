@@ -8,6 +8,7 @@ import com.burixer85.cs2skinflip.core.data.remote.MeResponseDto
 import com.burixer85.cs2skinflip.core.data.remote.PortfolioSyncResponseDto
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.burixer85.cs2skinflip.core.data.remote.SyncPortfolioRequest
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -23,6 +24,10 @@ class PortfolioRepositoryTest {
 
     private val backendApi: CS2BackendApiService = mock()
     private val steamApi: SteamApiService = mock()
+    private val session = SteamSessionManager(mock()).apply {
+        readCookies = { "steamLoginSecure=x" }
+        userAgentProvider = { "ua" }
+    }
 
     private fun inventoryPage(vararg assetIds: String, moreItems: Boolean, lastAssetId: String? = null) = InventoryResponse(
         success = 1,
@@ -38,16 +43,16 @@ class PortfolioRepositoryTest {
     @Test
     fun `sync follows every inventory page before sending it`() = runTest {
         whenever(backendApi.getMe()).thenReturn(MeResponseDto("u", "765", "n", null, false, null))
-        whenever(steamApi.getPublicInventory(any(), any(), any(), anyOrNull())).thenReturn(
+        whenever(steamApi.getPublicInventory(any(), any(), any(), anyOrNull(), any(), anyOrNull())).thenReturn(
             inventoryPage("1", "2", moreItems = true, lastAssetId = "2"),
             inventoryPage("3", moreItems = false),
         )
         whenever(backendApi.syncPortfolio(any())).thenReturn(PortfolioSyncResponseDto(synced = 3, total = 3))
 
-        PortfolioRepository(backendApi, steamApi).sync()
+        PortfolioRepository(backendApi, steamApi, session).sync()
 
         val starts = argumentCaptor<String>()
-        verify(steamApi, org.mockito.kotlin.times(2)).getPublicInventory(any(), any(), any(), starts.capture())
+        verify(steamApi, org.mockito.kotlin.times(2)).getPublicInventory(any(), any(), any(), starts.capture(), eq("ua"), eq("steamLoginSecure=x"))
         assertEquals(listOf(null, "2"), starts.allValues)
         val sent = argumentCaptor<SyncPortfolioRequest>()
         verify(backendApi).syncPortfolio(sent.capture())

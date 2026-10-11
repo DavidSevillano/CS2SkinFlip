@@ -131,6 +131,7 @@
     <string name="portfolio_edit_price_title">Satın alma fiyatını düzenle</string>
     <string name="portfolio_error_invalid_price">Geçerli bir fiyat gir</string>
     <string name="portfolio_error_inventory_private">Steam envanterin gizli. Senkronize etmek için Steam gizlilik ayarlarından herkese açık yap.</string>
+    <string name="portfolio_error_steam_busy">Steam şu anda istekleri sınırlıyor. Birkaç dakika sonra tekrar dene.</string>
     <string name="portfolio_error_sync_failed">Senkronize edilemedi. Tekrar dene.</string>
 
     <string name="alerts_title">Fiyat uyarıları</string>

@@ -131,6 +131,7 @@
     <string name="portfolio_edit_price_title">Изменить цену покупки</string>
     <string name="portfolio_error_invalid_price">Введите корректную цену</string>
     <string name="portfolio_error_inventory_private">Ваш инвентарь Steam скрыт. Сделайте его публичным в настройках приватности Steam, чтобы синхронизировать.</string>
+    <string name="portfolio_error_steam_busy">Steam сейчас ограничивает запросы. Попробуйте снова через несколько минут.</string>
     <string name="portfolio_error_sync_failed">Не удалось синхронизировать. Попробуйте снова.</string>
 
     <string name="alerts_title">Оповещения о цене</string>

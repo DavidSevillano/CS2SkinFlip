@@ -131,6 +131,7 @@
     <string name="portfolio_edit_price_title">Editar precio de compra</string>
     <string name="portfolio_error_invalid_price">Introduce un precio válido</string>
     <string name="portfolio_error_inventory_private">Tu inventario de Steam es privado. Configúralo como público en tus ajustes de privacidad de Steam para sincronizar.</string>
+    <string name="portfolio_error_steam_busy">Steam está limitando las peticiones ahora mismo. Inténtalo de nuevo en unos minutos.</string>
     <string name="portfolio_error_sync_failed">No se pudo sincronizar. Inténtalo de nuevo.</string>
 
     <string name="alerts_title">Alertas de precio</string>

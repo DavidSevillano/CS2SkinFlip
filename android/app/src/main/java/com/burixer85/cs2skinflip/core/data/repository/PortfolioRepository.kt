@@ -5,12 +5,14 @@ import com.burixer85.cs2skinflip.core.data.remote.CS2BackendApiService
 import com.burixer85.cs2skinflip.core.data.remote.DescriptionDto
 import com.burixer85.cs2skinflip.core.data.remote.SteamApiService
 import com.burixer85.cs2skinflip.core.data.remote.SteamInventoryPrivateException
+import com.burixer85.cs2skinflip.core.data.remote.SteamRateLimitedException
 import com.burixer85.cs2skinflip.core.data.remote.SyncItemRequest
 import com.burixer85.cs2skinflip.core.data.remote.SyncPortfolioRequest
 import com.burixer85.cs2skinflip.core.data.remote.UpsertPortfolioItemRequest
 import com.burixer85.cs2skinflip.core.data.remote.toDomain
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioItem
 import com.burixer85.cs2skinflip.core.domain.model.PortfolioSummary
+import com.burixer85.cs2skinflip.core.steam.SteamSessionManager
 import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,6 +29,7 @@ data class PortfolioState(
 class PortfolioRepository @Inject constructor(
     private val backendApi: CS2BackendApiService,
     private val steamApiService: SteamApiService,
+    private val steamSession: SteamSessionManager,
 ) {
     suspend fun fetchAll(): PortfolioState {
         val response = backendApi.getPortfolio()
@@ -61,10 +64,15 @@ class PortfolioRepository @Inject constructor(
                 steamApiService.getPublicInventory(
                     url = "https://steamcommunity.com/inventory/$steamId/730/2",
                     startAssetId = startAssetId,
+                    userAgent = steamSession.browserUserAgent,
+                    sessionCookie = steamSession.sessionCookieHeader(),
                 )
             } catch (e: HttpException) {
-                if (e.code() == 401 || e.code() == 403) throw SteamInventoryPrivateException()
-                throw e
+                when (e.code()) {
+                    401, 403 -> throw SteamInventoryPrivateException()
+                    429 -> throw SteamRateLimitedException()
+                    else -> throw e
+                }
             }
             if (inventory.success != 1) {
                 throw IllegalStateException("Steam inventory request did not succeed")
