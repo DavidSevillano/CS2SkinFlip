@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { env } from '../config/env'
 import { runRefreshPrices, getRefreshStatus } from '../jobs/runner'
+import { requireSecretHeader } from '../middleware/requireSecretHeader'
 
 /**
  * Job routes — the price pipeline's external trigger (a GitHub Actions cron).
@@ -14,11 +15,7 @@ export const jobsRoutes: FastifyPluginAsync = async (app) => {
   }
 
   // Guard: reject requests that don't carry the secret
-  app.addHook('onRequest', async (request, reply) => {
-    if (request.headers['x-jobs-secret'] !== env.JOBS_SECRET) {
-      reply.status(401).send({ error: 'Unauthorized' })
-    }
-  })
+  app.addHook('onRequest', requireSecretHeader('X-Jobs-Secret', env.JOBS_SECRET))
 
   /**
    * POST /jobs/refresh-prices

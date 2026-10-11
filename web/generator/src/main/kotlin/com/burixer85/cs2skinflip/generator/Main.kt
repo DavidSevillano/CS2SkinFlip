@@ -29,6 +29,6 @@ fun main(): Unit = runBlocking {
     }
 
     client.use {
-        SiteGenerator(Cs2ApiClient(it, config.backendUrl), config).generate()
+        SiteGenerator(Cs2ApiClient(it, config.backendUrl, config.exportSecret), config).generate()
     }
 }

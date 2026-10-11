@@ -27,6 +27,11 @@ const envSchema = z.object({
   // off in production, whereas the job routes must stay on for prices to refresh
   // at all — and the two secrets rotate on different schedules.
   JOBS_SECRET: z.string().min(32, 'JOBS_SECRET must be at least 32 characters').optional(),
+  // Protects GET /skins/export, the ~6 MB bulk dump the static site generator
+  // reads once a day. Public, it let a single IP pull ~600 MB/min through the
+  // global rate limit — the Neon transfer allowance gone in minutes. Without it
+  // the route isn't registered and the SEO site simply stops refreshing.
+  EXPORT_SECRET: z.string().min(32, 'EXPORT_SECRET must be at least 32 characters').optional(),
   FCM_SERVICE_ACCOUNT_PATH: z.string().optional(),
   GOOGLE_PLAY_SERVICE_ACCOUNT_PATH: z.string().optional(),
   GOOGLE_PLAY_PACKAGE_NAME: z.string().default('com.burixer85.cs2skinflip'),

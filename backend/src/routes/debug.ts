@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { AlertService } from '../services/alerts'
 import { env } from '../config/env'
+import { requireSecretHeader } from '../middleware/requireSecretHeader'
 
 const alertService = new AlertService()
 
@@ -15,11 +16,7 @@ export const debugRoutes: FastifyPluginAsync = async (app) => {
   }
 
   // Guard: reject requests that don't carry the secret
-  app.addHook('onRequest', async (request, reply) => {
-    if (request.headers['x-debug-secret'] !== env.DEBUG_SECRET) {
-      reply.status(401).send({ error: 'Unauthorized' })
-    }
-  })
+  app.addHook('onRequest', requireSecretHeader('X-Debug-Secret', env.DEBUG_SECRET))
 
   /**
    * GET /debug/client-ip

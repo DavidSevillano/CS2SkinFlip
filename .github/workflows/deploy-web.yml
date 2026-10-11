@@ -33,6 +33,9 @@ jobs:
         env:
           BACKEND_URL: ${{ secrets.BACKEND_URL }}
           SITE_URL: ${{ secrets.SITE_URL }}
+          # Must equal the backend's EXPORT_SECRET (Render dashboard) — the
+          # backend refuses /skins/export without it.
+          EXPORT_SECRET: ${{ secrets.EXPORT_SECRET }}
           ANDROID_CERT_SHA256: ${{ secrets.ANDROID_CERT_SHA256 }}
           # Absolute: `gradlew run` uses the module dir as CWD, so a relative
           # OUT_DIR would land in web/generator/dist instead of web/dist.

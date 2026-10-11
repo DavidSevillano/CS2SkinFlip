@@ -20,10 +20,13 @@ function queryRawDates(call: unknown[]): Date[] {
   return call.slice(1).filter((v): v is Date => v instanceof Date)
 }
 
+const { EXPORT_SECRET } = vi.hoisted(() => ({ EXPORT_SECRET: 'export-secret-at-least-32-characters' }))
+const EXPORT_HEADERS = { 'x-export-secret': EXPORT_SECRET }
+
 // `skins.ts` imports `env`, whose module body calls process.exit(1) when the
-// real env vars are absent (they are, under Vitest). Stub the two fields it reads.
+// real env vars are absent (they are, under Vitest). Stub the fields it reads.
 vi.mock('../config/env', () => ({
-  env: { RATE_LIMIT_SEARCH_MAX: 30, RATE_LIMIT_WINDOW: '1 minute' },
+  env: { RATE_LIMIT_SEARCH_MAX: 30, RATE_LIMIT_WINDOW: '1 minute', EXPORT_SECRET },
 }))
 
 // The route module constructs a PriceService, which pulls in redis. Stub it so
@@ -71,7 +74,7 @@ describe('GET /skins/export', () => {
     skinFindMany.mockResolvedValue([row('ak-47-redline-field-tested', 9.99)])
     const app = await buildTestApp()
 
-    const res = await app.inject({ method: 'GET', url: '/skins/export' })
+    const res = await app.inject({ method: 'GET', url: '/skins/export', headers: EXPORT_HEADERS })
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual([
@@ -95,7 +98,7 @@ describe('GET /skins/export', () => {
     skinFindMany.mockResolvedValue([])
     const app = await buildTestApp()
 
-    await app.inject({ method: 'GET', url: '/skins/export' })
+    await app.inject({ method: 'GET', url: '/skins/export', headers: EXPORT_HEADERS })
 
     expect(skinFindMany).toHaveBeenCalledWith({
       where: { price: { lowestPrice: { not: null } } },
@@ -108,7 +111,7 @@ describe('GET /skins/export', () => {
     skinFindMany.mockResolvedValue([])
     const app = await buildTestApp()
 
-    await app.inject({ method: 'GET', url: '/skins/export' })
+    await app.inject({ method: 'GET', url: '/skins/export', headers: EXPORT_HEADERS })
 
     const where = skinFindMany.mock.calls[0][0].where
     expect(where).toEqual({ price: { lowestPrice: { not: null } } })
@@ -118,10 +121,42 @@ describe('GET /skins/export', () => {
     skinFindMany.mockResolvedValue([])
     const app = await buildTestApp()
 
-    const res = await app.inject({ method: 'GET', url: '/skins/export' })
+    const res = await app.inject({ method: 'GET', url: '/skins/export', headers: EXPORT_HEADERS })
 
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual([])
+  })
+
+  // ~6 MB per call through a 100/min global limit is ~600 MB/min from one IP:
+  // the whole Neon transfer allowance in minutes. Only the generator may read it.
+  it.each([
+    ['no secret', {}],
+    ['a wrong secret', { 'x-export-secret': 'nope' }],
+  ])('refuses a request with %s and never queries the database', async (_label, headers) => {
+    const app = await buildTestApp()
+
+    const res = await app.inject({ method: 'GET', url: '/skins/export', headers })
+
+    expect(res.statusCode).toBe(401)
+    expect(skinFindMany).not.toHaveBeenCalled()
+  })
+
+  it('is not registered at all when EXPORT_SECRET is unset', async () => {
+    vi.resetModules()
+    vi.doMock('../config/env', () => ({
+      env: { RATE_LIMIT_SEARCH_MAX: 30, RATE_LIMIT_WINDOW: '1 minute', EXPORT_SECRET: undefined },
+    }))
+    const { skinRoutes: withoutSecret } = await import('./skins')
+    const app = Fastify()
+    await app.register(withoutSecret)
+
+    const res = await app.inject({ method: 'GET', url: '/skins/export', headers: EXPORT_HEADERS })
+
+    // Falls through to /skins/:skinId (whose findUnique isn't mocked) — never the export.
+    expect(res.statusCode).not.toBe(200)
+    expect(skinFindMany).not.toHaveBeenCalled()
+
+    vi.doUnmock('../config/env')
   })
 
   it('no longer exposes the superseded /skins/sitemap route', async () => {

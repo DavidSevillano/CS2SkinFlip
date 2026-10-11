@@ -5,6 +5,7 @@ import com.burixer85.cs2skinflip.shared.model.Skin
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
@@ -16,10 +17,14 @@ import io.ktor.http.isSuccess
 class Cs2ApiClient(
     private val client: HttpClient,
     private val baseUrl: String,
+    /** The backend's EXPORT_SECRET — `/skins/export` is refused without it. */
+    private val exportSecret: String,
 ) {
     /** Every priced skin, ordered by value descending. One call per site regeneration. */
     suspend fun fetchExport(): List<Skin> {
-        val response: HttpResponse = client.get("$baseUrl/skins/export")
+        val response: HttpResponse = client.get("$baseUrl/skins/export") {
+            header("X-Export-Secret", exportSecret)
+        }
         // Without the export there is nothing to render, so fail loudly.
         check(response.status.isSuccess()) { "GET /skins/export failed: ${response.status}" }
         return response.body()

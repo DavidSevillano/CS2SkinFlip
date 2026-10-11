@@ -5,6 +5,7 @@ import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
 import { env } from '../config/env'
+import { requireSecretHeader } from '../middleware/requireSecretHeader'
 
 const priceService = new PriceService()
 
@@ -208,7 +209,22 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
   // (Cloudflare Pages allows at most 20k files per deployment).
   // Deliberately uncached: called ~once a day, and the ~6MB payload is a poor
   // fit for Upstash.
-  app.get('/skins/export', async () => {
+  //
+  // Which is exactly why it must not be public: ~6 MB through the 100/min global
+  // limit is ~600 MB/min from a single IP, the whole Neon transfer allowance in
+  // minutes. Only the generator holds EXPORT_SECRET; without it set the route
+  // doesn't exist (and `/skins/export` falls through to `/skins/:skinId` → 404).
+  const exportSecret = env.EXPORT_SECRET
+  if (!exportSecret) {
+    app.log.warn('[Skins] EXPORT_SECRET not set — /skins/export disabled; the SEO site cannot refresh')
+  } else {
+    await app.register(async (guarded) => {
+      guarded.addHook('onRequest', requireSecretHeader('X-Export-Secret', exportSecret))
+      guarded.get('/skins/export', exportHandler)
+    })
+  }
+
+  async function exportHandler() {
     const skins = await prisma.skin.findMany({
       where: { price: { lowestPrice: { not: null } } },
       include: { price: true },
@@ -228,7 +244,7 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       priceChange24h: s.price!.priceChange24h,
       updatedAt: s.price!.updatedAt.toISOString(),
     }))
-  })
+  }
 
   app.get('/skins/:skinId', async (request, reply) => {
     const { skinId } = request.params as { skinId: string }

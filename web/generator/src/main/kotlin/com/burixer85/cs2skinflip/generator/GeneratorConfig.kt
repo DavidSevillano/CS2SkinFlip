@@ -20,18 +20,21 @@ data class GeneratorConfig(
     val siteUrl: String,
     val outputDir: String,
     val assetLinksFingerprint: String,
+    /** Sent as `X-Export-Secret`; the backend refuses `/skins/export` without it. */
+    val exportSecret: String,
 ) {
     companion object {
         fun fromEnv(env: Map<String, String>): GeneratorConfig {
             fun required(key: String): String {
                 val raw = env[key]?.trim()
                 check(!raw.isNullOrBlank()) { "Missing required environment variable: $key" }
-                return raw.trimEnd('/')
+                return raw
             }
 
             return GeneratorConfig(
-                backendUrl = required("BACKEND_URL"),
-                siteUrl = required("SITE_URL"),
+                backendUrl = required("BACKEND_URL").trimEnd('/'),
+                siteUrl = required("SITE_URL").trimEnd('/'),
+                exportSecret = required("EXPORT_SECRET"),
                 outputDir = env["OUT_DIR"]?.takeIf { it.isNotBlank() } ?: "dist",
                 assetLinksFingerprint = env["ANDROID_CERT_SHA256"]?.takeIf { it.isNotBlank() }
                     ?: "REPLACE_WITH_RELEASE_SHA256_FINGERPRINT",

@@ -72,6 +72,7 @@ Copy `.env` and fill in:
 | `JWT_SECRET` | Min 32 chars |
 | `FRONTEND_URL` | Used for CORS allowlist |
 | `JOBS_SECRET` | Min 32 chars. Protects `POST /jobs/refresh-prices`; must match the `JOBS_SECRET` GitHub repo secret. **Without it the `/jobs` routes don't register and no scheduled refresh can run** — `/health` goes `stale` within 8h and the uptime monitor alerts |
+| `EXPORT_SECRET` | Min 32 chars. Protects `GET /skins/export` (`X-Export-Secret` header); must match the `EXPORT_SECRET` GitHub repo secret that `deploy-web.yml` passes to the site generator. **Without it the route isn't registered and the SEO site stops refreshing** — the ~6 MB dump was public, and one IP could pull ~600 MB/min of Neon transfer through the global rate limit |
 | `TRUST_PROXY` | Reverse-proxy hop count in front of the app. Required in production for per-IP rate limiting to work — see [Rate limiting](#rate-limiting). Defaults to `false` (local dev) |
 | `LOG_LEVEL` | Pino level — defaults to `info` in every environment. Set to `warn`/`error` to quieten, `debug` to troubleshoot |
 | `FCM_SERVICE_ACCOUNT_PATH` | Optional — path to Firebase service account JSON for push notifications |

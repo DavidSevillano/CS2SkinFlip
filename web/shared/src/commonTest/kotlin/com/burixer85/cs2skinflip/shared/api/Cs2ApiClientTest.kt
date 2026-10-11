@@ -15,8 +15,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
+private const val EXPORT_SECRET = "export-secret-at-least-32-characters"
+
 private class Recorder {
     val urls = mutableListOf<String>()
+    val exportSecretHeaders = mutableListOf<String?>()
 }
 
 private fun clientReturning(
@@ -26,6 +29,7 @@ private fun clientReturning(
     val recorder = Recorder()
     val engine = MockEngine { request ->
         recorder.urls += request.url.toString()
+        recorder.exportSecretHeaders += request.headers["X-Export-Secret"]
         respond(
             content = body,
             status = status,
@@ -50,7 +54,7 @@ class FetchExportTest {
             """.trimIndent(),
         )
 
-        val skins = Cs2ApiClient(client, "https://api.example.com").fetchExport()
+        val skins = Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchExport()
 
         assertEquals(1, skins.size)
         assertEquals("ak", skins[0].id)
@@ -60,13 +64,31 @@ class FetchExportTest {
     }
 
     @Test
+    fun sendsTheExportSecretBecauseTheBackendRefusesTheExportWithoutIt() = runTest {
+        val (client, recorder) = clientReturning("[]")
+
+        Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchExport()
+
+        assertEquals(EXPORT_SECRET, recorder.exportSecretHeaders.single())
+    }
+
+    @Test
+    fun neverSendsTheExportSecretToThePublicHistoryRoute() = runTest {
+        val (client, recorder) = clientReturning("[]")
+
+        Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchPriceHistory("ak")
+
+        assertEquals(null, recorder.exportSecretHeaders.single())
+    }
+
+    @Test
     fun toleratesUnknownFields() = runTest {
         val (client, _) = clientReturning(
             """[{"id":"ak","marketHashName":"n","weapon":"w","rarity":"r","iconUrl":"i",
                  "updatedAt":"2026-07-01T00:00:00.000Z","somethingNew":42}]""",
         )
 
-        val skins = Cs2ApiClient(client, "https://api.example.com").fetchExport()
+        val skins = Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchExport()
 
         assertEquals("ak", skins.single().id)
     }
@@ -76,7 +98,7 @@ class FetchExportTest {
         val (client, _) = clientReturning("boom", HttpStatusCode.InternalServerError)
 
         assertFailsWith<IllegalStateException> {
-            Cs2ApiClient(client, "https://api.example.com").fetchExport()
+            Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchExport()
         }
     }
 }
@@ -88,7 +110,7 @@ class FetchPriceHistoryTest {
             """[{"price":10.5,"timestamp":"2026-06-01T00:00:00.000Z","source":"steam"}]""",
         )
 
-        val history = Cs2ApiClient(client, "https://api.example.com").fetchPriceHistory("ak", "30d")
+        val history = Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchPriceHistory("ak", "30d")
 
         assertEquals(1, history.size)
         assertEquals(10.5, history[0].price)
@@ -99,7 +121,7 @@ class FetchPriceHistoryTest {
     fun defaultsToThirtyDayRange() = runTest {
         val (client, recorder) = clientReturning("[]")
 
-        Cs2ApiClient(client, "https://api.example.com").fetchPriceHistory("ak")
+        Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchPriceHistory("ak")
 
         assertTrue(recorder.urls.single().contains("range=30d"))
     }
@@ -108,7 +130,7 @@ class FetchPriceHistoryTest {
     fun returnsEmptyListOnAnErrorResponseSoOneBadChartCannotFailTheBuild() = runTest {
         val (client, _) = clientReturning("boom", HttpStatusCode.InternalServerError)
 
-        val history = Cs2ApiClient(client, "https://api.example.com").fetchPriceHistory("ak", "30d")
+        val history = Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchPriceHistory("ak", "30d")
 
         assertEquals(emptyList(), history)
     }
@@ -117,7 +139,7 @@ class FetchPriceHistoryTest {
     fun urlEncodesTheSkinId() = runTest {
         val (client, recorder) = clientReturning("[]")
 
-        Cs2ApiClient(client, "https://api.example.com").fetchPriceHistory("a/b", "30d")
+        Cs2ApiClient(client, "https://api.example.com", EXPORT_SECRET).fetchPriceHistory("a/b", "30d")
 
         assertTrue(recorder.urls.single().contains("a%2Fb"))
     }

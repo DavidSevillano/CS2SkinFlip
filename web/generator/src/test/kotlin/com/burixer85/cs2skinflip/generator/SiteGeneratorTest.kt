@@ -149,12 +149,27 @@ class GeneratorConfigTest {
     @Test
     fun readsRequiredVariablesAndStripsTrailingSlashes() {
         val config = GeneratorConfig.fromEnv(
-            mapOf("BACKEND_URL" to "https://api.example.com/", "SITE_URL" to "https://site.example/"),
+            mapOf(
+                "BACKEND_URL" to "https://api.example.com/",
+                "SITE_URL" to "https://site.example/",
+                "EXPORT_SECRET" to " export-secret-ending-in-a-slash/ ",
+            ),
         )
         assertEquals("https://api.example.com", config.backendUrl)
         assertEquals("https://site.example", config.siteUrl)
         assertEquals("dist", config.outputDir)
         assertTrue(config.assetLinksFingerprint.isNotBlank())
+        // Whitespace from a pasted secret is trimmed, but a trailing slash is part
+        // of the secret, not a URL artefact.
+        assertEquals("export-secret-ending-in-a-slash/", config.exportSecret)
+    }
+
+    @Test
+    fun failsLoudlyWhenExportSecretIsMissing() {
+        val error = assertFailsWith<IllegalStateException> {
+            GeneratorConfig.fromEnv(mapOf("BACKEND_URL" to "https://api.example.com", "SITE_URL" to "https://site.example"))
+        }
+        assertTrue(error.message!!.contains("EXPORT_SECRET"))
     }
 
     @Test
@@ -163,6 +178,7 @@ class GeneratorConfigTest {
             mapOf(
                 "BACKEND_URL" to "https://api.example.com",
                 "SITE_URL" to "https://site.example",
+                "EXPORT_SECRET" to "export-secret-at-least-32-characters",
                 "OUT_DIR" to "out",
                 "ANDROID_CERT_SHA256" to "AA:BB",
             ),
