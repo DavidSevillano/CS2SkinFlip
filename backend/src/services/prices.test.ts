@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Reference points written after CSFloat joined lowestPrice, so the 24h change
+// is a plain comparison with lowestPrice (see CSFLOAT_IN_LOWEST_FROM).
+const REF_AT = new Date('2026-10-12T00:00:00Z')
 import { readdirSync, readFileSync } from 'fs'
 import { join, relative } from 'path'
 import { fakeRedisStore } from '../test/fakeRedis'
@@ -125,7 +129,10 @@ describe('PriceService.getTopMovers — corroboration', () => {
     expect(OR).toEqual([
       { skinportPrice: { not: null }, csgoMarketPrice: { not: null } },
       { skinportPrice: { not: null }, waxpeerPrice: { not: null } },
+      { skinportPrice: { not: null }, csfloatPrice: { not: null } },
       { csgoMarketPrice: { not: null }, waxpeerPrice: { not: null } },
+      { csgoMarketPrice: { not: null }, csfloatPrice: { not: null } },
+      { waxpeerPrice: { not: null }, csfloatPrice: { not: null } },
     ])
   })
 
@@ -137,8 +144,8 @@ describe('PriceService.getTopMovers — corroboration', () => {
       skin('honest', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 104 })),
     ])
     queryRaw.mockResolvedValue([
-      { skinId: 'liar', price: 2762 },
-      { skinId: 'honest', price: 80 },
+      { skinId: 'liar', price: 2762, at: REF_AT },
+      { skinId: 'honest', price: 80, at: REF_AT },
     ])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
@@ -152,7 +159,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
     skinFindMany.mockResolvedValue([
       { ...skin('mil', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 104 })), rarity: 'Mil-Spec Grade' },
     ])
-    queryRaw.mockResolvedValue([{ skinId: 'mil', price: 80 }])
+    queryRaw.mockResolvedValue([{ skinId: 'mil', price: 80, at: REF_AT }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -165,7 +172,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
     skinFindMany.mockResolvedValue([
       skin('wide', priced({ lowestPrice: 100, skinportPrice: 100, csgoMarketPrice: 150 })),
     ])
-    queryRaw.mockResolvedValue([{ skinId: 'wide', price: 80 }])
+    queryRaw.mockResolvedValue([{ skinId: 'wide', price: 80, at: REF_AT }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -179,7 +186,7 @@ describe('PriceService.getTopMovers — corroboration', () => {
     skinFindMany.mockResolvedValue([
       skin('alone', priced({ lowestPrice: 500, skinportPrice: 500, csgoMarketPrice: null })),
     ])
-    queryRaw.mockResolvedValue([{ skinId: 'alone', price: 1 }])
+    queryRaw.mockResolvedValue([{ skinId: 'alone', price: 1, at: REF_AT }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -242,8 +249,8 @@ describe('PriceService.getTopMovers — movement worth acting on', () => {
       skin('real', 336, 340),
     ])
     queryRaw.mockResolvedValue([
-      { skinId: 'pennies', price: 0.63 },
-      { skinId: 'real', price: 119 },
+      { skinId: 'pennies', price: 0.63, at: REF_AT },
+      { skinId: 'real', price: 119, at: REF_AT },
     ])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
@@ -254,7 +261,7 @@ describe('PriceService.getTopMovers — movement worth acting on', () => {
   it('keeps a modest percentage that moved real money', async () => {
     // +12% is unremarkable next to +90%, but it is $60 rather than $0.57.
     skinFindMany.mockResolvedValue([skin('chunky', 560, 575)])
-    queryRaw.mockResolvedValue([{ skinId: 'chunky', price: 500 }])
+    queryRaw.mockResolvedValue([{ skinId: 'chunky', price: 500, at: REF_AT }])
 
     const movers = await new PriceService().getTopMovers('rising', 20)
 
@@ -286,7 +293,7 @@ describe('top-movers cache invalidation', () => {
     // A reference price far enough from `lowestPrice` to clear the minimum
     // absolute move comfortably, so the writer actually has something to cache
     // and this test fails for cache reasons rather than threshold ones.
-    queryRaw.mockResolvedValue([{ skinId: 'skin-1', price: 4 }])
+    queryRaw.mockResolvedValue([{ skinId: 'skin-1', price: 4, at: REF_AT }])
   })
 
   it('removes every key the writer produced, whatever shape they are', async () => {

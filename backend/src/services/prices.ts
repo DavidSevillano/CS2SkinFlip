@@ -1,6 +1,7 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma'
 import { redis, CACHE_TTL } from '../redis/client'
-import { fetchReferencePrices, percentChange } from './priceReference'
+import { change24h, comparablePrice, fetchReferencePrices, percentChange } from './priceReference'
 import { MIN_TOP_MOVER_ABS_MOVE, MIN_TOP_MOVER_LISTINGS, MIN_TOP_MOVER_PRICE } from '../config/priceQuality'
 import { isCorroborated } from './quotes'
 import type { AggregatedPrices } from '../types'
@@ -46,6 +47,9 @@ export async function invalidateSkinPriceCache(): Promise<number> {
   return keys.length
 }
 
+// The marketplace columns of SkinPrice, for rules phrased over "any two of them".
+const QUOTE_COLUMNS = ['skinportPrice', 'csgoMarketPrice', 'waxpeerPrice', 'csfloatPrice'] as const
+
 export class PriceService {
 
   /** Read stored prices from DB (populated by bulk job every 6h). Cached 5 min. */
@@ -55,7 +59,7 @@ export class PriceService {
     if (cached) return cached
 
     const row = await prisma.skinPrice.findUnique({ where: { skinId } })
-    const priceChange24h = await this.calculate24hChange(skinId, row?.lowestPrice ?? null)
+    const priceChange24h = row ? await this.calculate24hChange(row) : null
 
     const prices: AggregatedPrices = {
       skinId,
@@ -63,6 +67,7 @@ export class PriceService {
       skinportPrice:   row?.skinportPrice   ?? null,
       csgoMarketPrice: row?.csgoMarketPrice ?? null,
       waxpeerPrice:    row?.waxpeerPrice    ?? null,
+      csfloatPrice:    row?.csfloatPrice    ?? null,
       lowestPrice:     row?.lowestPrice     ?? null,
       priceChange24h,
       volume24h:       row?.volume24h       ?? null,
@@ -73,10 +78,10 @@ export class PriceService {
     return prices
   }
 
-  async calculate24hChange(skinId: string, currentPrice: number | null): Promise<number | null> {
-    if (currentPrice === null) return null
-    const references = await fetchReferencePrices([skinId])
-    return percentChange(currentPrice, references.get(skinId))
+  async calculate24hChange(row: Parameters<typeof change24h>[0] & { skinId: string }): Promise<number | null> {
+    if (row.lowestPrice === null) return null
+    const references = await fetchReferencePrices([row.skinId])
+    return change24h(row, references.get(row.skinId))
   }
 
   /**
@@ -121,11 +126,9 @@ export class PriceService {
     // least two of these three are non-null" — Prisma has no counting operator
     // over sibling columns, and a raw query here would give up the typed
     // include on `price`.
-    const atLeastTwoQuotes = [
-      { skinportPrice: { not: null }, csgoMarketPrice: { not: null } },
-      { skinportPrice: { not: null }, waxpeerPrice: { not: null } },
-      { csgoMarketPrice: { not: null }, waxpeerPrice: { not: null } },
-    ]
+    const atLeastTwoQuotes = QUOTE_COLUMNS.flatMap((a, i) =>
+      QUOTE_COLUMNS.slice(i + 1).map((b) => ({ [a]: { not: null }, [b]: { not: null } })),
+    ) as Prisma.SkinPriceWhereInput[]
 
     const skins = await prisma.skin.findMany({
       include: { price: true },
@@ -153,11 +156,11 @@ export class PriceService {
     const topMovers = skins
       .map((skin) => {
         const current = skin.price?.lowestPrice ?? null
-        const prev = historyMap.get(skin.id) ?? null
-        const priceChange24h =
-          current !== null && prev !== null && prev > 0
-            ? ((current - prev) / prev) * 100
-            : null
+        const ref = historyMap.get(skin.id)
+        const prev = ref?.price ?? null
+        // The move is measured on the reference's basis; the price shown is today's.
+        const basis = ref && skin.price ? comparablePrice(skin.price, ref) : null
+        const priceChange24h = percentChange(basis, prev)
         return {
           skinId: skin.id,
           marketHashName: skin.marketHashName,
@@ -167,11 +170,13 @@ export class PriceService {
           skinportPrice:   skin.price?.skinportPrice   ?? null,
           csgoMarketPrice: skin.price?.csgoMarketPrice ?? null,
           waxpeerPrice:    skin.price?.waxpeerPrice    ?? null,
+          csfloatPrice:    skin.price?.csfloatPrice    ?? null,
           lowestPrice: current,
           priceChange24h,
           volume24h: skin.price?.volume24h ?? null,
           updatedAt: skin.price?.updatedAt.toISOString() ?? new Date().toISOString(),
           _prev: prev,
+          _basis: basis,
         }
       })
       // Quality filter: need a real 24h-ago reference price and a move big
@@ -181,8 +186,8 @@ export class PriceService {
       .filter(
         (s) =>
           s._prev !== null &&
-          s.lowestPrice !== null &&
-          Math.abs(s.lowestPrice - s._prev) >= MIN_TOP_MOVER_ABS_MOVE,
+          s._basis !== null &&
+          Math.abs(s._basis - s._prev) >= MIN_TOP_MOVER_ABS_MOVE,
       )
       // Corroboration, part two. The SQL above guaranteed a second quote exists;
       // this asks whether the quotes actually agree. They routinely don't: the

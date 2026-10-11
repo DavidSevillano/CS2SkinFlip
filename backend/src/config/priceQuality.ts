@@ -94,3 +94,20 @@ export const MAX_TOP_MOVER_QUOTE_SPREAD = 3
  * listings still led; past 10, the lists barely change.
  */
 export const MIN_TOP_MOVER_LISTINGS = 10
+
+/**
+ * When CSFloat starts counting towards `lowestPrice` (epoch ms).
+ *
+ * Its quotes are stored from the first run after the deploy, but joining the
+ * minimum moves the price of every skin it undercuts — measured 2026-10-11 it
+ * was the cheapest of the four on 54% of skins, its median quote 8% under the
+ * others' — and a 24h change computed across that step reads as a market-wide
+ * drop: the falling list fills with it and every percentage dips for a day.
+ *
+ * Fixed between two cron runs (18:00 and 00:00 UTC), so every PriceHistory
+ * point is unambiguously from before or after it. `change24h` compares a
+ * reference written before it with today's price computed without CSFloat.
+ * Once no reference predates it (48h later) that branch is dead weight and can
+ * go, along with this constant.
+ */
+export const CSFLOAT_IN_LOWEST_FROM = Date.parse('2026-10-11T21:00:00Z')

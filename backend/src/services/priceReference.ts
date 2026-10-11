@@ -1,6 +1,14 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '../db/prisma'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
+import { CSFLOAT_IN_LOWEST_FROM } from '../config/priceQuality'
+import { lowestPriceAt, type MarketplaceQuotes } from './quotes'
+
+/** A skin's reference point for the 24h change: its price, and when it was written. */
+export interface ReferencePrice {
+  price: number
+  at: Date
+}
 
 /**
  * Each skin's reference price for the 24h change: its latest PriceHistory point
@@ -16,19 +24,41 @@ import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
  *
  * Kept out of services/prices.ts so routes can use it without pulling in Redis.
  */
-export async function fetchReferencePrices(skinIds: string[]): Promise<Map<string, number>> {
+export async function fetchReferencePrices(skinIds: string[]): Promise<Map<string, ReferencePrice>> {
   if (skinIds.length === 0) return new Map()
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
-  const rows = await prisma.$queryRaw<Array<{ skinId: string; price: number }>>`
-    SELECT DISTINCT ON ("skinId") "skinId", "price"
+  const rows = await prisma.$queryRaw<Array<{ skinId: string; price: number; at: Date }>>`
+    SELECT DISTINCT ON ("skinId") "skinId", "price", "timestamp" AS "at"
     FROM "PriceHistory"
     WHERE "skinId" IN (${Prisma.join(skinIds)})
       AND "timestamp" >= ${windowStart}
       AND "timestamp" <= ${dayAgo}
     ORDER BY "skinId", "timestamp" DESC
   `
-  return new Map(rows.map((r) => [r.skinId, r.price]))
+  return new Map(rows.map((r) => [r.skinId, { price: r.price, at: r.at }]))
+}
+
+/**
+ * Today's price on the same basis as `ref`. A reference written before CSFloat
+ * joined `lowestPrice` was the minimum of the other three; comparing it with a
+ * minimum that now includes CSFloat would show a drop on every skin CSFloat
+ * undercuts. See CSFLOAT_IN_LOWEST_FROM.
+ */
+export function comparablePrice(
+  row: MarketplaceQuotes & { lowestPrice: number | null },
+  ref: ReferencePrice,
+): number | null {
+  return ref.at.getTime() < CSFLOAT_IN_LOWEST_FROM ? lowestPriceAt(row, ref.at.getTime()) : row.lowestPrice
+}
+
+/** The 24h change for a SkinPrice row against its reference, or null without one. */
+export function change24h(
+  row: MarketplaceQuotes & { lowestPrice: number | null },
+  ref: ReferencePrice | undefined,
+): number | null {
+  if (!ref) return null
+  return percentChange(comparablePrice(row, ref), ref.price)
 }
 
 /** Percentage change from `reference` to `current`, or null when either is unusable. */

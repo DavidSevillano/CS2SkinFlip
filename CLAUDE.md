@@ -153,18 +153,21 @@ The 6h cadence therefore lives in the workflow cron, mirrored by `REFRESH_INTERV
 
 ### Price pipeline
 
-Three marketplaces are fetched in parallel every 6h by the cron-triggered job (`populatePrices`), plus once on startup if `SkinPrice` is empty.
+Four marketplaces are fetched in parallel every 6h by the cron-triggered job (`populatePrices`), plus once on startup if `SkinPrice` is empty.
 **All endpoints are bulk and public — no API keys, no rate-limit concerns** (4 calls/day per marketplace):
 
 1. **Skinport** (`fetchSkinportPrices`) — `GET https://api.skinport.com/v1/items?app_id=730&currency=USD&tradable=1`, ~24.8k items. **`tradable` must stay `1`.** The flag selects between two different result sets rather than switching a filter off: measured 2026-07-24, `tradable=0` returns 10.9k priced items and `tradable=1` returns 24.8k. `0` is dominated by trade-locked listings, which are cheaper than the same skin you could actually flip, so it biased Skinport low and handed it `lowestPrice` more often than it deserved.
 2. **CS:GO Market** (`fetchCsgoMarketPrices`) — `GET https://market.csgo.com/api/v2/prices/USD.json`, ~25k items.
 3. **Waxpeer** (`fetchWaxpeerPrices`) — `GET https://api.waxpeer.com/v1/prices?game=csgo`, ~20k items. `min` field is USD × 1000 (divide by 1000).
+4. **CSFloat** (`fetchCsfloatPrices`) — `GET https://csfloat.com/api/v1/listings/price-list`, ~28k items, `min_price` in cents. The list its browser extension reads, **not a documented API**: if it changes or blocks Render, it reads as an outage and carry-forward covers it. Added 2026-10-11 because it quoted 92% of skins and raised the share with ≥3 quotes (where the median rule works) from 12.9k to 15.1k skins.
+
+**CSFloat joined `lowestPrice` at a fixed time, `CSFLOAT_IN_LOWEST_FROM`** (`config/priceQuality.ts`, between two cron runs). It is the cheapest of the four on ~54% of skins (median quote ~8% under the others), so joining the minimum is a step down that a 24h change would read as a market-wide drop. Every 24h change therefore goes through `change24h`/`comparablePrice` (`services/priceReference.ts`): a reference point written before that time is compared with today's price computed **without** CSFloat (`lowestPriceAt`). Once no reference predates it (48h later), that branch and the constant can be removed. The `PriceHistory` chart itself does show the one-off step.
 
 **CSDeals and DMarket dropped** (2026-07): CSDeals' bulk endpoint only lists ~2.6k actively-stocked items (vs ~20-25k for the others), so it almost never matched anything outside the most common skins. DMarket's public bulk aggregator (`price-aggregator/v1/aggregated-prices`) was retired outright; its replacement requires signed API-key auth and per-title lookups, incompatible with the no-keys bulk design here.
 
-`calcLowestPrice()` is **not** a plain MIN — a plain MIN trusts whichever marketplace is most wrong. When all three quote a skin, any quote further than `MAX_QUOTE_DEVIATION_FROM_MEDIAN` (4x) from the median of the three is discarded before the MIN is taken. With fewer than three quotes there is no majority to appeal to, so those rows keep the plain MIN and are instead refused by top movers. `SkinPrice.lowestPrice` stores the result and is the primary price shown in the Android app; the individual marketplace columns always record what each one actually said, rejected or not.
+`calcLowestPrice()` (`services/quotes.ts`) is **not** a plain MIN — a plain MIN trusts whichever marketplace is most wrong. With three or more quotes, any quote further than `MAX_QUOTE_DEVIATION_FROM_MEDIAN` (4x) from their median is discarded before the MIN is taken. With fewer than three quotes there is no majority to appeal to, so those rows keep the plain MIN and are instead refused by top movers. `SkinPrice.lowestPrice` stores the result and is the primary price shown in the Android app; the individual marketplace columns always record what each one actually said, rejected or not.
 
-**A marketplace that is down keeps its last quotes.** Every fetcher swallows its own error and returns an empty map; writing that as NULL moved `lowestPrice` to whichever marketplaces survived, an artificial jump that fired false alerts and polluted `PriceHistory`. `populatePrices` records each healthy marketplace's item count in Redis (`pipeline:prices:marketplaceHealth`); one returning nothing, or under half its last healthy count, is treated as down and its previous column values are carried forward for up to 24h. If all three are down nothing is written at all, so `/health` still goes stale.
+**A marketplace that is down keeps its last quotes.** Every fetcher swallows its own error and returns an empty map; writing that as NULL moved `lowestPrice` to whichever marketplaces survived, an artificial jump that fired false alerts and polluted `PriceHistory`. `populatePrices` records each healthy marketplace's item count in Redis (`pipeline:prices:marketplaceHealth`); one returning nothing, or under half its last healthy count, is treated as down and its previous column values are carried forward for up to 24h. If all of them are down nothing is written at all, so `/health` still goes stale.
 
 `SkinPrice.volume24h` holds **CS:GO Market's `volume`** (its count of listings for the item), the only liquidity signal in the three feeds — the column name predates that use. A skin with one or two listings has a "lowest price" that is a single seller's ask.
 
@@ -222,7 +225,7 @@ The uptime monitor is configured as a **keyword monitor on `fresh`** — only th
 
 ### Schema notes
 
-`SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `waxpeerPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
+`SkinPrice`: `skinportPrice`, `csgoMarketPrice`, `waxpeerPrice`, `csfloatPrice` (nullable floats, USD). `lowestPrice` = computed MIN, indexed for sorting. `priceChange24h` is also indexed for the home top-movers query.
 
 `User`: Steam OAuth only — `steamId` is required and unique. Has `fcmToken String?` for FCM push notifications and `locale String?` for their language. (Email/password auth was removed in favor of Steam-only sign-in.)
 

@@ -17,6 +17,7 @@ export interface AggregatedPrices {
   skinportPrice: number | null
   csgoMarketPrice: number | null
   waxpeerPrice: number | null
+  csfloatPrice: number | null
   lowestPrice: number | null
   priceChange24h: number | null
   volume24h: number | null

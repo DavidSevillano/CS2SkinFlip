@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
-import { fetchReferencePrices, percentChange } from '../services/priceReference'
+import { change24h, fetchReferencePrices } from '../services/priceReference'
 import { env } from '../config/env'
 import { requireSecretHeader } from '../middleware/requireSecretHeader'
 
@@ -148,7 +148,7 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     const enrichedSkins = skins.map((s: any) => {
       if (!s.price) return s
       const priceChange24h =
-        percentChange(s.price.lowestPrice, references.get(s.id)) ?? s.price.priceChange24h ?? null
+        change24h(s.price, references.get(s.id)) ?? s.price.priceChange24h ?? null
       return { ...s, price: { ...s.price, priceChange24h } }
     })
 
@@ -209,6 +209,7 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
       iconUrl: s.iconUrl,
       skinportPrice: s.price!.skinportPrice,
       csgoMarketPrice: s.price!.csgoMarketPrice,
+      csfloatPrice: s.price!.csfloatPrice,
       waxpeerPrice: s.price!.waxpeerPrice,
       lowestPrice: s.price!.lowestPrice,
       priceChange24h: s.price!.priceChange24h,
@@ -226,7 +227,7 @@ export const skinRoutes: FastifyPluginAsync = async (app) => {
     // shows the change the list just showed.
     const references = await fetchReferencePrices([skinId])
     const priceChange24h =
-      percentChange(skin.price?.lowestPrice ?? null, references.get(skinId)) ?? skin.price?.priceChange24h ?? null
+      (skin.price ? change24h(skin.price, references.get(skinId)) : null) ?? skin.price?.priceChange24h ?? null
 
     return {
       ...skin,

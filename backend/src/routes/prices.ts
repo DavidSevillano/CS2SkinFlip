@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify'
 import { prisma } from '../db/prisma'
 import { PriceService } from '../services/prices'
-import { fetchReferencePrices, percentChange } from '../services/priceReference'
+import { change24h, fetchReferencePrices } from '../services/priceReference'
 
 const priceService = new PriceService()
 
@@ -31,10 +31,11 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
         skinportPrice:   row.skinportPrice,
         csgoMarketPrice: row.csgoMarketPrice,
         waxpeerPrice:    row.waxpeerPrice,
+        csfloatPrice:    row.csfloatPrice,
         lowestPrice:     row.lowestPrice,
         // Same fallback as GET /skins: the bulk job's cached value when there is
         // no reference point in the window.
-        priceChange24h:  percentChange(row.lowestPrice, references.get(row.skinId)) ?? row.priceChange24h,
+        priceChange24h:  change24h(row, references.get(row.skinId)) ?? row.priceChange24h,
       }
     }
     return response

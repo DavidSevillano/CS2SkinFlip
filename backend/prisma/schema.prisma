@@ -84,6 +84,7 @@ model SkinPrice {
   skinportPrice   Float? // api.skinport.com (USD)
   csgoMarketPrice Float? // market.csgo.com (USD)
   waxpeerPrice    Float? // api.waxpeer.com (USD)
+  csfloatPrice    Float? // csfloat.com (USD) — in lowestPrice from CSFLOAT_IN_LOWEST_FROM
   lowestPrice     Float?
   volume24h       Int?
   priceChange24h  Float? // cached %, recomputed during each price refresh job

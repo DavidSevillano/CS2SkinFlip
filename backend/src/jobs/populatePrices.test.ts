@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { brotliCompressSync } from 'zlib'
 import { fakeRedisStore } from '../test/fakeRedis'
 
@@ -330,7 +330,7 @@ describe('populatePrices — bulk write path', () => {
 
     const [sql, ...params] = executeRawUnsafe.mock.calls[0]
     const tuples = (sql as string).match(/VALUES (.*)\s+ON CONFLICT/s)![1]
-    expect(tuples.startsWith('($1,$2,$3,$4,$5,$6,$7,$8,$9),($10,')).toBe(true)
+    expect(tuples.startsWith('($1,$2,$3,$4,$5,$6,$7,$8,$9,$10),($11,')).toBe(true)
     expect(tuples.match(/\$\d+/g)).toHaveLength(params.length)
   })
 
@@ -348,8 +348,8 @@ describe('populatePrices — bulk write path', () => {
 
     const [sql, ...params] = executeRawUnsafe.mock.calls[0]
     expect(sql).toMatch(/"volume24h"\s+= EXCLUDED\."volume24h"/)
-    // 9 columns per row; volume is the last one of the first row.
-    expect(params[8]).toBe(5)
+    // 10 columns per row; volume is the last one of the first row.
+    expect(params[9]).toBe(5)
   })
 
   it('still reports the rows it wrote in the run summary', async () => {
@@ -461,8 +461,8 @@ describe('populatePrices — outlier rejection across marketplaces', () => {
   /** The `lowestPrice` bind parameter of the single written row. */
   function writtenLowestPrice(): number {
     expect(executeRawUnsafe).toHaveBeenCalledTimes(1)
-    // Column order: id, skinId, skinport, csgo, waxpeer, lowestPrice, change, updatedAt.
-    return executeRawUnsafe.mock.calls[0][6] as number
+    // Column order: id, skinId, skinport, csgo, waxpeer, csfloat, lowestPrice, change, updatedAt, volume.
+    return executeRawUnsafe.mock.calls[0][7] as number
   }
 
   beforeEach(() => {
@@ -550,7 +550,7 @@ describe('populatePrices — one marketplace down', () => {
   /** The bind parameters of the single written row, by column. */
   function writtenRow() {
     const p = executeRawUnsafe.mock.calls[0]
-    return { skinport: p[3], csgo: p[4], waxpeer: p[5], lowest: p[6], volume: p[9] }
+    return { skinport: p[3], csgo: p[4], waxpeer: p[5], csfloat: p[6], lowest: p[7], volume: p[10] }
   }
 
   const redis = fakeRedisStore()
@@ -654,5 +654,80 @@ describe('populatePrices — one marketplace down', () => {
     await populatePrices(log)
 
     expect(redis.store.has('prices:skin-1')).toBe(false)
+  })
+})
+
+describe('populatePrices — CSFloat', () => {
+  const NAME = 'AK-47 | Redline (Field-Tested)'
+
+  async function switchOver() {
+    return (await import('../config/priceQuality')).CSFLOAT_IN_LOWEST_FROM
+  }
+
+  /** Bind parameters of the single written row, by column. */
+  function writtenRow() {
+    const p = executeRawUnsafe.mock.calls[0]
+    return { csfloat: p[6], lowest: p[7], change: p[8] }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    skinFindMany.mockResolvedValue([{ id: 'skin-1', marketHashName: NAME }])
+    queryRaw.mockResolvedValue([])
+    priceHistoryCreateMany.mockResolvedValue({ count: 1 })
+    executeRawUnsafe.mockResolvedValue(1)
+    redisKeys.mockResolvedValue([])
+    redisSet.mockResolvedValue('OK')
+    redisGet.mockResolvedValue(null)
+    syncSkinCatalogIfDue.mockResolvedValue(null)
+    // Three marketplaces agree around $100; CSFloat lists it at $92.
+    axiosGet.mockImplementation(async (url: string) => {
+      if (url.includes('csfloat.com')) return { data: [{ market_hash_name: NAME, quantity: 40, min_price: 9200 }] }
+      if (url.includes('market.csgo.com')) return { data: [{ market_hash_name: NAME, price: '105', volume: '20' }] }
+      if (url.includes('waxpeer')) return { data: { success: true, items: [{ name: NAME, min: 110_000 }] } }
+      if (url.includes('skinport')) return { data: brotliCompressSync(Buffer.from(JSON.stringify([{ market_hash_name: NAME, min_price: 100 }]))) }
+      return { data: [] }
+    })
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  // CSFloat quotes in cents.
+  it("stores CSFloat's quote in its own column, in dollars", async () => {
+    await populatePrices(log)
+
+    expect(writtenRow().csfloat).toBe(92)
+  })
+
+  it('leaves CSFloat out of lowestPrice before the switch-over', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime((await switchOver()) - 60 * 60 * 1000)
+
+    await populatePrices(log)
+
+    expect(writtenRow().lowest).toBe(100)
+  })
+
+  it('counts CSFloat in lowestPrice from the switch-over on', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime((await switchOver()) + 60 * 60 * 1000)
+
+    await populatePrices(log)
+
+    expect(writtenRow().lowest).toBe(92)
+  })
+
+  // The reference was written without CSFloat: an unchanged market must read 0%,
+  // not the -8% of CSFloat joining the minimum.
+  it("measures the 24h change across the switch-over on the reference's basis", async () => {
+    const at = await switchOver()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(at + 25 * 60 * 60 * 1000)
+    queryRaw.mockResolvedValue([{ skinId: 'skin-1', price: 100, at: new Date(at - 60 * 60 * 1000) }])
+
+    await populatePrices(log)
+
+    expect(writtenRow().lowest).toBe(92)
+    expect(writtenRow().change).toBe(0)
   })
 })

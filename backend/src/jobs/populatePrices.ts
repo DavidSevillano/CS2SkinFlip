@@ -5,7 +5,8 @@ import { promisify } from 'util'
 import { prisma } from '../db/prisma'
 import { redis } from '../redis/client'
 import { CHANGE_REFERENCE_WINDOW_MS } from '../config/priceHistory'
-import { MAX_QUOTE_DEVIATION_FROM_MEDIAN } from '../config/priceQuality'
+import { CSFLOAT_IN_LOWEST_FROM } from '../config/priceQuality'
+import { lowestPriceAt } from '../services/quotes'
 import { invalidateSkinPriceCache, invalidateTopMoversCache } from '../services/prices'
 import { SOUVENIR_PREFIX, syncSkinCatalogIfDue } from './populateSkins'
 import type { FastifyBaseLogger } from 'fastify'
@@ -21,6 +22,7 @@ const brotliDecompress = promisify(zlib.brotliDecompress)
 //   • Skinport      — api.skinport.com/v1/items
 //   • CS:GO Market  — market.csgo.com/api/v2/prices/USD.json
 //   • Waxpeer       — api.waxpeer.com/v1/prices
+//   • CSFloat       — csfloat.com/api/v1/listings/price-list
 //
 // CSDeals and DMarket dropped (2026-07): CSDeals' bulk endpoint only lists
 // ~2.6k actively-stocked items (vs ~20-25k for the other marketplaces), so it
@@ -153,54 +155,60 @@ async function fetchWaxpeerPrices(log: FastifyBaseLogger): Promise<Map<string, n
   return map
 }
 
-// ─── Merge & persist ─────────────────────────────────────────────────────────
+// ─── CSFloat ─────────────────────────────────────────────────────────────────
+// The price list its browser extension reads: public, no auth, one call, ~28k
+// items with the lowest ask in cents. Not a documented API — if it changes or
+// starts refusing us, it reads as an outage and the carry-forward below covers
+// it like any other marketplace going down.
 
-/**
- * The cheapest price we are willing to believe, which is not the same as the
- * cheapest price we were quoted.
- *
- * A plain MIN trusts whichever marketplace is most wrong. When all three quote
- * the skin the median is the majority opinion, so a quote far from it is an
- * outlier rather than a bargain, and dropping it costs nothing real — see
- * `config/priceQuality.ts` for the measured distribution behind the threshold.
- *
- * With fewer than three quotes there is no majority to appeal to: two numbers
- * that disagree cannot say which of them is lying. Those rows keep the plain
- * MIN and are held to a stricter standard by the readers that care — top movers
- * refuses them outright rather than pretending the price is verified.
- */
-function calcLowestPrice(...prices: (number | null | undefined)[]): number | null {
-  const valid = prices.filter((p): p is number => p != null && p > 0)
-  if (valid.length === 0) return null
-  if (valid.length < 3) return Math.min(...valid)
-
-  const median = [...valid].sort((a, b) => a - b)[1]
-  // The median is trivially within any factor of itself, so this never empties.
-  const corroborated = valid.filter(
-    (p) =>
-      p <= median * MAX_QUOTE_DEVIATION_FROM_MEDIAN &&
-      p >= median / MAX_QUOTE_DEVIATION_FROM_MEDIAN,
-  )
-  return Math.min(...corroborated)
+interface CsfloatPriceListItem {
+  market_hash_name: string
+  quantity: number
+  min_price: number
 }
+
+async function fetchCsfloatPrices(log: FastifyBaseLogger): Promise<Map<string, number>> {
+  const map = new Map<string, number>()
+  try {
+    const { data } = await axios.get<CsfloatPriceListItem[]>(
+      'https://csfloat.com/api/v1/listings/price-list',
+      { timeout: 30000 },
+    )
+    if (!Array.isArray(data)) {
+      log.warn('[Prices] CSFloat: response not in expected format')
+      return map
+    }
+    for (const item of data) {
+      const price = item.min_price / 100
+      if (price > 0 && item.market_hash_name) map.set(item.market_hash_name, price)
+    }
+    log.info(`[Prices] CSFloat: ${map.size} items`)
+  } catch (err) {
+    log.warn(`[Prices] CSFloat failed: ${(err as Error).message}`)
+  }
+  return map
+}
+
+// ─── Merge & persist ─────────────────────────────────────────────────────────
 
 interface SkinPriceRow {
   skinId: string
   skinport: number | null
   csgo: number | null
   waxpeer: number | null
+  csfloat: number | null
   lowestPrice: number
   priceChange24h: number | null
   volume: number | null
   trackHistory: boolean
 }
 
-// 500 rows x 9 columns = 4500 bind parameters, comfortably under Postgres' 65535
+// 500 rows x 10 columns = 5000 bind parameters, comfortably under Postgres' 65535
 // cap. The catalog is ~24k skins but only ~13.2k carry a price from any
 // marketplace (measured 2026-07-22), so a full run is ~27 statements.
 const WRITE_BATCH = 500
 
-const SKIN_PRICE_COLUMNS = 9
+const SKIN_PRICE_COLUMNS = 10
 
 /**
  * Upserts every priced skin in batched multi-row statements, returning the number
@@ -231,7 +239,7 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
     const tuples = batch
       .map((_, n) => {
         const b = n * SKIN_PRICE_COLUMNS
-        return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`
+        return `(${Array.from({ length: SKIN_PRICE_COLUMNS }, (_, c) => `$${b + c + 1}`).join(',')})`
       })
       .join(',')
 
@@ -245,6 +253,7 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
       r.skinport,
       r.csgo,
       r.waxpeer,
+      r.csfloat,
       r.lowestPrice,
       r.priceChange24h,
       now,
@@ -255,12 +264,13 @@ async function writeSkinPrices(rows: SkinPriceRow[]): Promise<number> {
     // the liquidity signal top movers filters on. The name predates that use.
     await prisma.$executeRawUnsafe(
       `INSERT INTO "SkinPrice" (
-         "id","skinId","skinportPrice","csgoMarketPrice","waxpeerPrice","lowestPrice","priceChange24h","updatedAt","volume24h"
+         "id","skinId","skinportPrice","csgoMarketPrice","waxpeerPrice","csfloatPrice","lowestPrice","priceChange24h","updatedAt","volume24h"
        ) VALUES ${tuples}
        ON CONFLICT ("skinId") DO UPDATE SET
          "skinportPrice"   = EXCLUDED."skinportPrice",
          "csgoMarketPrice" = EXCLUDED."csgoMarketPrice",
          "waxpeerPrice"    = EXCLUDED."waxpeerPrice",
+         "csfloatPrice"    = EXCLUDED."csfloatPrice",
          "lowestPrice"     = EXCLUDED."lowestPrice",
          "priceChange24h"  = EXCLUDED."priceChange24h",
          "updatedAt"       = EXCLUDED."updatedAt",
@@ -324,7 +334,7 @@ export interface PopulatePricesSummary {
 // a while instead.
 export const MARKETPLACE_HEALTH_KEY = 'pipeline:prices:marketplaceHealth'
 
-type Marketplace = 'skinport' | 'csgoMarket' | 'waxpeer'
+type Marketplace = 'skinport' | 'csgoMarket' | 'waxpeer' | 'csfloat'
 type MarketplaceHealth = Partial<Record<Marketplace, { count: number; at: number }>>
 
 // Down = nothing at all, or under half the items of its last healthy run (a
@@ -352,16 +362,18 @@ interface PreviousQuotes {
   skinportPrice: number | null
   csgoMarketPrice: number | null
   waxpeerPrice: number | null
+  csfloatPrice: number | null
   volume24h: number | null
 }
 
 export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePricesSummary> {
-  log.info('[PricePopulate] Fetching prices from 3 marketplaces in parallel...')
+  log.info('[PricePopulate] Fetching prices from 4 marketplaces in parallel...')
 
-  const [skinportMap, csgoMarket, waxpeerMap] = await Promise.all([
+  const [skinportMap, csgoMarket, waxpeerMap, csfloatMap] = await Promise.all([
     fetchSkinportPrices(log),
     fetchCsgoMarketPrices(log),
     fetchWaxpeerPrices(log),
+    fetchCsfloatPrices(log),
   ])
   const csgoMarketMap = csgoMarket.prices
 
@@ -371,11 +383,12 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
     skinport: skinportMap.size,
     csgoMarket: csgoMarketMap.size,
     waxpeer: waxpeerMap.size,
+    csfloat: csfloatMap.size,
   }
   const marketplaces = Object.keys(sizes) as Marketplace[]
   const down = marketplaces.filter((m) => isDown(sizes[m], health[m]))
 
-  // Carrying all three forward would keep /health "fresh" over prices nothing
+  // Carrying every one forward would keep /health "fresh" over prices nothing
   // refreshed — exactly what the freshness marker exists to catch.
   if (down.length === marketplaces.length) {
     log.error(
@@ -401,23 +414,24 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
   try {
     await syncSkinCatalogIfDue(
       log,
-      (name) => skinportMap.has(name) || csgoMarketMap.has(name) || waxpeerMap.has(name),
+      (name) => skinportMap.has(name) || csgoMarketMap.has(name) || waxpeerMap.has(name) || csfloatMap.has(name),
     )
   } catch (err) {
     log.error({ err }, '[PricePopulate] Catalog sync failed')
   }
 
-  // Only read when needed: ~13k rows of four columns, once per outage run.
+  // Only read when needed: ~16k rows of five columns, once per outage run.
   const previous = new Map<string, PreviousQuotes>()
   if (carried.length > 0) {
     const rows = await prisma.skinPrice.findMany({
-      select: { skinId: true, skinportPrice: true, csgoMarketPrice: true, waxpeerPrice: true, volume24h: true },
+      select: { skinId: true, skinportPrice: true, csgoMarketPrice: true, waxpeerPrice: true, csfloatPrice: true, volume24h: true },
     })
     for (const r of rows) previous.set(r.skinId, r)
   }
   const carrySkinport = carried.includes('skinport')
   const carryCsgoMarket = carried.includes('csgoMarket')
   const carryWaxpeer = carried.includes('waxpeer')
+  const carryCsfloat = carried.includes('csfloat')
 
   const skins = await prisma.skin.findMany({ select: { id: true, marketHashName: true } })
   log.info(`[PricePopulate] Merging prices for ${skins.length} skins...`)
@@ -437,13 +451,13 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
   // 4x on rows crossing the wire, not planner work.
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
   const windowStart = new Date(dayAgo.getTime() - CHANGE_REFERENCE_WINDOW_MS)
-  const recentHistory = await prisma.$queryRaw<{ skinId: string; price: number }[]>`
-    SELECT DISTINCT ON ("skinId") "skinId", "price"
+  const recentHistory = await prisma.$queryRaw<{ skinId: string; price: number; at: Date }[]>`
+    SELECT DISTINCT ON ("skinId") "skinId", "price", "timestamp" AS "at"
     FROM "PriceHistory"
     WHERE "timestamp" >= ${windowStart} AND "timestamp" <= ${dayAgo}
     ORDER BY "skinId", "timestamp" DESC
   `
-  const oldPriceMap = new Map(recentHistory.map((h) => [h.skinId, h.price]))
+  const oldPriceMap = new Map(recentHistory.map((h) => [h.skinId, h]))
 
   const rows = skins.flatMap((skin) => {
     const prev = previous.get(skin.id)
@@ -451,22 +465,27 @@ export async function populatePrices(log: FastifyBaseLogger): Promise<PopulatePr
     const skinport = carrySkinport ? prev?.skinportPrice ?? null : skinportMap.get(name) ?? null
     const csgo = carryCsgoMarket ? prev?.csgoMarketPrice ?? null : csgoMarketMap.get(name) ?? null
     const waxpeer = carryWaxpeer ? prev?.waxpeerPrice ?? null : waxpeerMap.get(name) ?? null
+    const csfloat = carryCsfloat ? prev?.csfloatPrice ?? null : csfloatMap.get(name) ?? null
     const volume = carryCsgoMarket ? prev?.volume24h ?? null : csgoMarket.volumes.get(name) ?? null
 
-    if (!skinport && !csgo && !waxpeer) return []
+    if (!skinport && !csgo && !waxpeer && !csfloat) return []
 
-    const lowestPrice = calcLowestPrice(skinport, csgo, waxpeer)
+    const quotes = { skinportPrice: skinport, csgoMarketPrice: csgo, waxpeerPrice: waxpeer, csfloatPrice: csfloat }
+    const lowestPrice = lowestPriceAt(quotes, now)
     if (!lowestPrice) return []
 
-    const oldPrice = oldPriceMap.get(skin.id) ?? null
-    const priceChange24h = oldPrice && oldPrice > 0
-      ? ((lowestPrice - oldPrice) / oldPrice) * 100
+    // Measured on the reference's basis: across CSFLOAT_IN_LOWEST_FROM a plain
+    // comparison would read CSFloat joining the minimum as a price drop.
+    const old = oldPriceMap.get(skin.id)
+    const basis = old && old.at.getTime() < CSFLOAT_IN_LOWEST_FROM ? lowestPriceAt(quotes, old.at.getTime()) : lowestPrice
+    const priceChange24h = old && old.price > 0 && basis
+      ? ((basis - old.price) / old.price) * 100
       : null
 
     // Souvenirs are priced but not charted: their history would cost ~65 MB of
     // the 512 MB cap at steady state (2 527 skins × ~111 points × 231 B).
     const trackHistory = !name.startsWith(SOUVENIR_PREFIX)
-    return [{ skinId: skin.id, skinport, csgo, waxpeer, lowestPrice, priceChange24h, volume, trackHistory }]
+    return [{ skinId: skin.id, skinport, csgo, waxpeer, csfloat, lowestPrice, priceChange24h, volume, trackHistory }]
   })
 
   const updated = await writeSkinPrices(rows)

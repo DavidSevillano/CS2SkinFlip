@@ -37,7 +37,7 @@ async function main() {
       select: {
         id: true,
         marketHashName: true,
-        price: { select: { lowestPrice: true, skinportPrice: true, csgoMarketPrice: true, waxpeerPrice: true } },
+        price: { select: { lowestPrice: true, skinportPrice: true, csgoMarketPrice: true, waxpeerPrice: true, csfloatPrice: true } },
       },
       where: {
         price: {
@@ -57,7 +57,7 @@ async function main() {
     const ranked = skins
       .map((s) => {
         const current = s.price!.lowestPrice!
-        const prev = refs.get(s.id) ?? null
+        const prev = refs.get(s.id)?.price ?? null
         return {
           name: s.marketHashName,
           current,

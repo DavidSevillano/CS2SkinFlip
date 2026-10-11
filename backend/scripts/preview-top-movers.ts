@@ -33,7 +33,7 @@ async function main() {
     console.log(`${direction.toUpperCase()} — ${movers.length} entries`)
     console.log('─'.repeat(94))
     for (const [i, m] of movers.entries()) {
-      const quotes = [m.skinportPrice, m.csgoMarketPrice, m.waxpeerPrice].filter(
+      const quotes = [m.skinportPrice, m.csgoMarketPrice, m.waxpeerPrice, m.csfloatPrice].filter(
         (p): p is number => p !== null && p > 0,
       )
       const spread = quotes.length >= 2 ? Math.max(...quotes) / Math.min(...quotes) : Infinity

@@ -22,6 +22,7 @@ interface ArmedAlertRow {
   skinportPrice: number | null
   csgoMarketPrice: number | null
   waxpeerPrice: number | null
+  csfloatPrice: number | null
   fcmToken: string | null
   locale: string | null
 }
@@ -38,7 +39,7 @@ export class AlertService {
     const rows = await prisma.$queryRaw<ArmedAlertRow[]>`
       SELECT a."id", a."userId", a."skinId", a."type"::text AS "type", a."targetPrice",
              s."name" AS "skinName",
-             sp."lowestPrice", sp."skinportPrice", sp."csgoMarketPrice", sp."waxpeerPrice",
+             sp."lowestPrice", sp."skinportPrice", sp."csgoMarketPrice", sp."waxpeerPrice", sp."csfloatPrice",
              u."fcmToken", u."locale"
       FROM "Alert" a
       JOIN "Skin" s ON s."id" = a."skinId"

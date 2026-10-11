@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Reference points written after CSFloat joined lowestPrice, so the 24h change
+// is a plain comparison with lowestPrice (see CSFLOAT_IN_LOWEST_FROM).
+const REF_AT = new Date('2026-10-12T00:00:00Z')
 import Fastify from 'fastify'
 
 const { skinFindMany, skinFindUnique, skinCount, queryRaw } = vi.hoisted(() => ({
@@ -243,7 +247,7 @@ describe('GET /skins/:skinId — 24h change', () => {
 
   it('reads the reference from the same bounded window as the lists', async () => {
     const { CHANGE_REFERENCE_WINDOW_MS } = await import('../config/priceHistory')
-    queryRaw.mockResolvedValue([{ skinId: 'ak', price: 100 }])
+    queryRaw.mockResolvedValue([{ skinId: 'ak', price: 100, at: REF_AT }])
     const app = await buildTestApp()
 
     const res = await app.inject({ method: 'GET', url: '/skins/ak' })
