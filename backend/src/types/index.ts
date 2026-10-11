@@ -11,13 +11,6 @@ export interface JwtPayload {
   steamId: string | null
 }
 
-export interface SteamPlayer {
-  steamid: string
-  personaname: string
-  avatarfull: string
-  profileurl: string
-}
-
 export interface AggregatedPrices {
   skinId: string
   marketHashName: string

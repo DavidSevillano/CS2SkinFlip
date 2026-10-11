@@ -49,14 +49,4 @@ export const priceRoutes: FastifyPluginAsync = async (app) => {
 
     return priceService.getPricesForSkin(skinId, skin.marketHashName)
   })
-
-  // Force-refresh prices for a skin (busts cache)
-  app.post('/prices/:skinId/refresh', async (request, reply) => {
-    const { skinId } = request.params as { skinId: string }
-
-    const skin = await prisma.skin.findUnique({ where: { id: skinId } })
-    if (!skin) return reply.status(404).send({ error: 'Skin not found' })
-
-    return priceService.getPricesForSkin(skinId, skin.marketHashName)
-  })
 }

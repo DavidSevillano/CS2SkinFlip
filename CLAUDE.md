@@ -193,8 +193,6 @@ Skin IDs are slugs derived from `marketHashName` via `slugify()`.
 
 | Key | TTL |
 |---|---|
-| `steam:player:{steamId}` | 1 hour |
-| `steam:inventory:{steamId}` | 10 min |
 | `prices:{skinId}` | 5 min |
 | `top-movers:{direction}:{limit}` | 15 min |
 | `pipeline:prices:lastSuccessfulRun` | none (never expires) |
