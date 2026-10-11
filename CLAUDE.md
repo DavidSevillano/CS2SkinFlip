@@ -274,7 +274,7 @@ Do not read `pg_stat_user_tables.seq_tup_read` as egress. `Skin` and `SkinPrice`
 
 ### Logging
 
-Pino, configured in `server.ts` from `LOG_LEVEL` (default `info`, so job output like `[PricePopulate] Done — X skins updated` is visible in Render's logs). `pino-pretty` is only attached when `NODE_ENV === 'development'`; production emits JSON.
+Pino, one instance in `src/logger.ts` (from `LOG_LEVEL`) that Fastify uses and that request-less code — the FCM and Google Play clients — imports directly; no `console` in `src/` beyond the env validation that runs before it exists (default `info`, so job output like `[PricePopulate] Done — X skins updated` is visible in Render's logs). `pino-pretty` is only attached when `NODE_ENV === 'development'`; production emits JSON.
 
 **Pino uses printf-style interpolation, so the error must go in the merge object, not as a trailing argument:**
 

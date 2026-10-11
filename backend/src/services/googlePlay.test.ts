@@ -20,6 +20,8 @@ vi.mock('googleapis', () => ({
   },
 }))
 
+vi.mock('../logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }))
+
 vi.mock('../config/env', () => ({
   env: {
     GOOGLE_PLAY_SERVICE_ACCOUNT_PATH: '/fake/service-account.json',

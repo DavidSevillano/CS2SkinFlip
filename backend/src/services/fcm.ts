@@ -1,6 +1,7 @@
 import { env } from '../config/env'
 import fs from 'fs'
 import { alertNotificationText } from './alertMessages'
+import { logger } from '../logger'
 
 // Lazy-initialise Firebase Admin so it only loads when FCM_SERVICE_ACCOUNT_PATH is set
 let messaging: import('firebase-admin/messaging').Messaging | null = null
@@ -21,7 +22,7 @@ async function getMessaging() {
     messaging = _getMessaging()
     return messaging
   } catch (e) {
-    console.warn('[FCM] Firebase Admin init failed:', e)
+    logger.warn({ err: e }, '[FCM] Firebase Admin init failed')
     return null
   }
 }
@@ -78,7 +79,7 @@ export async function sendAlertNotification(n: AlertNotification): Promise<SendR
   } catch (e) {
     const code = (e as { code?: string })?.code
     if (code && DEAD_TOKEN_CODES.has(code)) return 'invalid-token'
-    console.warn('[FCM] Failed to send notification:', e)
+    logger.warn({ err: e }, '[FCM] Failed to send notification')
     return 'failed'
   }
 }

@@ -1,5 +1,6 @@
 import { env } from '../config/env'
 import fs from 'fs'
+import { logger } from '../logger'
 
 // Lazy-initialise the Google Play Developer API client so it only loads when
 // GOOGLE_PLAY_SERVICE_ACCOUNT_PATH is set — mirrors the FCM lazy-init pattern.
@@ -19,7 +20,7 @@ async function getClient() {
     androidpublisher = google.androidpublisher({ version: 'v3', auth })
     return androidpublisher
   } catch (e) {
-    console.warn('[GooglePlay] Client init failed:', e)
+    logger.warn({ err: e }, '[GooglePlay] Client init failed')
     return null
   }
 }
@@ -64,7 +65,7 @@ export async function verifyAndAcknowledgePurchase(purchaseToken: string): Promi
       orderId: data.orderId ?? null,
     }
   } catch (e) {
-    console.warn('[GooglePlay] Verification failed:', e)
+    logger.warn({ err: e }, '[GooglePlay] Verification failed')
     return { ok: false, reason: 'Verification request to Google Play failed' }
   }
 }

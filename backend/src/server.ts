@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
 import { env } from './config/env'
+import { logger } from './logger'
 import { registerRoutes } from './routes'
 import { getPriceHealth } from './jobs/populatePrices'
 
@@ -14,13 +15,7 @@ export async function buildServer() {
     // rate-limit bucket. See TRUST_PROXY in config/env.ts for why this is a hop
     // count and not `true`.
     trustProxy: env.TRUST_PROXY,
-    logger: {
-      level: env.LOG_LEVEL,
-      transport:
-        env.NODE_ENV === 'development'
-          ? { target: 'pino-pretty', options: { colorize: true } }
-          : undefined,
-    },
+    logger,
   })
 
   await app.register(cors, {
